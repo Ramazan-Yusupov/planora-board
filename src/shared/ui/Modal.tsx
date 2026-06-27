@@ -23,9 +23,9 @@ export function Modal({ title, children, onClose }: ModalProps) {
 
   return (
     <div
-      aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-end bg-black/35 p-0 sm:items-center sm:justify-center sm:p-6"
+      aria-modal="true"
+      className="fixed inset-0 z-[70] flex items-end bg-black/65 p-0 sm:items-center sm:justify-center sm:p-6"
       role="dialog"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -33,8 +33,8 @@ export function Modal({ title, children, onClose }: ModalProps) {
         }
       }}
     >
-      <section className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border bg-panel shadow-2xl sm:max-w-2xl sm:rounded-2xl">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b bg-panel px-5 py-4 sm:px-6">
+      <section className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-white/10 bg-panel shadow-2xl sm:max-w-2xl sm:rounded-2xl">
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-white/10 bg-panel/95 px-5 py-4 backdrop-blur sm:px-6">
           <h2 className="min-w-0 truncate text-base font-semibold text-text">{title}</h2>
           <button
             aria-label="Закрыть окно"

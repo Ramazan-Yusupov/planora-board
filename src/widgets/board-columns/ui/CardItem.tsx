@@ -3,11 +3,13 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, GripVertical } from "lucide-react";
+import type { CSSProperties } from "react";
 
-import { LABEL_OPTIONS, type BoardCard } from "@/entities/board";
+import { LABEL_OPTIONS, type BoardCard, type CardSurface } from "@/entities/board";
 
 type CardItemProps = Readonly<{
   card: BoardCard;
+  cardSurface: CardSurface;
   onOpen: (cardId: string) => void;
 }>;
 
@@ -15,7 +17,21 @@ function getLabel(card: BoardCard) {
   return LABEL_OPTIONS.find((option) => option.value === card.label);
 }
 
-export function CardItem({ card, onOpen }: CardItemProps) {
+function createSurfaceStyle(
+  transform: ReturnType<typeof CSS.Transform.toString>,
+  transition: string | undefined,
+  cardSurface: CardSurface,
+): CSSProperties {
+  return {
+    transform,
+    transition,
+    backgroundColor: cardSurface.backgroundColor,
+    borderColor: cardSurface.borderColor,
+    color: cardSurface.textColor,
+  };
+}
+
+export function CardItem({ card, cardSurface, onOpen }: CardItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: {
@@ -26,23 +42,21 @@ export function CardItem({ card, onOpen }: CardItemProps) {
   });
 
   const label = getLabel(card);
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = createSurfaceStyle(CSS.Transform.toString(transform), transition, cardSurface);
 
   return (
     <article
       ref={setNodeRef}
       style={style}
-      className={`group rounded-xl border bg-panel p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+      className={`group rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
         isDragging ? "opacity-35" : "opacity-100"
       }`}
     >
       <div className="flex gap-2">
         <button
           aria-label={`Переместить карточку: ${card.title}`}
-          className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg text-text-muted opacity-70 transition hover:bg-control hover:text-text focus:opacity-100 group-hover:opacity-100"
+          className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg opacity-70 transition hover:bg-black/10 focus:opacity-100 group-hover:opacity-100"
+          style={{ color: cardSurface.mutedTextColor }}
           type="button"
           {...attributes}
           {...listeners}
@@ -58,12 +72,20 @@ export function CardItem({ card, onOpen }: CardItemProps) {
           {label && label.value !== "none" ? (
             <span className={`mb-2 block h-1.5 w-11 rounded-full ${label.color}`} />
           ) : null}
-          <h3 className="break-words text-sm font-medium leading-5 text-text">{card.title}</h3>
+          <h3 className="break-words text-sm font-medium leading-5 text-current">{card.title}</h3>
           {card.description ? (
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">{card.description}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: cardSurface.mutedTextColor }}>
+              {card.description}
+            </p>
           ) : null}
           {card.dueDate ? (
-            <span className="mt-3 inline-flex items-center gap-1 rounded-md bg-control px-2 py-1 text-[11px] font-medium text-text-muted">
+            <span
+              className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium"
+              style={{
+                backgroundColor: cardSurface.chipBackgroundColor,
+                color: cardSurface.textColor,
+              }}
+            >
               <CalendarDays aria-hidden="true" size={13} />
               {new Intl.DateTimeFormat("ru-RU", {
                 day: "2-digit",
@@ -77,15 +99,22 @@ export function CardItem({ card, onOpen }: CardItemProps) {
   );
 }
 
-export function CardPreview({ card }: Readonly<{ card: BoardCard }>) {
+export function CardPreview({ card, cardSurface }: Readonly<{ card: BoardCard; cardSurface: CardSurface }>) {
   const label = getLabel(card);
 
   return (
-    <article className="w-72 rotate-1 rounded-xl border bg-panel p-3 shadow-xl">
+    <article
+      className="w-72 rotate-1 rounded-xl border p-3 shadow-xl"
+      style={{
+        backgroundColor: cardSurface.backgroundColor,
+        borderColor: cardSurface.borderColor,
+        color: cardSurface.textColor,
+      }}
+    >
       {label && label.value !== "none" ? (
         <span className={`mb-2 block h-1.5 w-11 rounded-full ${label.color}`} />
       ) : null}
-      <h3 className="text-sm font-medium leading-5 text-text">{card.title}</h3>
+      <h3 className="text-sm font-medium leading-5 text-current">{card.title}</h3>
     </article>
   );
 }

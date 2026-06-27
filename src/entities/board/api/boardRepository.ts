@@ -1,7 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
+import { DEFAULT_BOARD_APPEARANCE } from "../lib/appearance";
 import { boardSchema } from "../model/schemas";
-import type { Board } from "../model/types";
+import type { Board, BoardWorkspace } from "../model/types";
 
 interface PlanoraDatabase extends DBSchema {
   boards: {
@@ -18,7 +19,7 @@ interface PlanoraDatabase extends DBSchema {
 }
 
 const DATABASE_NAME = "planora-board-db";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const ACTIVE_BOARD_KEY = "activeBoardId";
 
 let databasePromise: Promise<IDBPDatabase<PlanoraDatabase>> | null = null;
@@ -45,33 +46,67 @@ function getDatabase(): Promise<IDBPDatabase<PlanoraDatabase>> {
   return databasePromise;
 }
 
-export async function loadActiveBoard(): Promise<Board | null> {
-  const database = await getDatabase();
-  const metadata = await database.get("metadata", ACTIVE_BOARD_KEY);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-  if (metadata) {
-    const activeBoard = await database.get("boards", metadata.value);
-    if (activeBoard) {
-      return boardSchema.parse(activeBoard);
+function migrateBoard(value: unknown): unknown {
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  if (isRecord(value.appearance)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    appearance: { ...DEFAULT_BOARD_APPEARANCE },
+  };
+}
+
+function parseBoard(value: unknown): Board {
+  return boardSchema.parse(migrateBoard(value));
+}
+
+export async function loadBoardWorkspace(): Promise<BoardWorkspace> {
+  const database = await getDatabase();
+  const [storedBoards, metadata] = await Promise.all([
+    database.getAll("boards"),
+    database.get("metadata", ACTIVE_BOARD_KEY),
+  ]);
+  const boards = storedBoards.map(parseBoard).sort((first, second) => first.createdAt - second.createdAt);
+  const requestedActiveBoardId = metadata?.value;
+  const activeBoardId = boards.some((board) => board.id === requestedActiveBoardId)
+    ? requestedActiveBoardId ?? null
+    : boards.at(0)?.id ?? null;
+
+  return { boards, activeBoardId };
+}
+
+export async function saveBoardWorkspace(workspace: BoardWorkspace): Promise<void> {
+  const boards = workspace.boards.map(parseBoard);
+  const boardIds = new Set(boards.map((board) => board.id));
+  const activeBoardId = boardIds.has(workspace.activeBoardId ?? "") ? workspace.activeBoardId : boards.at(0)?.id ?? null;
+  const database = await getDatabase();
+  const transaction = database.transaction(["boards", "metadata"], "readwrite");
+  const boardStore = transaction.objectStore("boards");
+  const metadataStore = transaction.objectStore("metadata");
+  const existingBoardIds = await boardStore.getAllKeys();
+
+  for (const id of existingBoardIds) {
+    if (!boardIds.has(id)) {
+      await boardStore.delete(id);
     }
   }
 
-  const boards = await database.getAll("boards");
-  const firstBoard = boards.at(0);
-  return firstBoard ? boardSchema.parse(firstBoard) : null;
-}
+  for (const board of boards) {
+    await boardStore.put(board);
+  }
 
-export async function saveActiveBoard(board: Board): Promise<void> {
-  const validatedBoard = boardSchema.parse(board);
-  const database = await getDatabase();
-  const transaction = database.transaction(["boards", "metadata"], "readwrite");
-
-  await Promise.all([
-    transaction.objectStore("boards").put(validatedBoard),
-    transaction.objectStore("metadata").put({
-      key: ACTIVE_BOARD_KEY,
-      value: validatedBoard.id,
-    }),
-    transaction.done,
-  ]);
+  await metadataStore.put({
+    key: ACTIVE_BOARD_KEY,
+    value: activeBoardId ?? "",
+  });
+  await transaction.done;
 }

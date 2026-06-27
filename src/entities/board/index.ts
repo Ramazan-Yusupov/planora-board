@@ -1,5 +1,26 @@
-export { loadActiveBoard, saveActiveBoard } from "./api/boardRepository";
-export { STARTER_BOARD } from "./lib/createStarterBoard";
+export { loadBoardWorkspace, saveBoardWorkspace } from "./api/boardRepository";
+export {
+  DEFAULT_BOARD_APPEARANCE,
+  getReadableTextColor,
+  isHexColor,
+  resolveBoardAppearance,
+} from "./lib/appearance";
+export type { CardSurface, ResolvedBoardAppearance } from "./lib/appearance";
+export { createEmptyBoard, createStarterBoard, STARTER_BOARD } from "./lib/createStarterBoard";
 export { boardSchema } from "./model/schemas";
-export { LABEL_OPTIONS } from "./model/types";
-export type { Board, BoardCard, BoardList, CardDraft, LabelValue } from "./model/types";
+export {
+  BOARD_BACKGROUND_OPTIONS,
+  CARD_COLOR_OPTIONS,
+  LABEL_OPTIONS,
+} from "./model/types";
+export type {
+  Board,
+  BoardAppearance,
+  BoardBackgroundValue,
+  BoardCard,
+  BoardList,
+  BoardWorkspace,
+  CardColorValue,
+  CardDraft,
+  LabelValue,
+} from "./model/types";

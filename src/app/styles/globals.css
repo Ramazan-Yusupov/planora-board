@@ -1,20 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --app-canvas: oklch(0.97 0.008 250);
-  --app-panel: oklch(1 0 0);
-  --app-control: oklch(0.94 0.011 250);
-  --app-control-hover: oklch(0.9 0.016 250);
-  --app-surface-muted: oklch(0.91 0.014 250);
-  --app-text: oklch(0.24 0.022 250);
-  --app-text-muted: oklch(0.5 0.026 250);
-  --app-border: oklch(0.85 0.014 250);
-  --app-accent: oklch(0.56 0.18 256);
-  --app-accent-hover: oklch(0.49 0.18 256);
-  --app-accent-foreground: oklch(0.99 0 0);
-  --app-danger: oklch(0.56 0.21 28);
-  --app-danger-hover: oklch(0.49 0.21 28);
-  --app-ring: oklch(0.62 0.16 256);
+  color-scheme: dark;
+  --app-canvas: oklch(0.15 0.015 255);
+  --app-panel: oklch(0.2 0.018 255);
+  --app-control: oklch(0.27 0.02 255);
+  --app-control-hover: oklch(0.31 0.022 255);
+  --app-surface-muted: oklch(0.24 0.018 255);
+  --app-text: oklch(0.95 0.008 255);
+  --app-text-muted: oklch(0.72 0.018 255);
+  --app-border: oklch(0.36 0.018 255);
+  --app-accent: oklch(0.66 0.16 250);
+  --app-accent-hover: oklch(0.72 0.14 250);
+  --app-accent-foreground: oklch(0.16 0.016 255);
+  --app-danger: oklch(0.72 0.17 25);
+  --app-danger-hover: oklch(0.65 0.19 25);
+  --app-ring: oklch(0.73 0.13 250);
 }
 
 @theme inline {
@@ -70,6 +71,6 @@
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--app-accent) 24%, transparent);
+    background: color-mix(in oklab, var(--app-accent) 38%, transparent);
   }
 }

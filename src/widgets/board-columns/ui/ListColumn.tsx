@@ -1,18 +1,19 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { useSortable } from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Check, GripVertical, Plus, Trash2, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 
-import type { BoardCard, BoardList } from "@/entities/board";
+import type { BoardCard, BoardList, CardSurface } from "@/entities/board";
 
 import { CardItem } from "./CardItem";
 
 type ListColumnProps = Readonly<{
   list: BoardList;
   cards: BoardCard[];
+  cardSurface: CardSurface;
   onOpenCard: (cardId: string) => void;
   onAddCard: (listId: string, title: string) => void;
   onRenameList: (listId: string, title: string) => void;
@@ -22,6 +23,7 @@ type ListColumnProps = Readonly<{
 export function ListColumn({
   list,
   cards,
+  cardSurface,
   onOpenCard,
   onAddCard,
   onRenameList,
@@ -85,14 +87,14 @@ export function ListColumn({
     <section
       ref={setNodeRef}
       style={style}
-      className={`flex h-fit max-h-[calc(100dvh-11rem)] w-[min(86vw,19rem)] shrink-0 flex-col rounded-2xl border bg-surface-muted p-2 shadow-sm sm:w-80 ${
+      className={`flex h-fit max-h-[calc(100dvh-12.5rem)] w-[min(86vw,19rem)] shrink-0 flex-col rounded-2xl border border-white/10 bg-slate-950/45 p-2 shadow-xl backdrop-blur-sm sm:w-80 ${
         isDragging ? "opacity-40" : "opacity-100"
       }`}
     >
       <header className="flex items-center gap-1 px-1 pb-2">
         <button
           aria-label={`Переместить список: ${list.title}`}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-control hover:text-text"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white"
           type="button"
           {...attributes}
           {...listeners}
@@ -102,7 +104,7 @@ export function ListColumn({
 
         <input
           aria-label="Название списка"
-          className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold text-text outline-none transition focus:bg-panel"
+          className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-400 focus:bg-white/10"
           value={listTitle}
           onBlur={saveListTitle}
           onChange={(event) => setListTitle(event.target.value)}
@@ -117,12 +119,12 @@ export function ListColumn({
           }}
         />
 
-        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-panel text-xs font-semibold text-text-muted">
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/10 text-xs font-semibold text-slate-200">
           {cards.length}
         </span>
         <button
           aria-label={`Удалить список ${list.title}`}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-red-50 hover:text-danger"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-300 transition hover:bg-red-500/15 hover:text-red-200"
           type="button"
           onClick={requestDelete}
         >
@@ -130,32 +132,34 @@ export function ListColumn({
         </button>
       </header>
 
-      <div
-        ref={setDropRef}
-        className={`min-h-20 space-y-2 overflow-y-auto rounded-xl p-1 transition ${
-          isOver ? "bg-accent/10 ring-1 ring-accent/30" : ""
-        }`}
-      >
-        {cards.map((card) => (
-          <CardItem key={card.id} card={card} onOpen={onOpenCard} />
-        ))}
+      <SortableContext items={list.cardIds} strategy={verticalListSortingStrategy}>
+        <div
+          ref={setDropRef}
+          className={`min-h-20 space-y-2 overflow-y-auto rounded-xl p-1 transition ${
+            isOver ? "bg-white/10 ring-1 ring-white/30" : ""
+          }`}
+        >
+          {cards.map((card) => (
+            <CardItem key={card.id} card={card} cardSurface={cardSurface} onOpen={onOpenCard} />
+          ))}
 
-        {cards.length === 0 ? (
-          <p className="grid min-h-20 place-items-center rounded-xl border border-dashed bg-panel/45 px-3 text-center text-xs leading-5 text-text-muted">
-            Перетащите сюда карточку или создайте новую.
-          </p>
-        ) : null}
-      </div>
+          {cards.length === 0 ? (
+            <p className="grid min-h-20 place-items-center rounded-xl border border-dashed border-white/20 bg-black/10 px-3 text-center text-xs leading-5 text-slate-300">
+              Перетащите сюда карточку или создайте новую.
+            </p>
+          ) : null}
+        </div>
+      </SortableContext>
 
       {isAddingCard ? (
-        <form className="mt-2 rounded-xl border bg-panel p-2" onSubmit={saveCard}>
+        <form className="mt-2 rounded-xl border border-white/10 bg-slate-950/60 p-2" onSubmit={saveCard}>
           <label className="sr-only" htmlFor={`new-card-${list.id}`}>
             Название новой карточки
           </label>
           <textarea
             autoFocus
             id={`new-card-${list.id}`}
-            className="min-h-20 w-full resize-none rounded-lg border bg-panel px-3 py-2 text-sm text-text placeholder:text-text-muted"
+            className="min-h-20 w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-400"
             placeholder="Например, подготовить макеты"
             value={cardTitle}
             onChange={(event) => setCardTitle(event.target.value)}
@@ -177,7 +181,7 @@ export function ListColumn({
             </button>
             <button
               aria-label="Отменить создание карточки"
-              className="grid size-9 place-items-center rounded-lg text-text-muted transition hover:bg-control hover:text-text"
+              className="grid size-9 place-items-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white"
               type="button"
               onClick={() => {
                 setCardTitle("");
@@ -190,7 +194,7 @@ export function ListColumn({
         </form>
       ) : (
         <button
-          className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-text-muted transition hover:bg-control hover:text-text"
+          className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
           type="button"
           onClick={() => setIsAddingCard(true)}
         >
@@ -204,10 +208,10 @@ export function ListColumn({
 
 export function ListPreview({ list }: Readonly<{ list: BoardList }>) {
   return (
-    <section className="w-80 rotate-1 rounded-2xl border bg-surface-muted p-3 shadow-xl">
+    <section className="w-80 rotate-1 rounded-2xl border border-white/10 bg-slate-950/80 p-3 shadow-xl backdrop-blur-sm">
       <div className="flex items-center gap-2">
-        <GripVertical aria-hidden="true" size={18} className="text-text-muted" />
-        <p className="font-semibold text-text">{list.title}</p>
+        <GripVertical aria-hidden="true" size={18} className="text-slate-300" />
+        <p className="font-semibold text-white">{list.title}</p>
       </div>
     </section>
   );

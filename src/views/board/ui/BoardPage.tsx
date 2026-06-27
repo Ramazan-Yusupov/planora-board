@@ -1,41 +1,81 @@
 "use client";
 
-import { AlertTriangle, Cloud, LayoutDashboard, RefreshCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  Cloud,
+  LayoutDashboard,
+  Menu,
+  Palette,
+  RefreshCcw,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { loadActiveBoard, saveActiveBoard, STARTER_BOARD, type Board, type CardDraft } from "@/entities/board";
+import {
+  createStarterBoard,
+  loadBoardWorkspace,
+  resolveBoardAppearance,
+  saveBoardWorkspace,
+  type Board,
+  type BoardWorkspace,
+  type CardDraft,
+} from "@/entities/board";
 import {
   addCard,
   addList,
+  createBoard,
   deleteCard,
   deleteList,
   moveCard,
   moveList,
   renameBoard,
   renameList,
+  resetBoardContent,
+  updateBoardAppearance,
   updateCard,
 } from "@/features/board-management";
 import { APP_NAME } from "@/shared/config/app";
+import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
 import { CardModal } from "@/widgets/card-modal";
+import { ProjectSidebar } from "@/widgets/project-sidebar";
 
 type PersistenceState = "loading" | "saved" | "saving" | "error";
 
+function createInitialWorkspace(): BoardWorkspace {
+  const starterBoard = createStarterBoard();
+
+  return {
+    boards: [starterBoard],
+    activeBoardId: starterBoard.id,
+  };
+}
+
+function isMobileViewport(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
+}
+
 export function BoardPage() {
-  const [board, setBoard] = useState<Board>(STARTER_BOARD);
+  const [workspace, setWorkspace] = useState<BoardWorkspace>(createInitialWorkspace);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [persistenceState, setPersistenceState] = useState<PersistenceState>("loading");
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+
+  const activeBoard = useMemo(() => {
+    const requestedBoard = workspace.boards.find((board) => board.id === workspace.activeBoardId);
+    return requestedBoard ?? workspace.boards.at(0) ?? null;
+  }, [workspace.activeBoardId, workspace.boards]);
 
   useEffect(() => {
     let isDisposed = false;
 
     const hydrate = async () => {
       try {
-        const storedBoard = await loadActiveBoard();
-        if (!isDisposed && storedBoard) {
-          setBoard(storedBoard);
+        const loadedWorkspace = await loadBoardWorkspace();
+        if (!isDisposed && loadedWorkspace.boards.length > 0) {
+          setWorkspace(loadedWorkspace);
         }
       } catch (error) {
         if (!isDisposed) {
@@ -66,7 +106,7 @@ export function BoardPage() {
 
     const timeoutId = window.setTimeout(() => {
       setPersistenceState("saving");
-      void saveActiveBoard(board)
+      void saveBoardWorkspace(workspace)
         .then(() => {
           setPersistenceState("saved");
           setStorageError(null);
@@ -82,121 +122,266 @@ export function BoardPage() {
     }, 300);
 
     return () => window.clearTimeout(timeoutId);
-  }, [board, isHydrated]);
+  }, [isHydrated, workspace]);
 
-  const selectedCard = selectedCardId ? board.cards[selectedCardId] : undefined;
+  const selectedCard = selectedCardId && activeBoard ? activeBoard.cards[selectedCardId] : undefined;
   const selectedListTitle = useMemo(() => {
-    if (!selectedCard) {
+    if (!selectedCard || !activeBoard) {
       return "";
     }
 
-    return board.lists[selectedCard.listId]?.title ?? "Удалённый список";
-  }, [board.lists, selectedCard]);
+    return activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список";
+  }, [activeBoard, selectedCard]);
+  const resolvedAppearance = activeBoard ? resolveBoardAppearance(activeBoard.appearance) : null;
 
   const statusLabel =
     persistenceState === "loading"
-      ? "Загружаем доску…"
+      ? "Загружаем доски…"
       : persistenceState === "saving"
         ? "Сохраняем…"
         : persistenceState === "error"
           ? "Ошибка сохранения"
           : "Сохранено локально";
 
-  const applyBoardUpdate = (updater: (currentBoard: Board) => Board) => {
-    setBoard((currentBoard) => updater(currentBoard));
+  const updateActiveBoard = (updater: (currentBoard: Board) => Board) => {
+    setWorkspace((currentWorkspace) => {
+      const currentBoard = currentWorkspace.boards.find((board) => board.id === currentWorkspace.activeBoardId);
+      if (!currentBoard) {
+        return currentWorkspace;
+      }
+
+      const nextBoard = updater(currentBoard);
+      return {
+        ...currentWorkspace,
+        boards: currentWorkspace.boards.map((board) => (board.id === currentBoard.id ? nextBoard : board)),
+      };
+    });
   };
 
-  const resetBoard = () => {
-    if (window.confirm("Сбросить доску к начальному примеру? Все текущие карточки будут удалены.")) {
-      setBoard(STARTER_BOARD);
+  const createProject = (title: string) => {
+    const nextBoard = createBoard(title);
+    setWorkspace((currentWorkspace) => ({
+      boards: [...currentWorkspace.boards, nextBoard],
+      activeBoardId: nextBoard.id,
+    }));
+    setSelectedCardId(null);
+    setIsProjectsOpen(false);
+  };
+
+  const selectProject = (boardId: string) => {
+    setWorkspace((currentWorkspace) => ({
+      ...currentWorkspace,
+      activeBoardId: boardId,
+    }));
+    setSelectedCardId(null);
+    setIsAppearanceOpen(false);
+
+    if (isMobileViewport()) {
+      setIsProjectsOpen(false);
+    }
+  };
+
+  const deleteProject = (boardId: string) => {
+    setWorkspace((currentWorkspace) => {
+      const remainingBoards = currentWorkspace.boards.filter((board) => board.id !== boardId);
+      if (remainingBoards.length === 0) {
+        const fallbackBoard = createBoard("Новый проект");
+        return {
+          boards: [fallbackBoard],
+          activeBoardId: fallbackBoard.id,
+        };
+      }
+
+      const nextActiveBoardId = currentWorkspace.activeBoardId === boardId
+        ? remainingBoards[0].id
+        : currentWorkspace.activeBoardId;
+
+      return {
+        boards: remainingBoards,
+        activeBoardId: nextActiveBoardId,
+      };
+    });
+    setSelectedCardId(null);
+  };
+
+  const resetCurrentBoard = () => {
+    if (!activeBoard) {
+      return;
+    }
+
+    if (window.confirm("Сбросить текущую доску к начальному примеру? Все текущие карточки будут удалены.")) {
+      updateActiveBoard(resetBoardContent);
       setSelectedCardId(null);
     }
   };
 
+  const toggleProjects = () => {
+    setIsProjectsOpen((current) => !current);
+    setIsAppearanceOpen(false);
+  };
+
+  const toggleAppearance = () => {
+    setIsAppearanceOpen((current) => !current);
+    setIsProjectsOpen(false);
+  };
+
+  if (!activeBoard || !resolvedAppearance) {
+    return null;
+  }
+
   return (
-    <main className="flex min-h-dvh flex-col bg-canvas text-text">
-      <header className="border-b bg-panel/95 px-4 py-3 backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-5 gap-y-3">
-          <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm">
+    <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
+      <header className="z-50 border-b border-white/10 bg-panel/95 px-3 py-3 backdrop-blur-xl sm:px-5">
+        <div className="mx-auto flex max-w-[1800px] items-center gap-2 sm:gap-4">
+          <button
+            aria-label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
+            aria-pressed={isProjectsOpen}
+            className="grid size-10 shrink-0 place-items-center rounded-xl text-text-muted transition hover:bg-control hover:text-text"
+            type="button"
+            onClick={toggleProjects}
+          >
+            <Menu aria-hidden="true" size={20} />
+          </button>
+
+          <div className="hidden items-center gap-3 sm:flex">
+            <div className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm shadow-accent/20">
               <LayoutDashboard aria-hidden="true" size={20} />
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">{APP_NAME}</p>
-              <p className="text-xs text-text-muted">Локальная доска</p>
+              <p className="text-xs text-text-muted">Локальные проекты</p>
             </div>
           </div>
 
           <div className="min-w-0 flex-1 sm:max-w-xl">
             <label className="sr-only" htmlFor="board-title">
-              Название доски
+              Название проекта
             </label>
             <input
               id="board-title"
-              className="w-full rounded-xl border border-transparent bg-transparent px-3 py-2 text-lg font-semibold text-text transition hover:border-border focus:border-border focus:bg-panel"
-              value={board.title}
-              onChange={(event) => applyBoardUpdate((currentBoard) => renameBoard(currentBoard, event.target.value))}
+              className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 text-base font-semibold text-text transition hover:border-white/10 focus:border-white/10 focus:bg-control sm:px-3 sm:text-lg"
+              value={activeBoard.title}
+              onChange={(event) => updateActiveBoard((board) => renameBoard(board, event.target.value))}
             />
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            <span className={`hidden items-center gap-1.5 text-xs font-medium sm:inline-flex ${
-              persistenceState === "error" ? "text-danger" : "text-text-muted"
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+            <span className={`hidden items-center gap-1.5 text-xs font-medium md:inline-flex ${
+              persistenceState === "error" ? "text-red-300" : "text-text-muted"
             }`}>
               <Cloud aria-hidden="true" size={15} />
               {statusLabel}
             </span>
             <button
-              className="inline-flex h-10 items-center gap-2 rounded-xl border bg-panel px-3 text-sm font-medium text-text-muted transition hover:bg-control hover:text-text"
+              aria-label="Оформление доски"
+              aria-pressed={isAppearanceOpen}
+              className={`grid size-10 place-items-center rounded-xl transition ${
+                isAppearanceOpen ? "bg-accent text-accent-foreground" : "text-text-muted hover:bg-control hover:text-text"
+              }`}
               type="button"
-              onClick={resetBoard}
+              onClick={toggleAppearance}
+            >
+              <Palette aria-hidden="true" size={19} />
+            </button>
+            <button
+              aria-label="Сбросить текущую доску"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 px-2.5 text-sm font-medium text-text-muted transition hover:bg-control hover:text-text sm:px-3"
+              type="button"
+              onClick={resetCurrentBoard}
             >
               <RefreshCcw aria-hidden="true" size={16} />
-              <span className="hidden sm:inline">Сбросить пример</span>
+              <span className="hidden md:inline">Сбросить пример</span>
             </button>
           </div>
         </div>
       </header>
 
-      {storageError ? (
-        <div className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 sm:px-6">
-          <div className="mx-auto flex max-w-[1600px] items-start gap-2 text-sm leading-5">
-            <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={17} />
-            <p>{storageError}</p>
-          </div>
-        </div>
-      ) : null}
-
-      <section className="flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div>
-            <h1 className="text-base font-semibold">Рабочая доска</h1>
-            <p className="mt-1 text-sm text-text-muted">Перетаскивайте карточки и списки за значок с точками.</p>
-          </div>
-          <span className="rounded-lg bg-control px-2.5 py-1 text-xs font-medium text-text-muted">
-            {Object.keys(board.cards).length} задач
-          </span>
-        </div>
-
-        <div className="min-h-0 flex-1">
-          <BoardColumns
-            board={board}
-            onAddCard={(listId, title) => applyBoardUpdate((currentBoard) => addCard(currentBoard, listId, title))}
-            onAddList={(title) => applyBoardUpdate((currentBoard) => addList(currentBoard, title))}
-            onDeleteList={(listId) => applyBoardUpdate((currentBoard) => deleteList(currentBoard, listId))}
-            onMoveCard={(cardId, listId, index) =>
-              applyBoardUpdate((currentBoard) => moveCard(currentBoard, cardId, listId, index))
-            }
-            onMoveList={(listId, destinationListId) =>
-              applyBoardUpdate((currentBoard) => moveList(currentBoard, listId, destinationListId))
-            }
-            onOpenCard={setSelectedCardId}
-            onRenameList={(listId, title) =>
-              applyBoardUpdate((currentBoard) => renameList(currentBoard, listId, title))
-            }
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {isProjectsOpen || isAppearanceOpen ? (
+          <button
+            aria-label="Закрыть боковую панель"
+            className="absolute inset-0 z-30 bg-black/55 lg:hidden"
+            type="button"
+            onClick={() => {
+              setIsProjectsOpen(false);
+              setIsAppearanceOpen(false);
+            }}
           />
-        </div>
-      </section>
+        ) : null}
+
+        <ProjectSidebar
+          activeBoardId={workspace.activeBoardId}
+          boards={workspace.boards}
+          isOpen={isProjectsOpen}
+          onClose={() => setIsProjectsOpen(false)}
+          onCreateBoard={createProject}
+          onDeleteBoard={deleteProject}
+          onSelectBoard={selectProject}
+        />
+
+        <section className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
+          {storageError ? (
+            <div className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">
+              <div className="mx-auto flex max-w-[1800px] items-start gap-2 text-sm leading-5">
+                <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={17} />
+                <p>{storageError}</p>
+              </div>
+            </div>
+          ) : null}
+
+          <section
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            style={{
+              backgroundColor: resolvedAppearance.backgroundColor,
+              backgroundImage: resolvedAppearance.backgroundImage,
+              color: resolvedAppearance.canvasTextColor,
+            }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4 px-4 py-4 sm:px-6">
+              <div>
+                <h1 className="text-base font-semibold">Рабочая доска</h1>
+                <p className="mt-1 text-sm" style={{ color: resolvedAppearance.canvasMutedTextColor }}>
+                  Перетаскивайте карточки и списки за значок с точками.
+                </p>
+              </div>
+              <span
+                className="rounded-lg px-2.5 py-1 text-xs font-medium"
+                style={{
+                  backgroundColor: "rgba(15, 23, 42, 0.35)",
+                  color: resolvedAppearance.canvasTextColor,
+                }}
+              >
+                {Object.keys(activeBoard.cards).length} задач
+              </span>
+            </div>
+
+            <div className="min-h-0 flex-1">
+              <BoardColumns
+                appearance={resolvedAppearance}
+                board={activeBoard}
+                onAddCard={(listId, title) => updateActiveBoard((board) => addCard(board, listId, title))}
+                onAddList={(title) => updateActiveBoard((board) => addList(board, title))}
+                onDeleteList={(listId) => updateActiveBoard((board) => deleteList(board, listId))}
+                onMoveCard={(cardId, listId, index) =>
+                  updateActiveBoard((board) => moveCard(board, cardId, listId, index))
+                }
+                onMoveList={(listId, destinationListId) =>
+                  updateActiveBoard((board) => moveList(board, listId, destinationListId))
+                }
+                onOpenCard={setSelectedCardId}
+                onRenameList={(listId, title) => updateActiveBoard((board) => renameList(board, listId, title))}
+              />
+            </div>
+          </section>
+        </section>
+
+        <BoardAppearanceSidebar
+          board={activeBoard}
+          isOpen={isAppearanceOpen}
+          onChange={(appearance) => updateActiveBoard((board) => updateBoardAppearance(board, appearance))}
+          onClose={() => setIsAppearanceOpen(false)}
+        />
+      </div>
 
       {selectedCard ? (
         <CardModal
@@ -205,10 +390,10 @@ export function BoardPage() {
           listTitle={selectedListTitle}
           onClose={() => setSelectedCardId(null)}
           onDelete={(cardId) => {
-            applyBoardUpdate((currentBoard) => deleteCard(currentBoard, cardId));
+            updateActiveBoard((board) => deleteCard(board, cardId));
           }}
           onSave={(cardId, draft: CardDraft) => {
-            applyBoardUpdate((currentBoard) => updateCard(currentBoard, cardId, draft));
+            updateActiveBoard((board) => updateCard(board, cardId, draft));
           }}
         />
       ) : null}

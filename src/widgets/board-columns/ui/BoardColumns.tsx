@@ -13,15 +13,16 @@ import {
 } from "@dnd-kit/core";
 import { horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Plus, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 
-import type { Board, BoardCard, BoardList } from "@/entities/board";
+import type { Board, BoardCard, BoardList, ResolvedBoardAppearance } from "@/entities/board";
 
 import { CardPreview } from "./CardItem";
 import { ListColumn, ListPreview } from "./ListColumn";
 
 type BoardColumnsProps = Readonly<{
   board: Board;
+  appearance: ResolvedBoardAppearance;
   onAddCard: (listId: string, title: string) => void;
   onAddList: (title: string) => void;
   onRenameList: (listId: string, title: string) => void;
@@ -58,6 +59,7 @@ function getListCards(board: Board, list: BoardList): BoardCard[] {
 
 export function BoardColumns({
   board,
+  appearance,
   onAddCard,
   onAddList,
   onRenameList,
@@ -129,13 +131,14 @@ export function BoardColumns({
 
   return (
     <DndContext
+      autoScroll
       collisionDetection={closestCorners}
       sensors={sensors}
       onDragCancel={() => setActiveItem(null)}
       onDragEnd={onDragEnd}
       onDragStart={onDragStart}
     >
-      <div className="h-full overflow-x-auto overflow-y-hidden px-4 pb-5 sm:px-6">
+      <div className="h-full overflow-x-auto overflow-y-hidden px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6">
         <SortableContext items={board.listIds} strategy={horizontalListSortingStrategy}>
           <div className="flex h-full min-w-max items-start gap-3">
             {board.listIds.map((listId) => {
@@ -147,6 +150,7 @@ export function BoardColumns({
               return (
                 <ListColumn
                   key={list.id}
+                  cardSurface={appearance.cardSurface}
                   cards={getListCards(board, list)}
                   list={list}
                   onAddCard={onAddCard}
@@ -158,14 +162,14 @@ export function BoardColumns({
             })}
 
             {isAddingList ? (
-              <form className="w-[min(86vw,19rem)] shrink-0 rounded-2xl border bg-surface-muted p-3 shadow-sm sm:w-80" onSubmit={createList}>
+              <form className="w-[min(86vw,19rem)] shrink-0 rounded-2xl border border-white/15 bg-slate-950/75 p-3 shadow-xl backdrop-blur-sm sm:w-80" onSubmit={createList}>
                 <label className="sr-only" htmlFor="new-list-title">
                   Название нового списка
                 </label>
                 <input
                   autoFocus
                   id="new-list-title"
-                  className="h-10 w-full rounded-xl border bg-panel px-3 text-sm text-text placeholder:text-text-muted"
+                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-400"
                   placeholder="Например, На проверке"
                   value={listTitle}
                   onChange={(event) => setListTitle(event.target.value)}
@@ -186,7 +190,7 @@ export function BoardColumns({
                   </button>
                   <button
                     aria-label="Отменить создание списка"
-                    className="grid size-9 place-items-center rounded-lg text-text-muted transition hover:bg-control hover:text-text"
+                    className="grid size-9 place-items-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white"
                     type="button"
                     onClick={() => {
                       setListTitle("");
@@ -199,7 +203,7 @@ export function BoardColumns({
               </form>
             ) : (
               <button
-                className="flex h-12 w-[min(86vw,19rem)] shrink-0 items-center gap-2 rounded-2xl border border-dashed bg-panel/70 px-4 text-sm font-medium text-text-muted transition hover:border-accent/60 hover:bg-panel hover:text-accent sm:w-80"
+                className="flex h-12 w-[min(86vw,19rem)] shrink-0 items-center gap-2 rounded-2xl border border-dashed border-white/35 bg-slate-950/25 px-4 text-sm font-medium text-white/85 transition hover:border-white/70 hover:bg-slate-950/45 hover:text-white sm:w-80"
                 type="button"
                 onClick={() => setIsAddingList(true)}
               >
@@ -212,7 +216,7 @@ export function BoardColumns({
       </div>
 
       <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-        {activeCard ? <CardPreview card={activeCard} /> : null}
+        {activeCard ? <CardPreview card={activeCard} cardSurface={appearance.cardSurface} /> : null}
         {activeList && activeItem?.type === "list" ? <ListPreview list={activeList} /> : null}
       </DragOverlay>
     </DndContext>

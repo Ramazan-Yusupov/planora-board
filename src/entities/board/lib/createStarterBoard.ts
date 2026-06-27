@@ -1,63 +1,111 @@
-import type { Board } from "../model/types";
+import { createId } from "@/shared/lib";
 
-const createdAt = 1_760_000_000_000;
+import { DEFAULT_BOARD_APPEARANCE } from "./appearance";
+import type { Board, BoardAppearance } from "../model/types";
 
-export const STARTER_BOARD: Board = {
-  id: "starter-board",
-  title: "Мой проект",
-  listIds: ["list-ideas", "list-progress", "list-done"],
-  lists: {
-    "list-ideas": {
-      id: "list-ideas",
-      title: "Идеи",
-      cardIds: ["card-welcome", "card-brief"],
-      createdAt,
-      updatedAt: createdAt,
-    },
-    "list-progress": {
-      id: "list-progress",
-      title: "В работе",
-      cardIds: ["card-design"],
-      createdAt,
-      updatedAt: createdAt,
-    },
-    "list-done": {
-      id: "list-done",
-      title: "Готово",
-      cardIds: [],
-      createdAt,
-      updatedAt: createdAt,
-    },
-  },
-  cards: {
-    "card-welcome": {
-      id: "card-welcome",
-      listId: "list-ideas",
-      title: "Откройте карточку и отредактируйте её",
-      description: "В карточке доступны название, описание, срок и цветная метка.",
-      label: "blue",
-      createdAt,
-      updatedAt: createdAt,
-    },
-    "card-brief": {
-      id: "card-brief",
-      listId: "list-ideas",
-      title: "Добавьте новую задачу",
-      description: "Нажмите кнопку «Добавить карточку» внизу списка.",
-      label: "none",
-      createdAt,
-      updatedAt: createdAt,
-    },
-    "card-design": {
-      id: "card-design",
-      listId: "list-progress",
-      title: "Перетащите карточку между колонками",
-      description: "Можно менять порядок карточек внутри одной колонки или переносить их в другую.",
-      label: "violet",
-      createdAt,
-      updatedAt: createdAt,
-    },
-  },
-  createdAt,
-  updatedAt: createdAt,
+type StarterBoardOptions = {
+  id?: string;
+  title?: string;
+  appearance?: BoardAppearance;
+  createdAt?: number;
 };
+
+function resolveAppearance(appearance?: BoardAppearance): BoardAppearance {
+  return {
+    ...DEFAULT_BOARD_APPEARANCE,
+    ...appearance,
+  };
+}
+
+export function createStarterBoard(options: StarterBoardOptions = {}): Board {
+  const createdAt = options.createdAt ?? Date.now();
+  const id = options.id ?? "starter-board";
+  const title = options.title?.trim() || "Мой проект";
+
+  return {
+    id,
+    title,
+    appearance: resolveAppearance(options.appearance),
+    listIds: ["list-ideas", "list-progress", "list-done"],
+    lists: {
+      "list-ideas": {
+        id: "list-ideas",
+        title: "Идеи",
+        cardIds: ["card-welcome", "card-brief"],
+        createdAt,
+        updatedAt: createdAt,
+      },
+      "list-progress": {
+        id: "list-progress",
+        title: "В работе",
+        cardIds: ["card-design"],
+        createdAt,
+        updatedAt: createdAt,
+      },
+      "list-done": {
+        id: "list-done",
+        title: "Готово",
+        cardIds: [],
+        createdAt,
+        updatedAt: createdAt,
+      },
+    },
+    cards: {
+      "card-welcome": {
+        id: "card-welcome",
+        listId: "list-ideas",
+        title: "Откройте карточку и отредактируйте её",
+        description: "В карточке доступны название, описание, срок и цветная метка.",
+        label: "blue",
+        createdAt,
+        updatedAt: createdAt,
+      },
+      "card-brief": {
+        id: "card-brief",
+        listId: "list-ideas",
+        title: "Добавьте новую задачу",
+        description: "Нажмите кнопку «Добавить карточку» внизу списка.",
+        label: "none",
+        createdAt,
+        updatedAt: createdAt,
+      },
+      "card-design": {
+        id: "card-design",
+        listId: "list-progress",
+        title: "Перетащите карточку между колонками",
+        description: "Можно менять порядок карточек внутри одной колонки или переносить их в другую.",
+        label: "violet",
+        createdAt,
+        updatedAt: createdAt,
+      },
+    },
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+export function createEmptyBoard(title: string): Board {
+  const createdAt = Date.now();
+  const listId = createId("list");
+
+  return {
+    id: createId("board"),
+    title: title.trim() || "Новый проект",
+    appearance: { ...DEFAULT_BOARD_APPEARANCE },
+    listIds: [listId],
+    lists: {
+      [listId]: {
+        id: listId,
+        title: "Новые задачи",
+        cardIds: [],
+        createdAt,
+        updatedAt: createdAt,
+      },
+    },
+    cards: {},
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+export const STARTER_BOARD = createStarterBoard();

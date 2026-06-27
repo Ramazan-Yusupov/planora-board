@@ -51,7 +51,7 @@ export function CardModal({ card, listTitle, onClose, onDelete, onSave }: CardMo
           <input
             autoFocus
             id={titleId}
-            className="mt-2 h-11 w-full rounded-xl border bg-panel px-3 text-sm text-text placeholder:text-text-muted"
+            className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text placeholder:text-text-muted"
             placeholder="Напишите понятное название задачи"
             value={draft.title}
             onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
@@ -70,7 +70,7 @@ export function CardModal({ card, listTitle, onClose, onDelete, onSave }: CardMo
           </label>
           <textarea
             id={descriptionId}
-            className="mt-2 min-h-32 w-full resize-y rounded-xl border bg-panel px-3 py-2.5 text-sm leading-6 text-text placeholder:text-text-muted"
+            className="mt-2 min-h-32 w-full resize-y rounded-xl border border-white/10 bg-control/45 px-3 py-2.5 text-sm leading-6 text-text placeholder:text-text-muted"
             placeholder="Добавьте детали, критерии готовности или ссылки"
             value={draft.description}
             onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
@@ -85,7 +85,7 @@ export function CardModal({ card, listTitle, onClose, onDelete, onSave }: CardMo
             </label>
             <input
               id={dueDateId}
-              className="mt-2 h-11 w-full rounded-xl border bg-panel px-3 text-sm text-text"
+              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
               type="date"
               value={draft.dueDate ?? ""}
               onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value || undefined }))}
@@ -99,7 +99,7 @@ export function CardModal({ card, listTitle, onClose, onDelete, onSave }: CardMo
             </label>
             <select
               id={labelId}
-              className="mt-2 h-11 w-full rounded-xl border bg-panel px-3 text-sm text-text"
+              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
               value={draft.label}
               onChange={(event) => {
                 const option = LABEL_OPTIONS.find((item) => item.value === event.target.value);
@@ -117,12 +117,12 @@ export function CardModal({ card, listTitle, onClose, onDelete, onSave }: CardMo
           </div>
         </div>
 
-        <div className="flex flex-col-reverse justify-between gap-3 border-t pt-5 sm:flex-row sm:items-center">
+        <div className="flex flex-col-reverse justify-between gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center">
           {showDeleteConfirmation ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-danger">Удалить без возможности восстановления?</span>
+              <span className="text-sm text-red-300">Удалить без возможности восстановления?</span>
               <button
-                className="h-10 rounded-xl bg-danger px-3 text-sm font-medium text-white transition hover:bg-danger-hover"
+                className="h-10 rounded-xl bg-danger px-3 text-sm font-medium text-slate-950 transition hover:bg-danger-hover"
                 type="button"
                 onClick={() => {
                   onDelete(card.id);
@@ -141,7 +141,7 @@ export function CardModal({ card, listTitle, onClose, onDelete, onSave }: CardMo
             </div>
           ) : (
             <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-danger transition hover:bg-red-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-red-300 transition hover:bg-red-500/10"
               type="button"
               onClick={() => setShowDeleteConfirmation(true)}
             >

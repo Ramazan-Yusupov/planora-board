@@ -1,4 +1,10 @@
-import type { Board, CardDraft } from "@/entities/board";
+import {
+  createEmptyBoard,
+  createStarterBoard,
+  type Board,
+  type BoardAppearance,
+  type CardDraft,
+} from "@/entities/board";
 import { createId } from "@/shared/lib";
 
 function now(): number {
@@ -17,12 +23,33 @@ function moveItem<T>(items: readonly T[], fromIndex: number, toIndex: number): T
   return nextItems;
 }
 
+export function createBoard(title: string): Board {
+  return createEmptyBoard(title);
+}
+
+export function resetBoardContent(board: Board): Board {
+  return createStarterBoard({
+    id: board.id,
+    title: board.title,
+    appearance: board.appearance,
+    createdAt: board.createdAt,
+  });
+}
+
 export function renameBoard(board: Board, title: string): Board {
   const normalizedTitle = title.trim();
 
   return {
     ...board,
-    title: normalizedTitle || "Новая доска",
+    title: normalizedTitle || "Новый проект",
+    updatedAt: now(),
+  };
+}
+
+export function updateBoardAppearance(board: Board, appearance: BoardAppearance): Board {
+  return {
+    ...board,
+    appearance,
     updatedAt: now(),
   };
 }
@@ -211,8 +238,7 @@ export function moveCard(
   }
 
   const sourceCardIds = sourceList.cardIds.filter((id) => id !== cardId);
-  const destinationBase =
-    sourceList.id === destinationList.id ? sourceCardIds : destinationList.cardIds;
+  const destinationBase = sourceList.id === destinationList.id ? sourceCardIds : destinationList.cardIds;
   const safeIndex = Math.max(0, Math.min(destinationIndex, destinationBase.length));
   const destinationCardIds = [...destinationBase];
   destinationCardIds.splice(safeIndex, 0, cardId);
