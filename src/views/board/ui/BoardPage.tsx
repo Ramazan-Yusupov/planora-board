@@ -71,16 +71,18 @@ function BoardLoadingState() {
 
 type BoardTitleInputProps = Readonly<{
   title: string;
+  disabled: boolean;
   onCommit: (title: string) => void;
 }>;
 
-function BoardTitleInput({ title, onCommit }: BoardTitleInputProps) {
+function BoardTitleInput({ title, disabled, onCommit }: BoardTitleInputProps) {
   const [draft, setDraft] = useState(title);
 
   const commit = (value: string) => {
     const nextTitle = value.trim() || "Новый проект";
 
     setDraft(nextTitle);
+
     if (nextTitle !== title) {
       onCommit(nextTitle);
     }
@@ -89,7 +91,8 @@ function BoardTitleInput({ title, onCommit }: BoardTitleInputProps) {
   return (
     <input
       id="board-title"
-      className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 text-base font-semibold text-text transition hover:border-white/10 focus:border-white/10 focus:bg-control sm:px-3 sm:text-lg"
+      className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 text-base font-semibold text-text transition hover:border-white/10 focus:border-white/10 focus:bg-control disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-lg"
+      disabled={disabled}
       value={draft}
       onBlur={(event) => commit(event.currentTarget.value)}
       onChange={(event) => setDraft(event.target.value)}
@@ -127,6 +130,7 @@ export function BoardPage() {
     const requestedBoard = workspace.boards.find(
       (board) => board.id === workspace.activeBoardId,
     );
+
     return requestedBoard ?? workspace.boards.at(0) ?? null;
   }, [workspace.activeBoardId, workspace.boards]);
 
@@ -136,8 +140,21 @@ export function BoardPage() {
     const hydrate = async () => {
       try {
         const loadedWorkspace = await loadBoardWorkspace();
-        if (!isDisposed && loadedWorkspace.boards.length > 0) {
-          setWorkspace(loadedWorkspace);
+
+        const nextWorkspace =
+          loadedWorkspace.boards.length > 0
+            ? loadedWorkspace
+            : createInitialWorkspace();
+
+        // При первом входе база пуста. Сначала сохраняем стартовый
+        // проект, потом разрешаем пользователю менять его имя.
+        if (loadedWorkspace.boards.length === 0) {
+          await saveBoardWorkspace(nextWorkspace);
+        }
+
+        if (!isDisposed) {
+          setWorkspace(nextWorkspace);
+          setStorageError(null);
         }
       } catch (error) {
         if (!isDisposed) {
@@ -157,6 +174,7 @@ export function BoardPage() {
     };
 
     void hydrate();
+
     return () => {
       isDisposed = true;
     };
@@ -169,6 +187,7 @@ export function BoardPage() {
 
     const timeoutId = window.setTimeout(() => {
       setPersistenceState("saving");
+
       void saveBoardWorkspace(workspace)
         .then(() => {
           setPersistenceState("saved");
@@ -184,13 +203,16 @@ export function BoardPage() {
         });
     }, 300);
 
-    return () => window.clearTimeout(timeoutId);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [isHydrated, workspace]);
 
   const selectedCard =
     selectedCardId && activeBoard
       ? activeBoard.cards[selectedCardId]
       : undefined;
+
   const selectedListTitle = useMemo(() => {
     if (!selectedCard || !activeBoard) {
       return "";
@@ -198,6 +220,7 @@ export function BoardPage() {
 
     return activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список";
   }, [activeBoard, selectedCard]);
+
   const resolvedAppearance = activeBoard
     ? resolveBoardAppearance(activeBoard.appearance)
     : null;
@@ -216,11 +239,13 @@ export function BoardPage() {
       const currentBoard = currentWorkspace.boards.find(
         (board) => board.id === currentWorkspace.activeBoardId,
       );
+
       if (!currentBoard) {
         return currentWorkspace;
       }
 
       const nextBoard = updater(currentBoard);
+
       return {
         ...currentWorkspace,
         boards: currentWorkspace.boards.map((board) =>
@@ -230,12 +255,50 @@ export function BoardPage() {
     });
   };
 
+  const persistWorkspaceImmediately = (nextWorkspace: BoardWorkspace) => {
+    setPersistenceState("saving");
+
+    void saveBoardWorkspace(nextWorkspace)
+      .then(() => {
+        setPersistenceState("saved");
+        setStorageError(null);
+      })
+      .catch((error: unknown) => {
+        setPersistenceState("error");
+        setStorageError(
+          error instanceof Error
+            ? `Изменения не сохранены: ${error.message}`
+            : "Изменения не сохранены.",
+        );
+      });
+  };
+
+  const renameActiveBoard = (title: string) => {
+    if (!activeBoard) {
+      return;
+    }
+
+    const nextBoard = renameBoard(activeBoard, title);
+
+    const nextWorkspace: BoardWorkspace = {
+      ...workspace,
+      boards: workspace.boards.map((board) =>
+        board.id === nextBoard.id ? nextBoard : board,
+      ),
+    };
+
+    setWorkspace(nextWorkspace);
+    persistWorkspaceImmediately(nextWorkspace);
+  };
+
   const createProject = (title: string) => {
     const nextBoard = createBoard(title);
+
     setWorkspace((currentWorkspace) => ({
       boards: [...currentWorkspace.boards, nextBoard],
       activeBoardId: nextBoard.id,
     }));
+
     setSelectedCardId(null);
     setIsProjectsOpen(false);
   };
@@ -245,6 +308,7 @@ export function BoardPage() {
       ...currentWorkspace,
       activeBoardId: boardId,
     }));
+
     setSelectedCardId(null);
     setIsAppearanceOpen(false);
 
@@ -258,8 +322,10 @@ export function BoardPage() {
       const remainingBoards = currentWorkspace.boards.filter(
         (board) => board.id !== boardId,
       );
+
       if (remainingBoards.length === 0) {
         const fallbackBoard = createBoard("Новый проект");
+
         return {
           boards: [fallbackBoard],
           activeBoardId: fallbackBoard.id,
@@ -276,6 +342,7 @@ export function BoardPage() {
         activeBoardId: nextActiveBoardId,
       };
     });
+
     setSelectedCardId(null);
   };
 
@@ -311,6 +378,7 @@ export function BoardPage() {
             <div className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm shadow-accent/20">
               <LayoutDashboard aria-hidden="true" size={20} />
             </div>
+
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
                 {APP_NAME}
@@ -323,12 +391,12 @@ export function BoardPage() {
             <label className="sr-only" htmlFor="board-title">
               Название проекта
             </label>
+
             <BoardTitleInput
               key={activeBoard.id}
+              disabled={!isHydrated}
               title={activeBoard.title}
-              onCommit={(title) =>
-                updateActiveBoard((board) => renameBoard(board, title))
-              }
+              onCommit={renameActiveBoard}
             />
           </div>
 
@@ -343,6 +411,7 @@ export function BoardPage() {
               <Cloud aria-hidden="true" size={15} />
               {statusLabel}
             </span>
+
             <button
               aria-label="Оформление доски"
               aria-pressed={isAppearanceOpen}
@@ -408,13 +477,17 @@ export function BoardPage() {
             <div className="flex flex-wrap items-start justify-between gap-4 px-4 py-4 sm:px-6">
               <div>
                 <h1 className="text-base font-semibold">Рабочая доска</h1>
+
                 <p
                   className="mt-1 text-sm"
-                  style={{ color: resolvedAppearance.canvasMutedTextColor }}
+                  style={{
+                    color: resolvedAppearance.canvasMutedTextColor,
+                  }}
                 >
                   Перетаскивайте карточки и списки за значок с точками.
                 </p>
               </div>
+
               <span
                 className="rounded-lg px-2.5 py-1 text-xs font-medium"
                 style={{
