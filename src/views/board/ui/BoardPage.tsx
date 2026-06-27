@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Menu,
   Palette,
-  RefreshCcw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -29,7 +28,6 @@ import {
   moveList,
   renameBoard,
   renameList,
-  resetBoardContent,
   updateBoardAppearance,
   updateCard,
 } from "@/features/board-management";
@@ -279,21 +277,6 @@ export function BoardPage() {
       };
     });
     setSelectedCardId(null);
-  };
-
-  const resetCurrentBoard = () => {
-    if (!activeBoard) {
-      return;
-    }
-
-    if (
-      window.confirm(
-        "Сбросить текущую доску к начальному примеру? Все текущие карточки будут удалены.",
-      )
-    ) {
-      updateActiveBoard(resetBoardContent);
-      setSelectedCardId(null);
-    }
   };
 
   const toggleProjects = () => {
