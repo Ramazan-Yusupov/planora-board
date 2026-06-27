@@ -5,8 +5,8 @@ import { AppProviders } from "@/app/providers";
 import "@/app/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "Planora",
-  description: "Локальное kanban-приложение для управления задачами.",
+  title: "Planora — доска задач",
+  description: "Локальная kanban-доска для управления задачами.",
 };
 
 type RootLayoutProps = Readonly<{
@@ -15,7 +15,7 @@ type RootLayoutProps = Readonly<{
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="ru" suppressHydrationWarning>
+    <html lang="ru">
       <head>
         <link rel="icon" type="image/x-icon" href="/frontend.png" />
       </head>
