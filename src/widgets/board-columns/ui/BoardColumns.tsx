@@ -48,7 +48,7 @@ type BoardColumnsProps = Readonly<{
 function getListCards(board: Board, list: BoardList): BoardCard[] {
   return list.cardIds
     .map((cardId) => board.cards[cardId])
-    .filter((card): card is BoardCard => Boolean(card));
+    .filter((card): card is BoardCard => Boolean(card) && !card.isArchived);
 }
 
 export function BoardColumns({

@@ -36,6 +36,10 @@ const boardCardSchema = z.object({
   description: z.string(),
   dueDate: z.string().optional(),
   label: z.enum(labelValues),
+  // Старые записи IndexedDB не содержат этого поля. Zod добавит false
+  // во время чтения, а следующая запись сохранит уже актуальную форму.
+  isArchived: z.boolean().default(false),
+  archivedAt: z.number().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -130,6 +134,14 @@ export const boardSchema = z
             message: "Родительский список карточки не совпадает с порядком списка.",
           });
         }
+
+        if (card.isArchived) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardId, "isArchived"],
+            message: "Архивная карточка не должна находиться в порядке активного списка.",
+          });
+        }
       });
     }
 
@@ -150,11 +162,35 @@ export const boardSchema = z
         });
       }
 
-      if (!cardOwners.has(cardKey)) {
+      if (card.isArchived && cardOwners.has(cardKey)) {
         context.addIssue({
           code: "custom",
           path: ["cards", cardKey],
-          message: "Карточка отсутствует в порядке своего списка.",
+          message: "Архивная карточка не должна входить в порядок списка.",
+        });
+      }
+
+      if (!card.isArchived && !cardOwners.has(cardKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["cards", cardKey],
+          message: "Активная карточка отсутствует в порядке своего списка.",
+        });
+      }
+
+      if (card.isArchived && card.archivedAt === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["cards", cardKey, "archivedAt"],
+          message: "У архивной карточки должно быть время архивации.",
+        });
+      }
+
+      if (!card.isArchived && card.archivedAt !== undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["cards", cardKey, "archivedAt"],
+          message: "У активной карточки не должно быть времени архивации.",
         });
       }
     }

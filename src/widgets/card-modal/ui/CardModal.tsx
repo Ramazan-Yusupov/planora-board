@@ -1,16 +1,37 @@
 "use client";
 
-import { CalendarDays, FileText, Tag, Trash2 } from "lucide-react";
+import {
+  Archive,
+  CalendarDays,
+  Copy,
+  FileText,
+  MoveRight,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import { useId, useState } from "react";
 
-import { LABEL_OPTIONS, type BoardCard, type CardDraft } from "@/entities/board";
+import {
+  LABEL_OPTIONS,
+  type BoardCard,
+  type CardDraft,
+} from "@/entities/board";
 import { Button, ConfirmDialog, Modal } from "@/shared/ui";
+
+type CardListOption = Readonly<{
+  id: string;
+  title: string;
+}>;
 
 type CardModalProps = Readonly<{
   card: BoardCard;
+  lists: readonly CardListOption[];
   listTitle: string;
+  onArchive: (cardId: string) => void;
   onClose: () => void;
   onDelete: (cardId: string) => void;
+  onDuplicate: (cardId: string) => void;
+  onMove: (cardId: string, destinationListId: string) => void;
   onSave: (cardId: string, draft: CardDraft) => void;
 }>;
 
@@ -25,26 +46,60 @@ function createDraft(card: BoardCard): CardDraft {
 
 export function CardModal({
   card,
+  lists,
   listTitle,
+  onArchive,
   onClose,
   onDelete,
+  onDuplicate,
+  onMove,
   onSave,
 }: CardModalProps) {
   const [draft, setDraft] = useState<CardDraft>(() => createDraft(card));
+  const [destinationListId, setDestinationListId] = useState(card.listId);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
     useState(false);
   const titleId = useId();
   const descriptionId = useId();
   const dueDateId = useId();
   const labelId = useId();
+  const destinationListIdInput = useId();
 
-  const save = () => {
+  const saveDraft = (): boolean => {
     if (!draft.title.trim()) {
-      return;
+      return false;
     }
 
     onSave(card.id, draft);
+    return true;
+  };
+
+  const save = () => {
+    if (saveDraft()) {
+      onClose();
+    }
+  };
+
+  const moveToSelectedList = () => {
+    if (destinationListId === card.listId || !saveDraft()) {
+      return;
+    }
+
+    onMove(card.id, destinationListId);
     onClose();
+  };
+
+  const duplicate = () => {
+    if (saveDraft()) {
+      onDuplicate(card.id);
+    }
+  };
+
+  const archive = () => {
+    if (saveDraft()) {
+      onArchive(card.id);
+      onClose();
+    }
   };
 
   return (
@@ -159,6 +214,57 @@ export function CardModal({
               </select>
             </div>
           </div>
+
+          <section className="rounded-2xl border border-white/10 bg-control/25 p-3 sm:p-4">
+            <h3 className="text-sm font-semibold text-text">Действия</h3>
+            <p className="mt-1 text-xs leading-5 text-text-muted">
+              Перед действием текущие изменения карточки будут сохранены.
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div>
+                <label
+                  className="sr-only"
+                  htmlFor={destinationListIdInput}
+                >
+                  Список для перемещения карточки
+                </label>
+                <select
+                  id={destinationListIdInput}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-panel/70 px-3 text-sm text-text"
+                  value={destinationListId}
+                  onChange={(event) => setDestinationListId(event.target.value)}
+                >
+                  {lists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Button
+                disabled={destinationListId === card.listId}
+                size="md"
+                variant="secondary"
+                onClick={moveToSelectedList}
+              >
+                <MoveRight aria-hidden="true" size={17} />
+                Переместить
+              </Button>
+            </div>
+
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <Button className="sm:flex-1" variant="secondary" onClick={duplicate}>
+                <Copy aria-hidden="true" size={17} />
+                Создать копию
+              </Button>
+              <Button className="sm:flex-1" variant="dangerGhost" onClick={archive}>
+                <Archive aria-hidden="true" size={17} />
+                Архивировать
+              </Button>
+            </div>
+          </section>
 
           <div className="flex flex-col-reverse justify-between gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center">
             <Button

@@ -96,11 +96,9 @@ export function deleteList(board: Board, listId: string): Board {
 
   const remainingLists = { ...board.lists };
   delete remainingLists[listId];
-  const nextCards = { ...board.cards };
-
-  for (const cardId of list.cardIds) {
-    delete nextCards[cardId];
-  }
+  const nextCards = Object.fromEntries(
+    Object.entries(board.cards).filter(([, card]) => card.listId !== listId),
+  );
 
   return {
     ...board,
@@ -140,6 +138,7 @@ export function addCard(board: Board, listId: string, title: string): Board {
         title: normalizedTitle,
         description: "",
         label: "none",
+        isArchived: false,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -213,7 +212,7 @@ export function moveCard(
   const sourceList = card ? board.lists[card.listId] : undefined;
   const destinationList = board.lists[destinationListId];
 
-  if (!card || !sourceList || !destinationList) {
+  if (!card || !sourceList || !destinationList || card.isArchived) {
     return board;
   }
 

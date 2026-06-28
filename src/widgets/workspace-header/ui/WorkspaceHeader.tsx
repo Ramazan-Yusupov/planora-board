@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Archive,
   CalendarDays,
   Cloud,
   LayoutDashboard,
@@ -19,11 +20,13 @@ type WorkspaceHeaderProps = Readonly<{
   activeView: WorkspaceView;
   children: ReactNode;
   isAppearanceOpen?: boolean;
+  isArchiveOpen?: boolean;
   isPersistenceError: boolean;
   isProjectsOpen: boolean;
   persistenceLabel: string;
   onOpenBoard: () => void;
   onOpenCalendar: () => void;
+  onToggleArchive?: () => void;
   onToggleAppearance?: () => void;
   onToggleProjects: () => void;
 }>;
@@ -32,11 +35,13 @@ export function WorkspaceHeader({
   activeView,
   children,
   isAppearanceOpen = false,
+  isArchiveOpen = false,
   isPersistenceError,
   isProjectsOpen,
   persistenceLabel,
   onOpenBoard,
   onOpenCalendar,
+  onToggleArchive,
   onToggleAppearance,
   onToggleProjects,
 }: WorkspaceHeaderProps) {
@@ -97,6 +102,22 @@ export function WorkspaceHeader({
           >
             <CalendarDays aria-hidden="true" size={19} />
           </IconButton>
+
+          {onToggleArchive ? (
+            <IconButton
+              aria-pressed={isArchiveOpen}
+              className={cn(
+                isArchiveOpen
+                  ? "bg-accent text-accent-foreground"
+                  : "text-text-muted hover:bg-control hover:text-text",
+              )}
+              label="Открыть архив карточек"
+              size="lg"
+              onClick={onToggleArchive}
+            >
+              <Archive aria-hidden="true" size={18} />
+            </IconButton>
+          ) : null}
 
           {onToggleAppearance ? (
             <IconButton

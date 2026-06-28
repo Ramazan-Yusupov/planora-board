@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { resolveBoardAppearance, type CardDraft } from "@/entities/board";
+import { archiveCard, restoreCard } from "@/features/archive-card";
+import { duplicateCard } from "@/features/duplicate-card";
 import {
   addCard,
   addList,
@@ -21,6 +23,7 @@ import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import { CALENDAR_ROUTE, getBoardRoute } from "@/shared/config/routes";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
+import { CardArchiveModal } from "@/widgets/card-archive";
 import { CardModal } from "@/widgets/card-modal";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
@@ -111,6 +114,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const [isInitialCardDismissed, setIsInitialCardDismissed] = useState(false);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
 
   useEffect(() => {
     if (!isReady || !workspace || !activeBoard) {
@@ -138,11 +142,12 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     return <BoardLoadingState />;
   }
 
-  const selectedCard = selectedCardId
+  const requestedCard = selectedCardId
     ? activeBoard.cards[selectedCardId]
     : !isInitialCardDismissed && initialCardId
       ? activeBoard.cards[initialCardId]
       : undefined;
+  const selectedCard = requestedCard?.isArchived ? undefined : requestedCard;
   const selectedListTitle = selectedCard
     ? activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список"
     : "";
@@ -164,6 +169,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setSelectedCardId(null);
     setIsInitialCardDismissed(true);
     setIsAppearanceOpen(false);
+    setIsArchiveOpen(false);
     router.push(getBoardRoute(nextBoardId));
 
     if (isMobileViewport()) {
@@ -174,11 +180,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const toggleProjects = () => {
     setIsProjectsOpen((current) => !current);
     setIsAppearanceOpen(false);
+    setIsArchiveOpen(false);
   };
 
   const toggleAppearance = () => {
     setIsAppearanceOpen((current) => !current);
     setIsProjectsOpen(false);
+    setIsArchiveOpen(false);
+  };
+
+  const toggleArchive = () => {
+    setIsArchiveOpen((current) => !current);
+    closeSidebars();
   };
 
   const openCalendar = () => {
@@ -191,11 +204,13 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       <WorkspaceHeader
         activeView="board"
         isAppearanceOpen={isAppearanceOpen}
+        isArchiveOpen={isArchiveOpen}
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
         persistenceLabel={statusLabel}
         onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
         onOpenCalendar={openCalendar}
+        onToggleArchive={toggleArchive}
         onToggleAppearance={toggleAppearance}
         onToggleProjects={toggleProjects}
       >
@@ -237,6 +252,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               setSelectedCardId(null);
               setIsInitialCardDismissed(true);
               setIsProjectsOpen(false);
+              setIsArchiveOpen(false);
               router.push(getBoardRoute(createdBoardId));
             }
           }}
@@ -244,6 +260,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             const nextActiveBoardId = deleteProject(deletedBoardId);
             setSelectedCardId(null);
             setIsInitialCardDismissed(true);
+            setIsArchiveOpen(false);
 
             if (deletedBoardId === boardId && nextActiveBoardId) {
               router.replace(getBoardRoute(nextActiveBoardId));
@@ -295,7 +312,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                   color: resolvedAppearance.canvasTextColor,
                 }}
               >
-                {Object.keys(activeBoard.cards).length} задач
+                {Object.values(activeBoard.cards).filter((card) => !card.isArchived).length} задач
               </span>
             </div>
 
@@ -346,17 +363,59 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         />
       </div>
 
+      {isArchiveOpen ? (
+        <CardArchiveModal
+          cards={Object.values(activeBoard.cards)}
+          lists={activeBoard.lists}
+          onClose={() => setIsArchiveOpen(false)}
+          onDelete={(cardId) =>
+            updateActiveBoard((board) => deleteCard(board, cardId), "immediate")
+          }
+          onRestore={(cardId) =>
+            updateActiveBoard((board) => restoreCard(board, cardId), "immediate")
+          }
+        />
+      ) : null}
+
       {selectedCard ? (
         <CardModal
           key={selectedCard.id}
           card={selectedCard}
+          lists={activeBoard.listIds.flatMap((listId) => {
+            const list = activeBoard.lists[listId];
+
+            return list ? [{ id: list.id, title: list.title }] : [];
+          })}
           listTitle={selectedListTitle}
+          onArchive={(cardId) => {
+            updateActiveBoard((board) => archiveCard(board, cardId), "immediate");
+          }}
           onClose={() => {
             setIsInitialCardDismissed(true);
             setSelectedCardId(null);
           }}
           onDelete={(cardId) => {
-            updateActiveBoard((board) => deleteCard(board, cardId));
+            updateActiveBoard((board) => deleteCard(board, cardId), "immediate");
+          }}
+          onDuplicate={(cardId) => {
+            updateActiveBoard((board) => duplicateCard(board, cardId), "immediate");
+          }}
+          onMove={(cardId, destinationListId) => {
+            updateActiveBoard(
+              (board) => {
+                const destinationList = board.lists[destinationListId];
+
+                return destinationList
+                  ? moveCard(
+                      board,
+                      cardId,
+                      destinationListId,
+                      destinationList.cardIds.length,
+                    )
+                  : board;
+              },
+              "immediate",
+            );
           }}
           onSave={(cardId, draft: CardDraft) => {
             updateActiveBoard((board) => updateCard(board, cardId, draft));

@@ -72,6 +72,8 @@ export type BoardCard = {
   description: string;
   dueDate?: string;
   label: LabelValue;
+  isArchived: boolean;
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
 };

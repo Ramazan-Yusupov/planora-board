@@ -86,7 +86,7 @@ export function getCalendarItems(
 
   for (const board of visibleBoards) {
     for (const card of Object.values(board.cards)) {
-      if (!card.dueDate || !createLocalDate(card.dueDate)) {
+      if (card.isArchived || !card.dueDate || !createLocalDate(card.dueDate)) {
         continue;
       }
 
