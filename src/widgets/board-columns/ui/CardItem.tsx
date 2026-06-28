@@ -10,6 +10,7 @@ import { LABEL_OPTIONS, type BoardCard, type CardSurface } from "@/entities/boar
 type CardItemProps = Readonly<{
   card: BoardCard;
   cardSurface: CardSurface;
+  isDragDisabled?: boolean;
   onOpen: (cardId: string) => void;
 }>;
 
@@ -31,8 +32,14 @@ function createSurfaceStyle(
   };
 }
 
-export function CardItem({ card, cardSurface, onOpen }: CardItemProps) {
+export function CardItem({
+  card,
+  cardSurface,
+  isDragDisabled = false,
+  onOpen,
+}: CardItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    disabled: isDragDisabled,
     id: card.id,
     data: {
       type: "card",
@@ -55,7 +62,8 @@ export function CardItem({ card, cardSurface, onOpen }: CardItemProps) {
       <div className="flex gap-2">
         <button
           aria-label={`Переместить карточку: ${card.title}`}
-          className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg opacity-70 transition hover:bg-black/10 focus:opacity-100 group-hover:opacity-100"
+          className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg opacity-70 transition hover:bg-black/10 focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-35"
+          disabled={isDragDisabled}
           style={{ color: cardSurface.mutedTextColor }}
           type="button"
           {...attributes}

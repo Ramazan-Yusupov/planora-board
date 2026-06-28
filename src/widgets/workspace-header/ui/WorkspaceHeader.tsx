@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Cloud,
   LayoutDashboard,
+  ListFilter,
   Menu,
   Palette,
 } from "lucide-react";
@@ -19,32 +20,42 @@ export type WorkspaceView = "board" | "calendar";
 type WorkspaceHeaderProps = Readonly<{
   activeView: WorkspaceView;
   children: ReactNode;
+  activeFiltersCount?: number;
   isAppearanceOpen?: boolean;
   isArchiveOpen?: boolean;
+  isFiltersOpen?: boolean;
   isPersistenceError: boolean;
   isProjectsOpen: boolean;
   persistenceLabel: string;
   onOpenBoard: () => void;
   onOpenCalendar: () => void;
-  onToggleArchive?: () => void;
   onToggleAppearance?: () => void;
+  onToggleArchive?: () => void;
+  onToggleFilters?: () => void;
   onToggleProjects: () => void;
 }>;
 
 export function WorkspaceHeader({
   activeView,
   children,
+  activeFiltersCount = 0,
   isAppearanceOpen = false,
   isArchiveOpen = false,
+  isFiltersOpen = false,
   isPersistenceError,
   isProjectsOpen,
   persistenceLabel,
   onOpenBoard,
   onOpenCalendar,
-  onToggleArchive,
   onToggleAppearance,
+  onToggleArchive,
+  onToggleFilters,
   onToggleProjects,
 }: WorkspaceHeaderProps) {
+  const filtersLabel = activeFiltersCount
+    ? `Открыть фильтры: активно ${activeFiltersCount}`
+    : "Открыть фильтры";
+
   return (
     <header className="z-50 border-b border-white/10 bg-panel/95 px-3 py-3 backdrop-blur-xl sm:px-5">
       <div className="mx-auto flex max-w-[1800px] items-center gap-2 sm:gap-4">
@@ -102,6 +113,29 @@ export function WorkspaceHeader({
           >
             <CalendarDays aria-hidden="true" size={19} />
           </IconButton>
+
+          {onToggleFilters ? (
+            <IconButton
+              aria-pressed={isFiltersOpen}
+              className={cn(
+                isFiltersOpen
+                  ? "bg-accent text-accent-foreground"
+                  : "text-text-muted hover:bg-control hover:text-text",
+              )}
+              label={filtersLabel}
+              size="lg"
+              onClick={onToggleFilters}
+            >
+              <span className="relative grid place-items-center">
+                <ListFilter aria-hidden="true" size={19} />
+                {activeFiltersCount > 0 ? (
+                  <span className="absolute -right-2 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-slate-950">
+                    {activeFiltersCount}
+                  </span>
+                ) : null}
+              </span>
+            </IconButton>
+          ) : null}
 
           {onToggleArchive ? (
             <IconButton

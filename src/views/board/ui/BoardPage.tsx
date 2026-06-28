@@ -1,11 +1,18 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertTriangle, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { resolveBoardAppearance, type CardDraft } from "@/entities/board";
 import { archiveCard, restoreCard } from "@/features/archive-card";
+import {
+  DEFAULT_CARD_FILTERS,
+  getActiveCardFiltersCount,
+  getVisibleCardIdsByList,
+  hasActiveCardFilters,
+  type CardFilters,
+} from "@/features/filter-cards";
 import { duplicateCard } from "@/features/duplicate-card";
 import {
   addCard,
@@ -24,6 +31,7 @@ import { CALENDAR_ROUTE, getBoardRoute } from "@/shared/config/routes";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
 import { CardArchiveModal } from "@/widgets/card-archive";
+import { CardFiltersSidebar } from "@/widgets/card-filters";
 import { CardModal } from "@/widgets/card-modal";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
@@ -37,6 +45,19 @@ function isMobileViewport(): boolean {
   return (
     typeof window !== "undefined" &&
     window.matchMedia("(max-width: 1023px)").matches
+  );
+}
+
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT"
   );
 }
 
@@ -115,6 +136,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [cardFilters, setCardFilters] = useState<CardFilters>({
+    ...DEFAULT_CARD_FILTERS,
+  });
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!isReady || !workspace || !activeBoard) {
@@ -135,6 +161,29 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     }
   }, [activeBoard, boardId, isReady, router, selectProject, workspace]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "/" ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        isTextEditingTarget(event.target)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   const isRequestedBoardReady =
     isReady && Boolean(workspace) && activeBoard?.id === boardId;
 
@@ -152,6 +201,19 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     ? activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список"
     : "";
   const resolvedAppearance = resolveBoardAppearance(activeBoard.appearance);
+  const activeCardsCount = Object.values(activeBoard.cards).filter(
+    (card) => !card.isArchived,
+  ).length;
+  const visibleCardIdsByList = getVisibleCardIdsByList(
+    activeBoard,
+    cardFilters,
+  );
+  const visibleCardsCount = Object.values(visibleCardIdsByList).reduce(
+    (count, cardIds) => count + cardIds.length,
+    0,
+  );
+  const activeFiltersCount = getActiveCardFiltersCount(cardFilters);
+  const isFiltering = hasActiveCardFilters(cardFilters);
   const statusLabel =
     persistenceState === "saving"
       ? "Сохраняем…"
@@ -159,9 +221,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         ? "Ошибка сохранения"
         : "Сохранено локально";
 
-  const closeSidebars = () => {
+  const closePanels = () => {
     setIsProjectsOpen(false);
     setIsAppearanceOpen(false);
+    setIsFiltersOpen(false);
   };
 
   const selectProjectFromSidebar = (nextBoardId: string) => {
@@ -170,6 +233,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setIsInitialCardDismissed(true);
     setIsAppearanceOpen(false);
     setIsArchiveOpen(false);
+    setIsFiltersOpen(false);
     router.push(getBoardRoute(nextBoardId));
 
     if (isMobileViewport()) {
@@ -181,37 +245,49 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setIsProjectsOpen((current) => !current);
     setIsAppearanceOpen(false);
     setIsArchiveOpen(false);
+    setIsFiltersOpen(false);
   };
 
   const toggleAppearance = () => {
     setIsAppearanceOpen((current) => !current);
     setIsProjectsOpen(false);
     setIsArchiveOpen(false);
+    setIsFiltersOpen(false);
+  };
+
+  const toggleFilters = () => {
+    setIsFiltersOpen((current) => !current);
+    setIsProjectsOpen(false);
+    setIsAppearanceOpen(false);
+    setIsArchiveOpen(false);
   };
 
   const toggleArchive = () => {
     setIsArchiveOpen((current) => !current);
-    closeSidebars();
+    closePanels();
   };
 
   const openCalendar = () => {
-    closeSidebars();
+    closePanels();
     router.push(CALENDAR_ROUTE);
   };
 
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
       <WorkspaceHeader
+        activeFiltersCount={activeFiltersCount}
         activeView="board"
         isAppearanceOpen={isAppearanceOpen}
         isArchiveOpen={isArchiveOpen}
+        isFiltersOpen={isFiltersOpen}
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
         persistenceLabel={statusLabel}
         onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
         onOpenCalendar={openCalendar}
-        onToggleArchive={toggleArchive}
         onToggleAppearance={toggleAppearance}
+        onToggleArchive={toggleArchive}
+        onToggleFilters={toggleFilters}
         onToggleProjects={toggleProjects}
       >
         <label className="sr-only" htmlFor="board-title">
@@ -231,12 +307,12 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       </WorkspaceHeader>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {isProjectsOpen || isAppearanceOpen ? (
+        {isProjectsOpen || isAppearanceOpen || isFiltersOpen ? (
           <button
             aria-label="Закрыть боковую панель"
             className="absolute inset-0 z-30 bg-black/55 lg:hidden"
             type="button"
-            onClick={closeSidebars}
+            onClick={closePanels}
           />
         ) : null}
 
@@ -253,6 +329,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               setIsInitialCardDismissed(true);
               setIsProjectsOpen(false);
               setIsArchiveOpen(false);
+              setIsFiltersOpen(false);
               router.push(getBoardRoute(createdBoardId));
             }
           }}
@@ -261,6 +338,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             setSelectedCardId(null);
             setIsInitialCardDismissed(true);
             setIsArchiveOpen(false);
+            setIsFiltersOpen(false);
 
             if (deletedBoardId === boardId && nextActiveBoardId) {
               router.replace(getBoardRoute(nextActiveBoardId));
@@ -305,30 +383,83 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                 </p>
               </div>
 
-              <span
-                className="rounded-lg px-2.5 py-1 text-xs font-medium"
-                style={{
-                  backgroundColor: "rgba(15, 23, 42, 0.35)",
-                  color: resolvedAppearance.canvasTextColor,
-                }}
-              >
-                {Object.values(activeBoard.cards).filter((card) => !card.isArchived).length} задач
-              </span>
+              <div className="flex min-w-[min(100%,17rem)] flex-1 items-center justify-end gap-2 sm:max-w-xl">
+                <label className="relative min-w-0 flex-1 sm:max-w-sm">
+                  <span className="sr-only">Поиск карточек</span>
+                  <Search
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+                    size={17}
+                    style={{ color: resolvedAppearance.canvasMutedTextColor }}
+                  />
+                  <input
+                    ref={searchInputRef}
+                    className="h-10 w-full rounded-xl border border-white/15 bg-slate-950/30 py-2 pl-10 pr-9 text-sm text-white placeholder:text-white/55 backdrop-blur-sm"
+                    placeholder="Поиск задач…  /"
+                    value={cardFilters.query}
+                    onChange={(event) =>
+                      setCardFilters((current) => ({
+                        ...current,
+                        query: event.target.value,
+                      }))
+                    }
+                  />
+                  {cardFilters.query ? (
+                    <button
+                      aria-label="Очистить поиск"
+                      className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white"
+                      type="button"
+                      onClick={() =>
+                        setCardFilters((current) => ({ ...current, query: "" }))
+                      }
+                    >
+                      <X aria-hidden="true" size={16} />
+                    </button>
+                  ) : null}
+                </label>
+
+                <span
+                  className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium"
+                  style={{
+                    backgroundColor: "rgba(15, 23, 42, 0.35)",
+                    color: resolvedAppearance.canvasTextColor,
+                  }}
+                >
+                  {isFiltering
+                    ? `${visibleCardsCount} из ${activeCardsCount}`
+                    : `${activeCardsCount} задач`}
+                </span>
+              </div>
             </div>
+
+            {isFiltering ? (
+              <div className="px-4 pb-3 sm:px-6">
+                <p className="rounded-xl border border-white/15 bg-slate-950/25 px-3 py-2 text-xs leading-5 text-white/75 backdrop-blur-sm">
+                  Во время поиска и фильтрации перенос карточек и списков временно
+                  выключен. Очистите фильтры, чтобы изменить порядок.
+                </p>
+              </div>
+            ) : null}
 
             <div className="min-h-0 flex-1">
               <BoardColumns
                 appearance={resolvedAppearance}
                 board={activeBoard}
+                isFiltering={isFiltering}
+                visibleCardIdsByList={visibleCardIdsByList}
                 onAddCard={(listId, title) =>
                   updateActiveBoard((board) => addCard(board, listId, title))
                 }
                 onAddList={(title) =>
                   updateActiveBoard((board) => addList(board, title))
                 }
-                onDeleteList={(listId) =>
-                  updateActiveBoard((board) => deleteList(board, listId))
-                }
+                onDeleteList={(listId) => {
+                  if (cardFilters.listId === listId) {
+                    setCardFilters((current) => ({ ...current, listId: "all" }));
+                  }
+
+                  updateActiveBoard((board) => deleteList(board, listId));
+                }}
                 onMoveCard={(cardId, listId, index) =>
                   updateActiveBoard((board) =>
                     moveCard(board, cardId, listId, index),
@@ -341,6 +472,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                 }
                 onOpenCard={(cardId) => {
                   setIsInitialCardDismissed(true);
+                  setIsFiltersOpen(false);
                   setSelectedCardId(cardId);
                 }}
                 onRenameList={(listId, title) =>
@@ -360,6 +492,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             )
           }
           onClose={() => setIsAppearanceOpen(false)}
+        />
+
+        <CardFiltersSidebar
+          filters={cardFilters}
+          isOpen={isFiltersOpen}
+          lists={activeBoard.listIds.flatMap((listId) => {
+            const list = activeBoard.lists[listId];
+
+            return list ? [list] : [];
+          })}
+          onChange={setCardFilters}
+          onClose={() => setIsFiltersOpen(false)}
         />
       </div>
 

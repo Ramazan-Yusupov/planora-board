@@ -20,6 +20,8 @@ type ListColumnProps = Readonly<{
   list: BoardList;
   cards: BoardCard[];
   cardSurface: CardSurface;
+  isDragDisabled: boolean;
+  totalCardCount: number;
   onOpenCard: (cardId: string) => void;
   onAddCard: (listId: string, title: string) => void;
   onRenameList: (listId: string, title: string) => void;
@@ -30,6 +32,8 @@ export function ListColumn({
   list,
   cards,
   cardSurface,
+  isDragDisabled,
+  totalCardCount,
   onOpenCard,
   onAddCard,
   onRenameList,
@@ -42,6 +46,7 @@ export function ListColumn({
     useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
+      disabled: isDragDisabled,
       id: list.id,
       data: {
         type: "list",
@@ -49,6 +54,7 @@ export function ListColumn({
       },
     });
   const { setNodeRef: setDropRef, isOver } = useDroppable({
+    disabled: isDragDisabled,
     id: `list-drop-${list.id}`,
     data: {
       type: "list-drop",
@@ -85,9 +91,12 @@ export function ListColumn({
     setListTitle(list.title);
   };
 
-  const deleteDescription = cards.length
-    ? `Список «${list.title}» и ${cards.length} карточек будут удалены без возможности восстановления.`
+  const deleteDescription = totalCardCount
+    ? `Список «${list.title}» и ${totalCardCount} карточек будут удалены без возможности восстановления.`
     : `Список «${list.title}» будет удалён без возможности восстановления.`;
+  const emptyMessage = isDragDisabled
+    ? "Нет карточек по текущему фильтру."
+    : "Перетащите сюда карточку или создайте новую.";
 
   return (
     <Fragment>
@@ -104,6 +113,7 @@ export function ListColumn({
             {...attributes}
             {...listeners}
             className="text-slate-300 hover:bg-white/10 hover:text-white"
+            disabled={isDragDisabled}
             label={`Переместить список: ${list.title}`}
             size="sm"
           >
@@ -157,13 +167,14 @@ export function ListColumn({
                 key={card.id}
                 card={card}
                 cardSurface={cardSurface}
+                isDragDisabled={isDragDisabled}
                 onOpen={onOpenCard}
               />
             ))}
 
             {cards.length === 0 ? (
               <p className="grid min-h-20 place-items-center rounded-xl border border-dashed border-white/20 bg-black/10 px-3 text-center text-xs leading-5 text-slate-300">
-                Перетащите сюда карточку или создайте новую.
+                {emptyMessage}
               </p>
             ) : null}
           </div>

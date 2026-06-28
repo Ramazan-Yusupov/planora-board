@@ -36,6 +36,8 @@ import { ListColumn, ListPreview } from "./ListColumn";
 type BoardColumnsProps = Readonly<{
   board: Board;
   appearance: ResolvedBoardAppearance;
+  isFiltering?: boolean;
+  visibleCardIdsByList?: Readonly<Record<string, readonly string[]>>;
   onAddCard: (listId: string, title: string) => void;
   onAddList: (title: string) => void;
   onRenameList: (listId: string, title: string) => void;
@@ -45,8 +47,14 @@ type BoardColumnsProps = Readonly<{
   onMoveList: (listId: string, destinationListId: string) => void;
 }>;
 
-function getListCards(board: Board, list: BoardList): BoardCard[] {
-  return list.cardIds
+function getListCards(
+  board: Board,
+  list: BoardList,
+  visibleCardIds?: readonly string[],
+): BoardCard[] {
+  const cardIds = visibleCardIds ?? list.cardIds;
+
+  return cardIds
     .map((cardId) => board.cards[cardId])
     .filter((card): card is BoardCard => Boolean(card) && !card.isArchived);
 }
@@ -54,6 +62,8 @@ function getListCards(board: Board, list: BoardList): BoardCard[] {
 export function BoardColumns({
   board,
   appearance,
+  isFiltering = false,
+  visibleCardIdsByList,
   onAddCard,
   onAddList,
   onRenameList,
@@ -71,6 +81,7 @@ export function BoardColumns({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+  const isDragEnabled = !isFiltering;
 
   const activeCard = activeItem?.cardId
     ? board.cards[activeItem.cardId]
@@ -80,10 +91,19 @@ export function BoardColumns({
     : undefined;
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (!isDragEnabled) {
+      return;
+    }
+
     setActiveItem(readDndItemData(event.active.data.current));
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (!isDragEnabled) {
+      setActiveItem(null);
+      return;
+    }
+
     const activeData = readDndItemData(event.active.data.current);
     const overData = readDndItemData(event.over?.data.current);
 
@@ -129,9 +149,9 @@ export function BoardColumns({
 
   return (
     <DndContext
-      autoScroll
+      autoScroll={isDragEnabled}
       collisionDetection={closestCorners}
-      sensors={sensors}
+      sensors={isDragEnabled ? sensors : undefined}
       onDragCancel={() => setActiveItem(null)}
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
@@ -149,12 +169,20 @@ export function BoardColumns({
                 return null;
               }
 
+              const visibleCardIds = visibleCardIdsByList?.[list.id];
+              const visibleList = visibleCardIds
+                ? { ...list, cardIds: [...visibleCardIds] }
+                : list;
+              const cards = getListCards(board, list, visibleCardIds);
+
               return (
                 <ListColumn
                   key={list.id}
                   cardSurface={appearance.cardSurface}
-                  cards={getListCards(board, list)}
-                  list={list}
+                  cards={cards}
+                  isDragDisabled={!isDragEnabled}
+                  list={visibleList}
+                  totalCardCount={list.cardIds.length}
                   onAddCard={onAddCard}
                   onDeleteList={onDeleteList}
                   onOpenCard={onOpenCard}
@@ -220,14 +248,16 @@ export function BoardColumns({
         </SortableContext>
       </div>
 
-      <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-        {activeCard ? (
-          <CardPreview card={activeCard} cardSurface={appearance.cardSurface} />
-        ) : null}
-        {activeList && activeItem?.type === "list" ? (
-          <ListPreview list={activeList} />
-        ) : null}
-      </DragOverlay>
+      {isDragEnabled ? (
+        <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+          {activeCard ? (
+            <CardPreview card={activeCard} cardSurface={appearance.cardSurface} />
+          ) : null}
+          {activeList && activeItem?.type === "list" ? (
+            <ListPreview list={activeList} />
+          ) : null}
+        </DragOverlay>
+      ) : null}
     </DndContext>
   );
 }

@@ -4,6 +4,10 @@ import { AlertTriangle } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
+import {
+  DEFAULT_CALENDAR_CARD_FILTERS,
+  type CalendarCardFilters,
+} from "@/features/filter-cards";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import { getMonthStart, shiftMonth, type CalendarItem } from "@/features/view-calendar";
 import { CALENDAR_ROUTE, getBoardRoute } from "@/shared/config/routes";
@@ -51,6 +55,9 @@ export function CalendarPage() {
   } = useBoardWorkspace();
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+  const [calendarFilters, setCalendarFilters] = useState<CalendarCardFilters>({
+    ...DEFAULT_CALENDAR_CARD_FILTERS,
+  });
   const [monthOffset, setMonthOffset] = useState(0);
   const currentMonthTimestamp = useSyncExternalStore(
     subscribeToCurrentMonth,
@@ -148,8 +155,10 @@ export function CalendarPage() {
 
           <CalendarView
             boards={workspace.boards}
+            filters={calendarFilters}
             month={month}
             selectedBoardId={selectedBoardId}
+            onChangeFilters={setCalendarFilters}
             onOpenCard={openCalendarCard}
             onSelectBoard={setSelectedBoardId}
             onShiftMonth={(offset) => setMonthOffset((current) => current + offset)}

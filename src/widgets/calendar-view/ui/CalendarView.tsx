@@ -1,9 +1,14 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, CircleDot } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleDot, Search } from "lucide-react";
 import { useMemo } from "react";
 
-import type { Board } from "@/entities/board";
+import { LABEL_OPTIONS, type Board } from "@/entities/board";
+import {
+  isCardMatchingFilters,
+  toCardFilters,
+  type CalendarCardFilters,
+} from "@/features/filter-cards";
 import {
   formatDayLabel,
   formatMonthTitle,
@@ -16,8 +21,10 @@ import { Button, IconButton } from "@/shared/ui";
 
 type CalendarViewProps = Readonly<{
   boards: readonly Board[];
+  filters: CalendarCardFilters;
   month: Date;
   selectedBoardId: string | null;
+  onChangeFilters: (filters: CalendarCardFilters) => void;
   onOpenCard: (item: CalendarItem) => void;
   onSelectBoard: (boardId: string | null) => void;
   onShiftMonth: (offset: number) => void;
@@ -28,18 +35,32 @@ const weekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 export function CalendarView({
   boards,
+  filters,
   month,
   selectedBoardId,
+  onChangeFilters,
   onOpenCard,
   onSelectBoard,
   onShiftMonth,
   onShowToday,
 }: CalendarViewProps) {
   const days = useMemo(() => getCalendarDays(month), [month]);
-  const itemsByDate = useMemo(
-    () => getCalendarItems(boards, selectedBoardId),
-    [boards, selectedBoardId],
-  );
+  const itemsByDate = useMemo(() => {
+    const nextItemsByDate = new Map<string, CalendarItem[]>();
+    const cardFilters = toCardFilters(filters);
+
+    for (const [dateKey, items] of getCalendarItems(boards, selectedBoardId)) {
+      const filteredItems = items.filter((item) =>
+        isCardMatchingFilters(item.card, cardFilters),
+      );
+
+      if (filteredItems.length > 0) {
+        nextItemsByDate.set(dateKey, filteredItems);
+      }
+    }
+
+    return nextItemsByDate;
+  }, [boards, filters, selectedBoardId]);
   const monthTitle = formatMonthTitle(month);
 
   return (
@@ -68,21 +89,61 @@ export function CalendarView({
           Сегодня
         </Button>
 
-        <label className="ml-auto flex min-w-[min(100%,15rem)] items-center gap-2 text-sm text-text-muted">
-          <span className="sr-only">Фильтр по проекту</span>
-          <select
-            className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
-            value={selectedBoardId ?? ""}
-            onChange={(event) => onSelectBoard(event.target.value || null)}
-          >
-            <option value="">Все проекты</option>
-            {boards.map((board) => (
-              <option key={board.id} value={board.id}>
-                {board.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex w-full flex-wrap items-center gap-2 xl:ml-auto xl:w-auto xl:flex-nowrap">
+          <label className="relative min-w-[min(100%,14rem)] flex-1 xl:w-56 xl:flex-none">
+            <span className="sr-only">Поиск задач в календаре</span>
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              size={16}
+            />
+            <input
+              className="h-10 w-full rounded-xl border border-white/10 bg-control/45 py-2 pl-9 pr-3 text-sm text-text placeholder:text-text-muted"
+              placeholder="Поиск задач"
+              value={filters.query}
+              onChange={(event) =>
+                onChangeFilters({ ...filters, query: event.target.value })
+              }
+            />
+          </label>
+
+          <label className="min-w-[min(100%,11rem)] flex-1 text-sm text-text-muted xl:w-48 xl:flex-none">
+            <span className="sr-only">Фильтр по проекту</span>
+            <select
+              className="h-10 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              value={selectedBoardId ?? ""}
+              onChange={(event) => onSelectBoard(event.target.value || null)}
+            >
+              <option value="">Все проекты</option>
+              {boards.map((board) => (
+                <option key={board.id} value={board.id}>
+                  {board.title}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="min-w-[min(100%,10rem)] flex-1 text-sm text-text-muted xl:w-44 xl:flex-none">
+            <span className="sr-only">Фильтр по метке</span>
+            <select
+              className="h-10 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              value={filters.label}
+              onChange={(event) =>
+                onChangeFilters({
+                  ...filters,
+                  label: event.target.value as CalendarCardFilters["label"],
+                })
+              }
+            >
+              <option value="all">Все метки</option>
+              {LABEL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6">
