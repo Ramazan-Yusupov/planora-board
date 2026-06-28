@@ -495,7 +495,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               color: resolvedAppearance.canvasTextColor,
             }}
           >
-            <div className="flex flex-wrap items-start justify-between gap-4 px-4 py-4 sm:px-6">
+            <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6 sm:py-4">
               <div>
                 <h1 className="text-base font-semibold">Рабочая доска</h1>
                 <p className="mt-1 text-sm" style={{ color: resolvedAppearance.canvasMutedTextColor }}>
@@ -503,20 +503,20 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                 </p>
               </div>
 
-              <div className="flex min-w-[min(100%,17rem)] flex-1 items-center justify-end gap-2 sm:max-w-xl">
+              <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:min-w-[min(100%,17rem)] sm:flex-1 sm:justify-end sm:max-w-xl">
                 <label className="relative min-w-0 flex-1 sm:max-w-sm">
                   <span className="sr-only">Поиск карточек</span>
                   <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" size={17} style={{ color: resolvedAppearance.canvasMutedTextColor }} />
                   <TextField
                     ref={searchInputRef}
-                    className="border-white/15 bg-slate-950/30 py-2 pl-10 pr-9 text-white placeholder:text-white/55 backdrop-blur-sm"
+                    className="border-white/15 bg-slate-950/30 py-2 pl-10 pr-11 text-white placeholder:text-white/55 backdrop-blur-sm"
                     placeholder="Поиск задач…  /"
                     value={cardFilters.query}
                     onChange={(event) => setCardFilters((current) => ({ ...current, query: event.target.value }))}
                   />
                   {cardFilters.query ? (
                     <IconButton
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-white/70 hover:bg-white/10 hover:text-white"
+                      className="absolute right-1 top-1/2 size-9 -translate-y-1/2 text-white/70 hover:bg-white/10 hover:text-white"
                       label="Очистить поиск"
                       size="sm"
                       onClick={() => setCardFilters((current) => ({ ...current, query: "" }))}
@@ -525,7 +525,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                     </IconButton>
                   ) : null}
                 </label>
-                <span className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: "rgba(15, 23, 42, 0.35)", color: resolvedAppearance.canvasTextColor }}>
+                <span className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: "rgba(15, 23, 42, 0.35)", color: resolvedAppearance.canvasTextColor }}>
                   {isFiltering ? `${visibleCardsCount} из ${activeCardsCount}` : `${activeCardsCount} задач`}
                 </span>
               </div>

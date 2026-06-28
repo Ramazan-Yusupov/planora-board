@@ -5,7 +5,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -79,7 +80,12 @@ export function BoardColumns({
   const [isAddingList, setIsAddingList] = useState(false);
   const [listTitle, setListTitle] = useState("");
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 7 } }),
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { distance: 8 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -160,12 +166,12 @@ export function BoardColumns({
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
     >
-      <div className="h-full overflow-x-auto overflow-y-hidden px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6">
+      <div className="scrollbar-none h-full touch-pan-x overscroll-x-contain overflow-x-auto overflow-y-hidden px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6">
         <SortableContext
           items={activeListIds}
           strategy={horizontalListSortingStrategy}
         >
-          <div className="flex h-full min-w-max items-start gap-3">
+          <div className="flex h-full min-w-max items-start gap-3 pr-4 sm:pr-6">
             {activeListIds.map((listId) => {
               const list = board.lists[listId];
 

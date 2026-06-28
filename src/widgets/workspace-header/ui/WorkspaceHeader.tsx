@@ -9,11 +9,12 @@ import {
   LayoutDashboard,
   ListFilter,
   Menu,
+  MoreHorizontal,
   Palette,
   Redo2,
   Undo2,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { APP_NAME } from "@/shared/config/app";
 import { cn } from "@/shared/lib";
@@ -45,6 +46,73 @@ type WorkspaceHeaderProps = Readonly<{
   onUndo?: () => void;
 }>;
 
+type HeaderMenuItemProps = Readonly<{
+  icon: ReactNode;
+  label: string;
+  onSelect: () => void;
+  active?: boolean;
+  badge?: number;
+  disabled?: boolean;
+  shortcut?: string;
+}>;
+
+function HeaderMenuItem({
+  icon,
+  label,
+  onSelect,
+  active = false,
+  badge,
+  disabled = false,
+  shortcut,
+}: HeaderMenuItemProps) {
+  return (
+    <button
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium transition",
+        active
+          ? "bg-accent text-accent-foreground"
+          : "text-text-muted hover:bg-control hover:text-text",
+        disabled && "cursor-not-allowed opacity-45",
+      )}
+      disabled={disabled}
+      role="menuitem"
+      type="button"
+      onClick={onSelect}
+    >
+      <span className="grid size-7 shrink-0 place-items-center">{icon}</span>
+
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+
+      {shortcut ? (
+        <kbd
+          className={cn(
+            "rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
+            active
+              ? "border-accent-foreground/30 text-accent-foreground/80"
+              : "border-white/10 text-text-muted",
+          )}
+        >
+          {shortcut}
+        </kbd>
+      ) : null}
+
+      {badge ? (
+        <span
+          className={cn(
+            "grid min-h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold",
+            active
+              ? "bg-accent-foreground text-accent"
+              : "bg-danger text-slate-950",
+          )}
+        >
+          {badge}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 export function WorkspaceHeader({
   activeView,
   children,
@@ -68,67 +136,131 @@ export function WorkspaceHeader({
   onToggleProjects,
   onUndo,
 }: WorkspaceHeaderProps) {
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+
   const filtersLabel = activeFiltersCount
-    ? `Открыть фильтры: активно ${activeFiltersCount}`
-    : "Открыть фильтры";
+    ? `Фильтры: активно ${activeFiltersCount}`
+    : "Фильтры";
+
+  const desktopIconClass = "text-text-muted hover:bg-control hover:text-text";
+
+  useEffect(() => {
+    if (!isActionsMenuOpen) {
+      return;
+    }
+
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (
+        actionsMenuRef.current &&
+        !actionsMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsActionsMenuOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsActionsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isActionsMenuOpen]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+
+    const closeMenuOnDesktop = () => {
+      if (mediaQuery.matches) {
+        setIsActionsMenuOpen(false);
+      }
+    };
+
+    closeMenuOnDesktop();
+    mediaQuery.addEventListener("change", closeMenuOnDesktop);
+
+    return () => {
+      mediaQuery.removeEventListener("change", closeMenuOnDesktop);
+    };
+  }, []);
+
+  const selectMenuAction = (action: (() => void) | undefined) => {
+    action?.();
+    setIsActionsMenuOpen(false);
+  };
 
   return (
-    <header className="z-50 border-b border-white/10 bg-panel/95 px-3 py-3 backdrop-blur-xl sm:px-5">
-      <div className="mx-auto flex max-w-[1800px] items-center gap-2 sm:gap-4">
-        <IconButton
-          aria-pressed={isProjectsOpen}
-          className="text-text-muted hover:bg-control hover:text-text"
-          label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
-          size="lg"
-          onClick={onToggleProjects}
-        >
-          <Menu aria-hidden="true" size={20} />
-        </IconButton>
-
-        <div className="hidden items-center gap-3 sm:flex">
-          <button
-            aria-label="Открыть доску"
-            className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm shadow-accent/20 transition hover:bg-accent-hover"
-            type="button"
-            onClick={onOpenBoard}
+    <header className="z-50 border-b border-white/10 bg-panel/95 px-2 py-2 backdrop-blur-xl sm:px-5 sm:py-3">
+      <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 sm:gap-3">
+        <div className="flex">
+          <IconButton
+            aria-pressed={isProjectsOpen}
+            className="size-11 text-text-muted hover:bg-control hover:text-text sm:size-10"
+            label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
+            size="lg"
+            onClick={onToggleProjects}
           >
-            <LayoutDashboard aria-hidden="true" size={20} />
-          </button>
+            <Menu aria-hidden="true" size={20} />
+          </IconButton>
 
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">{APP_NAME}</p>
-            <p className="text-xs text-text-muted">Локальные проекты</p>
+          <div className="hidden items-center gap-3 sm:flex">
+            <button
+              aria-label="Открыть доску"
+              className="grid size-10 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm shadow-accent/20 transition hover:bg-accent-hover"
+              type="button"
+              onClick={onOpenBoard}
+            >
+              <LayoutDashboard aria-hidden="true" size={20} />
+            </button>
+
+            <div className="hidden md:block">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+                {APP_NAME}
+              </p>
+              <p className="text-xs text-text-muted">Локальные проекты</p>
+            </div>
           </div>
         </div>
 
         <div className="min-w-0 flex-1 sm:max-w-xl">{children}</div>
 
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <span
-            className={cn(
-              "hidden items-center gap-1.5 text-xs font-medium md:inline-flex",
-              isPersistenceError ? "text-red-300" : "text-text-muted",
-            )}
-          >
-            <Cloud aria-hidden="true" size={15} />
-            {persistenceLabel}
-          </span>
+        <span
+          className={cn(
+            "hidden items-center gap-1.5 text-xs font-medium lg:inline-flex",
+            isPersistenceError ? "text-red-300" : "text-text-muted",
+          )}
+        >
+          <Cloud aria-hidden="true" size={15} />
+          {persistenceLabel}
+        </span>
 
+        {/* Desktop: отдельные кнопки инструментов */}
+        <div className="hidden shrink-0 items-center gap-1 lg:flex">
           {onUndo ? (
             <IconButton
-              className="hidden text-text-muted hover:bg-control hover:text-text sm:grid"
               disabled={!canUndo}
+              className={desktopIconClass}
               label="Отменить действие"
+              size="sm"
               onClick={onUndo}
             >
               <Undo2 aria-hidden="true" size={18} />
             </IconButton>
           ) : null}
+
           {onRedo ? (
             <IconButton
-              className="hidden text-text-muted hover:bg-control hover:text-text sm:grid"
               disabled={!canRedo}
+              className={desktopIconClass}
               label="Повторить действие"
+              size="sm"
               onClick={onRedo}
             >
               <Redo2 aria-hidden="true" size={18} />
@@ -137,9 +269,9 @@ export function WorkspaceHeader({
 
           {onOpenCommands ? (
             <IconButton
-              className="text-text-muted hover:bg-control hover:text-text"
-              label="Открыть команды"
-              size="lg"
+              className={desktopIconClass}
+              label="Командная палитра"
+              size="sm"
               onClick={onOpenCommands}
             >
               <Command aria-hidden="true" size={18} />
@@ -147,17 +279,17 @@ export function WorkspaceHeader({
           ) : null}
 
           <IconButton
-            aria-current={activeView === "calendar" ? "page" : undefined}
+            aria-pressed={activeView === "calendar"}
             className={cn(
               activeView === "calendar"
                 ? "bg-accent text-accent-foreground"
-                : "text-text-muted hover:bg-control hover:text-text",
+                : desktopIconClass,
             )}
-            label="Открыть календарь"
-            size="lg"
+            label="Календарь"
+            size="sm"
             onClick={onOpenCalendar}
           >
-            <CalendarDays aria-hidden="true" size={19} />
+            <CalendarDays aria-hidden="true" size={18} />
           </IconButton>
 
           {onToggleFilters ? (
@@ -166,20 +298,13 @@ export function WorkspaceHeader({
               className={cn(
                 isFiltersOpen
                   ? "bg-accent text-accent-foreground"
-                  : "text-text-muted hover:bg-control hover:text-text",
+                  : desktopIconClass,
               )}
               label={filtersLabel}
-              size="lg"
+              size="sm"
               onClick={onToggleFilters}
             >
-              <span className="relative grid place-items-center">
-                <ListFilter aria-hidden="true" size={19} />
-                {activeFiltersCount > 0 ? (
-                  <span className="absolute -right-2 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-slate-950">
-                    {activeFiltersCount}
-                  </span>
-                ) : null}
-              </span>
+              <ListFilter aria-hidden="true" size={18} />
             </IconButton>
           ) : null}
 
@@ -189,10 +314,10 @@ export function WorkspaceHeader({
               className={cn(
                 isArchiveOpen
                   ? "bg-accent text-accent-foreground"
-                  : "text-text-muted hover:bg-control hover:text-text",
+                  : desktopIconClass,
               )}
-              label="Открыть архив"
-              size="lg"
+              label="Архив"
+              size="sm"
               onClick={onToggleArchive}
             >
               <Archive aria-hidden="true" size={18} />
@@ -201,9 +326,9 @@ export function WorkspaceHeader({
 
           {onOpenWorkspaceData ? (
             <IconButton
-              className="text-text-muted hover:bg-control hover:text-text"
+              className={desktopIconClass}
               label="Экспорт и импорт"
-              size="lg"
+              size="sm"
               onClick={onOpenWorkspaceData}
             >
               <Download aria-hidden="true" size={18} />
@@ -216,14 +341,143 @@ export function WorkspaceHeader({
               className={cn(
                 isAppearanceOpen
                   ? "bg-accent text-accent-foreground"
-                  : "text-text-muted hover:bg-control hover:text-text",
+                  : desktopIconClass,
               )}
               label="Оформление доски"
-              size="lg"
+              size="sm"
               onClick={onToggleAppearance}
             >
-              <Palette aria-hidden="true" size={19} />
+              <Palette aria-hidden="true" size={18} />
             </IconButton>
+          ) : null}
+        </div>
+
+        {/* Mobile / tablet: компактное меню до 1024px */}
+        <div ref={actionsMenuRef} className="relative shrink-0 lg:hidden">
+          <IconButton
+            aria-expanded={isActionsMenuOpen}
+            aria-haspopup="menu"
+            className={cn(
+              "size-11 sm:size-10",
+              isActionsMenuOpen
+                ? "bg-accent text-accent-foreground"
+                : "text-text-muted hover:bg-control hover:text-text",
+            )}
+            label={
+              isActionsMenuOpen
+                ? "Закрыть меню инструментов"
+                : "Открыть меню инструментов"
+            }
+            size="lg"
+            onClick={() => setIsActionsMenuOpen((current) => !current)}
+          >
+            <MoreHorizontal aria-hidden="true" size={21} />
+          </IconButton>
+
+          {isActionsMenuOpen ? (
+            <div
+              aria-label="Инструменты проекта"
+              className="absolute right-0 top-[calc(100%+0.5rem)] z-[60] max-h-[calc(100dvh-5.5rem)] w-[min(92vw,22rem)] overflow-y-auto rounded-2xl border border-white/10 bg-panel/98 p-2 shadow-2xl backdrop-blur-xl scrollbar-none"
+              role="menu"
+            >
+              <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+                Навигация
+              </p>
+
+              <HeaderMenuItem
+                active={activeView === "board"}
+                icon={<LayoutDashboard aria-hidden="true" size={18} />}
+                label="Рабочая доска"
+                onSelect={() => selectMenuAction(onOpenBoard)}
+              />
+
+              <HeaderMenuItem
+                active={activeView === "calendar"}
+                icon={<CalendarDays aria-hidden="true" size={18} />}
+                label="Календарь"
+                onSelect={() => selectMenuAction(onOpenCalendar)}
+              />
+
+              <div className="my-2 border-t border-white/10" />
+
+              {onOpenCommands ? (
+                <HeaderMenuItem
+                  icon={<Command aria-hidden="true" size={18} />}
+                  label="Командная палитра"
+                  shortcut="⌘K"
+                  onSelect={() => selectMenuAction(onOpenCommands)}
+                />
+              ) : null}
+
+              {onUndo ? (
+                <HeaderMenuItem
+                  disabled={!canUndo}
+                  icon={<Undo2 aria-hidden="true" size={18} />}
+                  label="Отменить действие"
+                  shortcut="⌘Z"
+                  onSelect={() => selectMenuAction(onUndo)}
+                />
+              ) : null}
+
+              {onRedo ? (
+                <HeaderMenuItem
+                  disabled={!canRedo}
+                  icon={<Redo2 aria-hidden="true" size={18} />}
+                  label="Повторить действие"
+                  shortcut="⇧⌘Z"
+                  onSelect={() => selectMenuAction(onRedo)}
+                />
+              ) : null}
+
+              {onToggleFilters ||
+              onToggleArchive ||
+              onOpenWorkspaceData ||
+              onToggleAppearance ? (
+                <>
+                  <div className="my-2 border-t border-white/10" />
+
+                  <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+                    Доска
+                  </p>
+                </>
+              ) : null}
+
+              {onToggleFilters ? (
+                <HeaderMenuItem
+                  active={isFiltersOpen}
+                  badge={activeFiltersCount || undefined}
+                  icon={<ListFilter aria-hidden="true" size={18} />}
+                  label={filtersLabel}
+                  onSelect={() => selectMenuAction(onToggleFilters)}
+                />
+              ) : null}
+
+              {onToggleArchive ? (
+                <HeaderMenuItem
+                  active={isArchiveOpen}
+                  icon={<Archive aria-hidden="true" size={18} />}
+                  label="Архив"
+                  onSelect={() => selectMenuAction(onToggleArchive)}
+                />
+              ) : null}
+
+              {onOpenWorkspaceData ? (
+                <HeaderMenuItem
+                  icon={<Download aria-hidden="true" size={18} />}
+                  label="Экспорт и импорт"
+                  onSelect={() => selectMenuAction(onOpenWorkspaceData)}
+                />
+              ) : null}
+
+              {onToggleAppearance ? (
+                <HeaderMenuItem
+                  active={isAppearanceOpen}
+                  icon={<Palette aria-hidden="true" size={18} />}
+                  label="Оформление доски"
+                  onSelect={() => selectMenuAction(onToggleAppearance)}
+                />
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

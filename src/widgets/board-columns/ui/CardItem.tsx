@@ -238,14 +238,14 @@ export function CardItem({
     <article
       ref={setNodeRef}
       style={style}
-      className={`group rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+      className={`group touch-manipulation rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
         isDragging ? "opacity-35" : "opacity-100"
       }`}
     >
       <div className="flex items-start gap-2">
         <button
           aria-label={`Переместить карточку: ${card.title}`}
-          className="grid size-7 shrink-0 place-items-center rounded-lg opacity-70 transition hover:bg-black/10 focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-35"
+          className="drag-handle grid size-11 shrink-0 touch-none select-none place-items-center rounded-xl opacity-70 [-webkit-touch-callout:none] transition hover:bg-black/10 focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-35 sm:size-7 sm:rounded-lg"
           disabled={isDragDisabled}
           style={{ color: cardSurface.mutedTextColor }}
           type="button"

@@ -143,15 +143,15 @@ export function ListColumn({
         ref={setNodeRef}
         style={style}
         className={cn(
-          "flex h-fit max-h-[calc(100dvh-12.5rem)] w-[min(86vw,19rem)] shrink-0 flex-col rounded-2xl border border-white/10 bg-slate-950/45 p-2 shadow-xl backdrop-blur-sm sm:w-80",
+          "flex h-fit max-h-[calc(100dvh-12.25rem)] w-[min(90vw,21rem)] shrink-0 flex-col rounded-2xl border border-white/10 bg-slate-950/45 p-2 shadow-xl backdrop-blur-sm sm:w-80",
           isDragging ? "opacity-40" : "opacity-100",
         )}
       >
-        <header className="flex items-center gap-1 px-1 pb-2">
+        <header className="flex min-w-0 items-center gap-1 px-1 pb-2">
           <IconButton
             {...attributes}
             {...listeners}
-            className="text-slate-300 hover:bg-white/10 hover:text-white"
+            className="drag-handle size-11 touch-none select-none text-slate-300 [-webkit-touch-callout:none] hover:bg-white/10 hover:text-white sm:size-8"
             disabled={isDragDisabled}
             label={`Переместить список: ${list.title}`}
             size="sm"
@@ -202,7 +202,7 @@ export function ListColumn({
               : totalCardCount}
           </span>
           <IconButton
-            className="text-slate-300 hover:bg-white/10 hover:text-white"
+            className="size-10 text-slate-300 hover:bg-white/10 hover:text-white sm:size-8"
             label={`Действия со списком ${list.title}`}
             size="sm"
             onClick={() => onOpenListActions(list.id)}
@@ -210,7 +210,7 @@ export function ListColumn({
             <MoreHorizontal aria-hidden="true" size={17} />
           </IconButton>
           <IconButton
-            className="text-slate-300 hover:bg-red-500/15 hover:text-red-200"
+            className="size-10 text-slate-300 hover:bg-red-500/15 hover:text-red-200 sm:size-8"
             label={`Удалить список ${list.title}`}
             size="sm"
             onClick={() => setIsDeleteConfirmationOpen(true)}
@@ -226,7 +226,7 @@ export function ListColumn({
           <div
             ref={setDropRef}
             className={cn(
-              "min-h-20 scrollbar-none space-y-2 overflow-y-auto rounded-xl p-1 transition",
+              "scrollbar-none min-h-20 touch-pan-y overscroll-contain space-y-2 overflow-y-auto rounded-xl p-1 transition",
               isOver ? "bg-white/10 ring-1 ring-white/30" : "",
             )}
           >
