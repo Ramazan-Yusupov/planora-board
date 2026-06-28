@@ -1,6 +1,4 @@
 import {
-  createEmptyBoard,
-  createStarterBoard,
   type Board,
   type BoardAppearance,
   type CardDraft,
@@ -21,19 +19,6 @@ function moveItem<T>(items: readonly T[], fromIndex: number, toIndex: number): T
 
   nextItems.splice(toIndex, 0, movedItem);
   return nextItems;
-}
-
-export function createBoard(title: string): Board {
-  return createEmptyBoard(title);
-}
-
-export function resetBoardContent(board: Board): Board {
-  return createStarterBoard({
-    id: board.id,
-    title: board.title,
-    appearance: board.appearance,
-    createdAt: board.createdAt,
-  });
 }
 
 export function renameBoard(board: Board, title: string): Board {

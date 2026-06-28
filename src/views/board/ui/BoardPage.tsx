@@ -7,21 +7,12 @@ import {
   Menu,
   Palette,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
-import {
-  createStarterBoard,
-  loadBoardWorkspace,
-  resolveBoardAppearance,
-  saveBoardWorkspace,
-  type Board,
-  type BoardWorkspace,
-  type CardDraft,
-} from "@/entities/board";
+import { resolveBoardAppearance, type CardDraft } from "@/entities/board";
 import {
   addCard,
   addList,
-  createBoard,
   deleteCard,
   deleteList,
   moveCard,
@@ -31,22 +22,12 @@ import {
   updateBoardAppearance,
   updateCard,
 } from "@/features/board-management";
+import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import { APP_NAME } from "@/shared/config/app";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
 import { CardModal } from "@/widgets/card-modal";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
-
-type PersistenceState = "loading" | "saved" | "saving" | "error";
-
-function createInitialWorkspace(): BoardWorkspace {
-  const starterBoard = createStarterBoard();
-
-  return {
-    boards: [starterBoard],
-    activeBoardId: starterBoard.id,
-  };
-}
 
 function isMobileViewport(): boolean {
   return (
@@ -57,15 +38,15 @@ function isMobileViewport(): boolean {
 
 function BoardLoadingState() {
   return (
-    <div
-      aria-busy="true"
-      aria-live="polite"
-      className="grid h-full place-items-center px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6"
-    >
-      <p className="rounded-xl border border-white/15 bg-slate-950/35 px-4 py-3 text-sm text-white/80 backdrop-blur-sm">
+    <main className="grid h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text">
+      <p
+        aria-busy="true"
+        aria-live="polite"
+        className="rounded-xl border border-white/15 bg-slate-950/35 px-4 py-3 text-sm text-white/80 backdrop-blur-sm"
+      >
         Загружаем доску…
       </p>
-    </div>
+    </main>
   );
 }
 
@@ -104,7 +85,6 @@ function BoardTitleInput({ title, disabled, onCommit }: BoardTitleInputProps) {
 
         if (event.key === "Escape") {
           event.preventDefault();
-          event.currentTarget.value = title;
           setDraft(title);
           event.currentTarget.blur();
         }
@@ -114,236 +94,47 @@ function BoardTitleInput({ title, disabled, onCommit }: BoardTitleInputProps) {
 }
 
 export function BoardPage() {
-  const [workspace, setWorkspace] = useState<BoardWorkspace>(
-    createInitialWorkspace,
-  );
+  const {
+    workspace,
+    activeBoard,
+    isReady,
+    persistenceState,
+    storageError,
+    createProject,
+    deleteProject,
+    selectProject,
+    updateActiveBoard,
+  } = useBoardWorkspace();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [isBoardReady, setIsBoardReady] = useState(false);
-  const [persistenceState, setPersistenceState] =
-    useState<PersistenceState>("loading");
-  const [storageError, setStorageError] = useState<string | null>(null);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
 
-  const activeBoard = useMemo(() => {
-    const requestedBoard = workspace.boards.find(
-      (board) => board.id === workspace.activeBoardId,
-    );
+  if (!isReady || !workspace || !activeBoard) {
+    return <BoardLoadingState />;
+  }
 
-    return requestedBoard ?? workspace.boards.at(0) ?? null;
-  }, [workspace.activeBoardId, workspace.boards]);
-
-  useEffect(() => {
-    let isDisposed = false;
-
-    const hydrate = async () => {
-      try {
-        const loadedWorkspace = await loadBoardWorkspace();
-
-        const nextWorkspace =
-          loadedWorkspace.boards.length > 0
-            ? loadedWorkspace
-            : createInitialWorkspace();
-
-        // При первом входе база пуста. Сначала сохраняем стартовый
-        // проект, потом разрешаем пользователю менять его имя.
-        if (loadedWorkspace.boards.length === 0) {
-          await saveBoardWorkspace(nextWorkspace);
-        }
-
-        if (!isDisposed) {
-          setWorkspace(nextWorkspace);
-          setStorageError(null);
-        }
-      } catch (error) {
-        if (!isDisposed) {
-          setStorageError(
-            error instanceof Error
-              ? `Не удалось открыть локальное хранилище: ${error.message}`
-              : "Не удалось открыть локальное хранилище.",
-          );
-        }
-      } finally {
-        if (!isDisposed) {
-          setIsHydrated(true);
-          setIsBoardReady(true);
-          setPersistenceState("saved");
-        }
-      }
-    };
-
-    void hydrate();
-
-    return () => {
-      isDisposed = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setPersistenceState("saving");
-
-      void saveBoardWorkspace(workspace)
-        .then(() => {
-          setPersistenceState("saved");
-          setStorageError(null);
-        })
-        .catch((error: unknown) => {
-          setPersistenceState("error");
-          setStorageError(
-            error instanceof Error
-              ? `Изменения не сохранены: ${error.message}`
-              : "Изменения не сохранены.",
-          );
-        });
-    }, 300);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [isHydrated, workspace]);
-
-  const selectedCard =
-    selectedCardId && activeBoard
-      ? activeBoard.cards[selectedCardId]
-      : undefined;
-
-  const selectedListTitle = useMemo(() => {
-    if (!selectedCard || !activeBoard) {
-      return "";
-    }
-
-    return activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список";
-  }, [activeBoard, selectedCard]);
-
-  const resolvedAppearance = activeBoard
-    ? resolveBoardAppearance(activeBoard.appearance)
-    : null;
-
+  const selectedCard = selectedCardId
+    ? activeBoard.cards[selectedCardId]
+    : undefined;
+  const selectedListTitle = selectedCard
+    ? activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список"
+    : "";
+  const resolvedAppearance = resolveBoardAppearance(activeBoard.appearance);
   const statusLabel =
-    persistenceState === "loading"
-      ? "Загружаем доски…"
-      : persistenceState === "saving"
-        ? "Сохраняем…"
-        : persistenceState === "error"
-          ? "Ошибка сохранения"
-          : "Сохранено локально";
+    persistenceState === "saving"
+      ? "Сохраняем…"
+      : persistenceState === "error"
+        ? "Ошибка сохранения"
+        : "Сохранено локально";
 
-  const updateActiveBoard = (updater: (currentBoard: Board) => Board) => {
-    setWorkspace((currentWorkspace) => {
-      const currentBoard = currentWorkspace.boards.find(
-        (board) => board.id === currentWorkspace.activeBoardId,
-      );
-
-      if (!currentBoard) {
-        return currentWorkspace;
-      }
-
-      const nextBoard = updater(currentBoard);
-
-      return {
-        ...currentWorkspace,
-        boards: currentWorkspace.boards.map((board) =>
-          board.id === currentBoard.id ? nextBoard : board,
-        ),
-      };
-    });
-  };
-
-  const persistWorkspaceImmediately = (nextWorkspace: BoardWorkspace) => {
-    setPersistenceState("saving");
-
-    void saveBoardWorkspace(nextWorkspace)
-      .then(() => {
-        setPersistenceState("saved");
-        setStorageError(null);
-      })
-      .catch((error: unknown) => {
-        setPersistenceState("error");
-        setStorageError(
-          error instanceof Error
-            ? `Изменения не сохранены: ${error.message}`
-            : "Изменения не сохранены.",
-        );
-      });
-  };
-
-  const renameActiveBoard = (title: string) => {
-    if (!activeBoard) {
-      return;
-    }
-
-    const nextBoard = renameBoard(activeBoard, title);
-
-    const nextWorkspace: BoardWorkspace = {
-      ...workspace,
-      boards: workspace.boards.map((board) =>
-        board.id === nextBoard.id ? nextBoard : board,
-      ),
-    };
-
-    setWorkspace(nextWorkspace);
-    persistWorkspaceImmediately(nextWorkspace);
-  };
-
-  const createProject = (title: string) => {
-    const nextBoard = createBoard(title);
-
-    setWorkspace((currentWorkspace) => ({
-      boards: [...currentWorkspace.boards, nextBoard],
-      activeBoardId: nextBoard.id,
-    }));
-
-    setSelectedCardId(null);
-    setIsProjectsOpen(false);
-  };
-
-  const selectProject = (boardId: string) => {
-    setWorkspace((currentWorkspace) => ({
-      ...currentWorkspace,
-      activeBoardId: boardId,
-    }));
-
+  const selectProjectFromSidebar = (boardId: string) => {
+    selectProject(boardId);
     setSelectedCardId(null);
     setIsAppearanceOpen(false);
 
     if (isMobileViewport()) {
       setIsProjectsOpen(false);
     }
-  };
-
-  const deleteProject = (boardId: string) => {
-    setWorkspace((currentWorkspace) => {
-      const remainingBoards = currentWorkspace.boards.filter(
-        (board) => board.id !== boardId,
-      );
-
-      if (remainingBoards.length === 0) {
-        const fallbackBoard = createBoard("Новый проект");
-
-        return {
-          boards: [fallbackBoard],
-          activeBoardId: fallbackBoard.id,
-        };
-      }
-
-      const nextActiveBoardId =
-        currentWorkspace.activeBoardId === boardId
-          ? remainingBoards[0].id
-          : currentWorkspace.activeBoardId;
-
-      return {
-        boards: remainingBoards,
-        activeBoardId: nextActiveBoardId,
-      };
-    });
-
-    setSelectedCardId(null);
   };
 
   const toggleProjects = () => {
@@ -355,10 +146,6 @@ export function BoardPage() {
     setIsAppearanceOpen((current) => !current);
     setIsProjectsOpen(false);
   };
-
-  if (!activeBoard || !resolvedAppearance) {
-    return null;
-  }
 
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
@@ -394,9 +181,11 @@ export function BoardPage() {
 
             <BoardTitleInput
               key={activeBoard.id}
-              disabled={!isHydrated}
+              disabled={!isReady}
               title={activeBoard.title}
-              onCommit={renameActiveBoard}
+              onCommit={(title) =>
+                updateActiveBoard((board) => renameBoard(board, title), "immediate")
+              }
             />
           </div>
 
@@ -447,9 +236,16 @@ export function BoardPage() {
           boards={workspace.boards}
           isOpen={isProjectsOpen}
           onClose={() => setIsProjectsOpen(false)}
-          onCreateBoard={createProject}
-          onDeleteBoard={deleteProject}
-          onSelectBoard={selectProject}
+          onCreateBoard={(title) => {
+            createProject(title);
+            setSelectedCardId(null);
+            setIsProjectsOpen(false);
+          }}
+          onDeleteBoard={(boardId) => {
+            deleteProject(boardId);
+            setSelectedCardId(null);
+          }}
+          onSelectBoard={selectProjectFromSidebar}
         />
 
         <section className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -500,39 +296,33 @@ export function BoardPage() {
             </div>
 
             <div className="min-h-0 flex-1">
-              {isBoardReady ? (
-                <BoardColumns
-                  appearance={resolvedAppearance}
-                  board={activeBoard}
-                  onAddCard={(listId, title) =>
-                    updateActiveBoard((board) => addCard(board, listId, title))
-                  }
-                  onAddList={(title) =>
-                    updateActiveBoard((board) => addList(board, title))
-                  }
-                  onDeleteList={(listId) =>
-                    updateActiveBoard((board) => deleteList(board, listId))
-                  }
-                  onMoveCard={(cardId, listId, index) =>
-                    updateActiveBoard((board) =>
-                      moveCard(board, cardId, listId, index),
-                    )
-                  }
-                  onMoveList={(listId, destinationListId) =>
-                    updateActiveBoard((board) =>
-                      moveList(board, listId, destinationListId),
-                    )
-                  }
-                  onOpenCard={setSelectedCardId}
-                  onRenameList={(listId, title) =>
-                    updateActiveBoard((board) =>
-                      renameList(board, listId, title),
-                    )
-                  }
-                />
-              ) : (
-                <BoardLoadingState />
-              )}
+              <BoardColumns
+                appearance={resolvedAppearance}
+                board={activeBoard}
+                onAddCard={(listId, title) =>
+                  updateActiveBoard((board) => addCard(board, listId, title))
+                }
+                onAddList={(title) =>
+                  updateActiveBoard((board) => addList(board, title))
+                }
+                onDeleteList={(listId) =>
+                  updateActiveBoard((board) => deleteList(board, listId))
+                }
+                onMoveCard={(cardId, listId, index) =>
+                  updateActiveBoard((board) =>
+                    moveCard(board, cardId, listId, index),
+                  )
+                }
+                onMoveList={(listId, destinationListId) =>
+                  updateActiveBoard((board) =>
+                    moveList(board, listId, destinationListId),
+                  )
+                }
+                onOpenCard={setSelectedCardId}
+                onRenameList={(listId, title) =>
+                  updateActiveBoard((board) => renameList(board, listId, title))
+                }
+              />
             </div>
           </section>
         </section>

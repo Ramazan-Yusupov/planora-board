@@ -108,4 +108,3 @@ export function createEmptyBoard(title: string): Board {
   };
 }
 
-export const STARTER_BOARD = createStarterBoard();

@@ -18,11 +18,18 @@ interface PlanoraDatabase extends DBSchema {
   };
 }
 
+export type BoardWorkspacePersistenceChange = Readonly<{
+  boardsToSave: readonly Board[];
+  boardIdsToDelete: readonly string[];
+  activeBoardId: string | null;
+}>;
+
 const DATABASE_NAME = "planora-board-db";
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const ACTIVE_BOARD_KEY = "activeBoardId";
 
 let databasePromise: Promise<IDBPDatabase<PlanoraDatabase>> | null = null;
+let writeQueue: Promise<void> = Promise.resolve();
 
 function getDatabase(): Promise<IDBPDatabase<PlanoraDatabase>> {
   if (typeof window === "undefined") {
@@ -69,13 +76,43 @@ function parseBoard(value: unknown): Board {
   return boardSchema.parse(migrateBoard(value));
 }
 
+function queueWrite(task: () => Promise<void>): Promise<void> {
+  const nextWrite = writeQueue.then(task, task);
+
+  // Ошибка предыдущего сохранения не должна блокировать следующие изменения.
+  writeQueue = nextWrite.catch(() => undefined);
+
+  return nextWrite;
+}
+
+function normalizeChange(
+  change: BoardWorkspacePersistenceChange,
+): BoardWorkspacePersistenceChange {
+  const boardsById = new Map(
+    change.boardsToSave.map((board) => [board.id, parseBoard(board)]),
+  );
+  const boardIdsToDelete = new Set(change.boardIdsToDelete);
+
+  for (const boardId of boardsById.keys()) {
+    boardIdsToDelete.delete(boardId);
+  }
+
+  return {
+    boardsToSave: [...boardsById.values()],
+    boardIdsToDelete: [...boardIdsToDelete],
+    activeBoardId: change.activeBoardId,
+  };
+}
+
 export async function loadBoardWorkspace(): Promise<BoardWorkspace> {
   const database = await getDatabase();
   const [storedBoards, metadata] = await Promise.all([
     database.getAll("boards"),
     database.get("metadata", ACTIVE_BOARD_KEY),
   ]);
-  const boards = storedBoards.map(parseBoard).sort((first, second) => first.createdAt - second.createdAt);
+  const boards = storedBoards
+    .map(parseBoard)
+    .sort((first, second) => first.createdAt - second.createdAt);
   const requestedActiveBoardId = metadata?.value;
   const activeBoardId = boards.some((board) => board.id === requestedActiveBoardId)
     ? requestedActiveBoardId ?? null
@@ -84,29 +121,29 @@ export async function loadBoardWorkspace(): Promise<BoardWorkspace> {
   return { boards, activeBoardId };
 }
 
-export async function saveBoardWorkspace(workspace: BoardWorkspace): Promise<void> {
-  const boards = workspace.boards.map(parseBoard);
-  const boardIds = new Set(boards.map((board) => board.id));
-  const activeBoardId = boardIds.has(workspace.activeBoardId ?? "") ? workspace.activeBoardId : boards.at(0)?.id ?? null;
-  const database = await getDatabase();
-  const transaction = database.transaction(["boards", "metadata"], "readwrite");
-  const boardStore = transaction.objectStore("boards");
-  const metadataStore = transaction.objectStore("metadata");
-  const existingBoardIds = await boardStore.getAllKeys();
+export function persistBoardWorkspaceChange(
+  change: BoardWorkspacePersistenceChange,
+): Promise<void> {
+  const normalizedChange = normalizeChange(change);
 
-  for (const id of existingBoardIds) {
-    if (!boardIds.has(id)) {
-      await boardStore.delete(id);
+  return queueWrite(async () => {
+    const database = await getDatabase();
+    const transaction = database.transaction(["boards", "metadata"], "readwrite");
+    const boardStore = transaction.objectStore("boards");
+    const metadataStore = transaction.objectStore("metadata");
+
+    for (const boardId of normalizedChange.boardIdsToDelete) {
+      await boardStore.delete(boardId);
     }
-  }
 
-  for (const board of boards) {
-    await boardStore.put(board);
-  }
+    for (const board of normalizedChange.boardsToSave) {
+      await boardStore.put(board);
+    }
 
-  await metadataStore.put({
-    key: ACTIVE_BOARD_KEY,
-    value: activeBoardId ?? "",
+    await metadataStore.put({
+      key: ACTIVE_BOARD_KEY,
+      value: normalizedChange.activeBoardId ?? "",
+    });
+    await transaction.done;
   });
-  await transaction.done;
 }

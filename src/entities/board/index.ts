@@ -1,4 +1,8 @@
-export { loadBoardWorkspace, saveBoardWorkspace } from "./api/boardRepository";
+export {
+  loadBoardWorkspace,
+  persistBoardWorkspaceChange,
+} from "./api/boardRepository";
+export type { BoardWorkspacePersistenceChange } from "./api/boardRepository";
 export {
   DEFAULT_BOARD_APPEARANCE,
   getReadableTextColor,
@@ -6,7 +10,14 @@ export {
   resolveBoardAppearance,
 } from "./lib/appearance";
 export type { CardSurface, ResolvedBoardAppearance } from "./lib/appearance";
-export { createEmptyBoard, createStarterBoard, STARTER_BOARD } from "./lib/createStarterBoard";
+export { createEmptyBoard, createStarterBoard } from "./lib/createStarterBoard";
+export {
+  createInitialBoardWorkspace,
+  deleteBoardFromWorkspace,
+  getActiveBoard,
+  replaceBoardInWorkspace,
+  selectBoardInWorkspace,
+} from "./lib/workspace";
 export { boardSchema } from "./model/schemas";
 export {
   BOARD_BACKGROUND_OPTIONS,
