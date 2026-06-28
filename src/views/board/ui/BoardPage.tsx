@@ -24,6 +24,8 @@ import {
 } from "@/features/board-management";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import { APP_NAME } from "@/shared/config/app";
+import { cn } from "@/shared/lib";
+import { IconButton } from "@/shared/ui";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
 import { CardModal } from "@/widgets/card-modal";
@@ -151,15 +153,15 @@ export function BoardPage() {
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
       <header className="z-50 border-b border-white/10 bg-panel/95 px-3 py-3 backdrop-blur-xl sm:px-5">
         <div className="mx-auto flex max-w-[1800px] items-center gap-2 sm:gap-4">
-          <button
-            aria-label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
+          <IconButton
             aria-pressed={isProjectsOpen}
-            className="grid size-10 shrink-0 place-items-center rounded-xl text-text-muted transition hover:bg-control hover:text-text"
-            type="button"
+            className="text-text-muted hover:bg-control hover:text-text"
+            label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
+            size="lg"
             onClick={toggleProjects}
           >
             <Menu aria-hidden="true" size={20} />
-          </button>
+          </IconButton>
 
           <div className="hidden items-center gap-3 sm:flex">
             <div className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm shadow-accent/20">
@@ -191,29 +193,28 @@ export function BoardPage() {
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <span
-              className={`hidden items-center gap-1.5 text-xs font-medium md:inline-flex ${
-                persistenceState === "error"
-                  ? "text-red-300"
-                  : "text-text-muted"
-              }`}
+              className={cn(
+                "hidden items-center gap-1.5 text-xs font-medium md:inline-flex",
+                persistenceState === "error" ? "text-red-300" : "text-text-muted",
+              )}
             >
               <Cloud aria-hidden="true" size={15} />
               {statusLabel}
             </span>
 
-            <button
-              aria-label="Оформление доски"
+            <IconButton
               aria-pressed={isAppearanceOpen}
-              className={`grid size-10 place-items-center rounded-xl transition ${
+              className={cn(
                 isAppearanceOpen
                   ? "bg-accent text-accent-foreground"
-                  : "text-text-muted hover:bg-control hover:text-text"
-              }`}
-              type="button"
+                  : "text-text-muted hover:bg-control hover:text-text",
+              )}
+              label="Оформление доски"
+              size="lg"
               onClick={toggleAppearance}
             >
               <Palette aria-hidden="true" size={19} />
-            </button>
+            </IconButton>
           </div>
         </div>
       </header>
