@@ -231,18 +231,18 @@ export function WorkspaceHeader({
 
         <div className="min-w-0 flex-1 sm:max-w-xl">{children}</div>
 
-        <span
-          className={cn(
-            "hidden items-center gap-1.5 text-xs font-medium lg:inline-flex",
-            isPersistenceError ? "text-red-300" : "text-text-muted",
-          )}
-        >
-          <Cloud aria-hidden="true" size={15} />
-          {persistenceLabel}
-        </span>
-
         {/* Desktop: отдельные кнопки инструментов */}
         <div className="hidden shrink-0 items-center gap-1 lg:flex">
+          <span
+            className={cn(
+              "hidden items-center gap-1.5 text-xs font-medium lg:inline-flex",
+              isPersistenceError ? "text-red-300" : "text-text-muted",
+            )}
+          >
+            <Cloud aria-hidden="true" size={15} />
+            {persistenceLabel}
+          </span>
+
           {onUndo ? (
             <IconButton
               disabled={!canUndo}
