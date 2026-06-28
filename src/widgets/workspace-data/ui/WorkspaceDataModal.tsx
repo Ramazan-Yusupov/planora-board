@@ -65,22 +65,15 @@ function FolderStoragePanel({
             <h3 className="text-sm font-semibold text-text">Хранилище</h3>
             {isFolderConnected ? (
               <p className="mt-1 text-xs leading-5 text-text-muted">
-                Данные и вложения сохраняются в папку{" "}
-                <strong className="font-medium text-text">
-                  {storage.name}
-                </strong>
-                . Очистка данных сайта не удалит проекты.
+                Данные и вложения сохраняются в папку <strong className="font-medium text-text">{storage.name}</strong>. Очистка данных сайта не удалит проекты.
               </p>
             ) : needsFolderAccess ? (
               <p className="mt-1 text-xs leading-5 text-amber-200">
-                Папка «{storage.name}» требует повторного разрешения. Выберите
-                её снова, чтобы продолжить сохранение на диск.
+                Папка «{storage.name}» требует повторного разрешения. Выберите её снова, чтобы продолжить сохранение на диск.
               </p>
             ) : (
               <p className="mt-1 text-xs leading-5 text-text-muted">
-                Сейчас проекты хранятся в браузере. Подключите папку, чтобы
-                переносить среду между компьютерами и не зависеть от очистки
-                кэша.
+                Сейчас проекты хранятся в браузере. Подключите папку, чтобы переносить среду между компьютерами и не зависеть от очистки кэша.
               </p>
             )}
           </div>
@@ -95,8 +88,7 @@ function FolderStoragePanel({
 
       {!storage.isSupported ? (
         <p className="mt-3 rounded-xl border border-amber-300/25 bg-amber-950/30 px-3 py-2 text-xs leading-5 text-amber-100">
-          Выбор папки доступен в Chrome и Edge на компьютере. Для этого браузера
-          используйте экспорт JSON.
+          Выбор папки доступен в Chrome и Edge на компьютере. Для этого браузера используйте экспорт JSON.
         </p>
       ) : (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -107,11 +99,7 @@ function FolderStoragePanel({
             onClick={() => runAction(onConnectFolder)}
           >
             {isBusy ? (
-              <LoaderCircle
-                aria-hidden="true"
-                className="animate-spin"
-                size={17}
-              />
+              <LoaderCircle aria-hidden="true" className="animate-spin" size={17} />
             ) : (
               <FolderOpen aria-hidden="true" size={17} />
             )}
@@ -208,8 +196,7 @@ export function WorkspaceDataModal({
           <Panel>
             <h3 className="text-sm font-semibold text-text">Экспорт</h3>
             <p className="mt-1 text-xs leading-5 text-text-muted">
-              Скачайте JSON-файл проекта или всей рабочей области.
-              Файлы-вложения не входят в JSON-резервную копию.
+              Скачайте JSON-файл проекта или всей рабочей области. Файлы-вложения не входят в JSON-резервную копию.
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Button
@@ -236,8 +223,7 @@ export function WorkspaceDataModal({
           <Panel>
             <h3 className="text-sm font-semibold text-text">Импорт JSON</h3>
             <p className="mt-1 text-xs leading-5 text-text-muted">
-              Импорт заменяет текущие проекты. Подключённая папка получит
-              обновлённую рабочую область после подтверждения импорта.
+              Импорт заменяет текущие проекты. Подключённая папка получит обновлённую рабочую область после подтверждения импорта.
             </p>
             <input
               ref={inputRef}
@@ -253,19 +239,13 @@ export function WorkspaceDataModal({
               onClick={() => inputRef.current?.click()}
             >
               {isReading ? (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="animate-spin"
-                  size={17}
-                />
+                <LoaderCircle aria-hidden="true" className="animate-spin" size={17} />
               ) : (
                 <FileUp aria-hidden="true" size={17} />
               )}
               Выбрать JSON
             </Button>
-            {error ? (
-              <p className="mt-3 text-sm text-red-300">{error}</p>
-            ) : null}
+            {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
           </Panel>
         </div>
       </Modal>
