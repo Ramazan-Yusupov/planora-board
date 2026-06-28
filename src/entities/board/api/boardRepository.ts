@@ -1,5 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
+import {
+  deleteFolderAttachments,
+  loadFolderAttachment,
+  saveFolderAttachment,
+  type WorkspaceFolderHandle,
+} from "./folderStorage";
+
 import { DEFAULT_BOARD_APPEARANCE } from "../lib/appearance";
 import {
   createDefaultBoardLabelCollection,
@@ -27,6 +34,15 @@ interface PlanoraDatabase extends DBSchema {
       blob: Blob;
     };
   };
+  workspaceFolderHandles: {
+    key: string;
+    value: {
+      key: string;
+      handle: WorkspaceFolderHandle;
+      name: string;
+      updatedAt: number;
+    };
+  };
 }
 
 export type BoardWorkspacePersistenceChange = Readonly<{
@@ -36,8 +52,9 @@ export type BoardWorkspacePersistenceChange = Readonly<{
 }>;
 
 const DATABASE_NAME = "planora-board-db";
-const DATABASE_VERSION = 5;
+const DATABASE_VERSION = 6;
 const ACTIVE_BOARD_KEY = "activeBoardId";
+const ACTIVE_FOLDER_HANDLE_KEY = "activeWorkspaceFolder";
 
 let databasePromise: Promise<IDBPDatabase<PlanoraDatabase>> | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
@@ -60,6 +77,10 @@ function getDatabase(): Promise<IDBPDatabase<PlanoraDatabase>> {
 
         if (!database.objectStoreNames.contains("attachmentBlobs")) {
           database.createObjectStore("attachmentBlobs", { keyPath: "id" });
+        }
+
+        if (!database.objectStoreNames.contains("workspaceFolderHandles")) {
+          database.createObjectStore("workspaceFolderHandles", { keyPath: "key" });
         }
       },
     });
@@ -228,6 +249,34 @@ export async function loadBoardWorkspace(): Promise<BoardWorkspace> {
   return { boards, activeBoardId };
 }
 
+export async function loadPersistedWorkspaceFolderHandle(): Promise<WorkspaceFolderHandle | null> {
+  const database = await getDatabase();
+  const entry = await database.get("workspaceFolderHandles", ACTIVE_FOLDER_HANDLE_KEY);
+
+  return entry?.handle ?? null;
+}
+
+export function savePersistedWorkspaceFolderHandle(
+  handle: WorkspaceFolderHandle,
+): Promise<void> {
+  return queueWrite(async () => {
+    const database = await getDatabase();
+    await database.put("workspaceFolderHandles", {
+      key: ACTIVE_FOLDER_HANDLE_KEY,
+      handle,
+      name: handle.name,
+      updatedAt: Date.now(),
+    });
+  });
+}
+
+export function clearPersistedWorkspaceFolderHandle(): Promise<void> {
+  return queueWrite(async () => {
+    const database = await getDatabase();
+    await database.delete("workspaceFolderHandles", ACTIVE_FOLDER_HANDLE_KEY);
+  });
+}
+
 export function persistBoardWorkspaceChange(
   change: BoardWorkspacePersistenceChange,
 ): Promise<void> {
@@ -257,12 +306,26 @@ export function persistBoardWorkspaceChange(
 
 export function saveAttachmentBlob(attachmentId: string, blob: Blob): Promise<void> {
   return queueWrite(async () => {
+    // Папка — долговременное хранилище. Кэш IndexedDB обновляем только после
+    // успешной записи файла, чтобы карточка не ссылалась на несуществующее вложение.
+    await saveFolderAttachment(attachmentId, blob);
+
     const database = await getDatabase();
     await database.put("attachmentBlobs", { id: attachmentId, blob });
   });
 }
 
 export async function loadAttachmentBlob(attachmentId: string): Promise<Blob | null> {
+  try {
+    const folderBlob = await loadFolderAttachment(attachmentId);
+
+    if (folderBlob) {
+      return folderBlob;
+    }
+  } catch {
+    // При временно отозванном доступе к папке продолжаем использовать кэш.
+  }
+
   const database = await getDatabase();
   const entry = await database.get("attachmentBlobs", attachmentId);
 
@@ -277,6 +340,8 @@ export function deleteAttachmentBlobs(attachmentIds: readonly string[]): Promise
   }
 
   return queueWrite(async () => {
+    await deleteFolderAttachments(uniqueAttachmentIds);
+
     const database = await getDatabase();
     const transaction = database.transaction("attachmentBlobs", "readwrite");
 

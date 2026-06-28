@@ -177,6 +177,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     isReady,
     persistenceState,
     storageError,
+    workspaceStorage,
+    isWorkspaceStorageBusy,
+    connectWorkspaceFolder,
+    createFolderBackup,
+    disconnectWorkspaceFolder,
     canRedo,
     canUndo,
     createProject,
@@ -313,7 +318,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       ? "Сохраняем…"
       : persistenceState === "error"
         ? "Ошибка сохранения"
-        : "Сохранено локально";
+        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
+          ? `Сохранено в папку: ${workspaceStorage.name}`
+          : workspaceStorage.kind === "folder"
+            ? "Папка требует доступа"
+            : "Сохранено в браузере";
 
   const closePanels = () => {
     setIsProjectsOpen(false);
@@ -679,8 +688,13 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       <WorkspaceDataModal
         activeBoard={activeBoard}
         isOpen={isWorkspaceDataOpen}
+        isWorkspaceStorageBusy={isWorkspaceStorageBusy}
         workspace={workspace}
+        workspaceStorage={workspaceStorage}
         onClose={() => setIsWorkspaceDataOpen(false)}
+        onConnectFolder={connectWorkspaceFolder}
+        onCreateFolderBackup={createFolderBackup}
+        onDisconnectFolder={disconnectWorkspaceFolder}
         onImport={(nextWorkspace) => {
           replaceWorkspace(nextWorkspace);
           const nextBoardId = nextWorkspace.activeBoardId ?? nextWorkspace.boards[0]?.id;

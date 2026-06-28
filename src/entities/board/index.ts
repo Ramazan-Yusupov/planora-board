@@ -1,12 +1,35 @@
 export {
+  clearPersistedWorkspaceFolderHandle,
   deleteAttachmentBlobs,
   loadAttachmentBlob,
   loadBoardWorkspace,
+  loadPersistedWorkspaceFolderHandle,
   parseBoardData,
   persistBoardWorkspaceChange,
   saveAttachmentBlob,
+  savePersistedWorkspaceFolderHandle,
 } from "./api/boardRepository";
 export type { BoardWorkspacePersistenceChange } from "./api/boardRepository";
+export {
+  activateFolderWorkspaceHandle,
+  clearActiveFolderWorkspace,
+  createActiveFolderBackup,
+  getWorkspaceFolderPermission,
+  initializeFolderWorkspace,
+  isAbortError,
+  isWorkspaceFolderStorageSupported,
+  pickWorkspaceFolder,
+  readFolderWorkspace,
+  requestWorkspaceFolderPermission,
+  saveActiveFolderWorkspace,
+  toWorkspaceStorageInfo,
+} from "./api/folderStorage";
+export type {
+  FolderWorkspaceSnapshot,
+  WorkspaceFolderHandle,
+  WorkspaceFolderPermission,
+  WorkspaceFolderStorageInfo,
+} from "./api/folderStorage";
 export {
   DEFAULT_BOARD_APPEARANCE,
   getReadableTextColor,

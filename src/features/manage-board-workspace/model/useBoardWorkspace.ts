@@ -3,20 +3,36 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  activateFolderWorkspaceHandle,
+  clearActiveFolderWorkspace,
+  clearPersistedWorkspaceFolderHandle,
+  createActiveFolderBackup,
   createEmptyBoard,
   createInitialBoardWorkspace,
   deleteAttachmentBlobs,
   deleteBoardFromWorkspace,
   getActiveBoard,
   getRemovedAttachmentIds,
+  getWorkspaceFolderPermission,
   getWorkspacePersistenceChange,
+  initializeFolderWorkspace,
+  isAbortError,
+  isWorkspaceFolderStorageSupported,
   loadBoardWorkspace,
+  loadPersistedWorkspaceFolderHandle,
   persistBoardWorkspaceChange,
+  pickWorkspaceFolder,
+  readFolderWorkspace,
+  requestWorkspaceFolderPermission,
   replaceBoardInWorkspace,
+  saveActiveFolderWorkspace,
+  savePersistedWorkspaceFolderHandle,
   selectBoardInWorkspace,
+  toWorkspaceStorageInfo,
   type Board,
   type BoardWorkspace,
   type BoardWorkspacePersistenceChange,
+  type WorkspaceFolderStorageInfo,
 } from "@/entities/board";
 import {
   createHistory,
@@ -35,16 +51,27 @@ type PendingWorkspaceChange = {
   activeBoardId: string | null;
 };
 
+type HydratedWorkspaceResult = Readonly<{
+  error: string | null;
+  storageInfo: WorkspaceFolderStorageInfo;
+  workspace: BoardWorkspace;
+}>;
+
 type UseBoardWorkspaceResult = {
   workspace: BoardWorkspace | null;
   activeBoard: Board | null;
   isReady: boolean;
   persistenceState: BoardPersistenceState;
   storageError: string | null;
+  workspaceStorage: WorkspaceFolderStorageInfo;
+  isWorkspaceStorageBusy: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  connectWorkspaceFolder: () => Promise<void>;
+  createFolderBackup: () => Promise<void>;
   createProject: (title: string) => string | null;
   deleteProject: (boardId: string) => string | null;
+  disconnectWorkspaceFolder: () => Promise<void>;
   redo: () => void;
   replaceWorkspace: (workspace: BoardWorkspace) => void;
   selectProject: (boardId: string) => void;
@@ -54,6 +81,14 @@ type UseBoardWorkspaceResult = {
     saveMode?: BoardSaveMode,
   ) => void;
 };
+
+function createBrowserStorageInfo(): WorkspaceFolderStorageInfo {
+  return {
+    isConnected: false,
+    isSupported: isWorkspaceFolderStorageSupported(),
+    kind: "browser",
+  };
+}
 
 function mergePendingChange(
   pendingChange: PendingWorkspaceChange | null,
@@ -96,12 +131,19 @@ function getPersistenceError(error: unknown): string {
     : "Изменения не сохранены.";
 }
 
+function resetHistory(): HistoryState<BoardWorkspace> {
+  return createHistory();
+}
+
 export function useBoardWorkspace(): UseBoardWorkspaceResult {
   const [workspace, setWorkspace] = useState<BoardWorkspace | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [persistenceState, setPersistenceState] =
     useState<BoardPersistenceState>("loading");
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [workspaceStorage, setWorkspaceStorage] =
+    useState<WorkspaceFolderStorageInfo>(createBrowserStorageInfo);
+  const [isWorkspaceStorageBusy, setIsWorkspaceStorageBusy] = useState(false);
   const [historyState, setHistoryState] = useState<HistoryState<BoardWorkspace>>(
     createHistory,
   );
@@ -111,16 +153,18 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
   const pendingAttachmentBlobDeletesRef = useRef<Set<string>>(new Set());
   const saveTimerRef = useRef<number | null>(null);
   const latestWriteRef = useRef(0);
-  const hydrationPromiseRef = useRef<Promise<{
-    workspace: BoardWorkspace;
-    error: string | null;
-  }> | null>(null);
+  const hydrationPromiseRef = useRef<Promise<HydratedWorkspaceResult> | null>(
+    null,
+  );
   const isMountedRef = useRef(true);
 
-  const updateHistoryState = useCallback((nextHistory: HistoryState<BoardWorkspace>) => {
-    historyRef.current = nextHistory;
-    setHistoryState(nextHistory);
-  }, []);
+  const updateHistoryState = useCallback(
+    (nextHistory: HistoryState<BoardWorkspace>) => {
+      historyRef.current = nextHistory;
+      setHistoryState(nextHistory);
+    },
+    [],
+  );
 
   const flushPendingChanges = useCallback(async () => {
     if (saveTimerRef.current !== null) {
@@ -135,6 +179,7 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
     }
 
     pendingChangeRef.current = null;
+    const workspaceSnapshot = workspaceRef.current;
     const attachmentIdsToDelete = [
       ...pendingAttachmentBlobDeletesRef.current,
     ];
@@ -148,6 +193,13 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
 
     try {
       await persistBoardWorkspaceChange(toPersistenceChange(pendingChange));
+
+      // IndexedDB остаётся кэшем и fallback. Если подключена папка, полный
+      // snapshot сохраняется туда после успешного локального обновления.
+      if (workspaceSnapshot) {
+        await saveActiveFolderWorkspace(workspaceSnapshot);
+      }
+
       await deleteAttachmentBlobs(attachmentIdsToDelete);
 
       if (
@@ -249,23 +301,51 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
     let isDisposed = false;
 
     if (!hydrationPromiseRef.current) {
-      hydrationPromiseRef.current = (async () => {
+      hydrationPromiseRef.current = (async (): Promise<HydratedWorkspaceResult> => {
         try {
-          const loadedWorkspace = await loadBoardWorkspace();
+          const cachedWorkspace = await loadBoardWorkspace();
+          const folderHandle = await loadPersistedWorkspaceFolderHandle();
+          const folderPermission = folderHandle
+            ? await getWorkspaceFolderPermission(folderHandle)
+            : undefined;
+          let nextWorkspace = cachedWorkspace;
+          let nextStorageInfo = toWorkspaceStorageInfo(
+            folderHandle,
+            folderPermission,
+          );
 
-          if (loadedWorkspace.boards.length > 0) {
-            return { workspace: loadedWorkspace, error: null };
+          if (nextWorkspace.boards.length === 0) {
+            nextWorkspace = createInitialBoardWorkspace();
+            await persistBoardWorkspaceChange({
+              boardsToSave: nextWorkspace.boards,
+              boardIdsToDelete: [],
+              activeBoardId: nextWorkspace.activeBoardId,
+            });
           }
 
-          const initialWorkspace = createInitialBoardWorkspace();
+          if (folderHandle && folderPermission === "granted") {
+            const folderSnapshot = await readFolderWorkspace(folderHandle);
+            const nextFolderSnapshot =
+              folderSnapshot ??
+              (await initializeFolderWorkspace(folderHandle, nextWorkspace));
 
-          await persistBoardWorkspaceChange({
-            boardsToSave: initialWorkspace.boards,
-            boardIdsToDelete: [],
-            activeBoardId: initialWorkspace.activeBoardId,
-          });
+            activateFolderWorkspaceHandle(folderHandle, nextFolderSnapshot);
+            nextStorageInfo = toWorkspaceStorageInfo(folderHandle, "granted");
 
-          return { workspace: initialWorkspace, error: null };
+            if (folderSnapshot) {
+              nextWorkspace = folderSnapshot.workspace;
+              await persistBoardWorkspaceChange(
+                getWorkspacePersistenceChange(cachedWorkspace, nextWorkspace),
+              );
+            }
+          }
+
+
+          return {
+            workspace: nextWorkspace,
+            error: null,
+            storageInfo: nextStorageInfo,
+          };
         } catch (error) {
           return {
             workspace: createInitialBoardWorkspace(),
@@ -273,6 +353,7 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
               error instanceof Error
                 ? `Не удалось открыть локальное хранилище: ${error.message}`
                 : "Не удалось открыть локальное хранилище.",
+            storageInfo: createBrowserStorageInfo(),
           };
         }
       })();
@@ -285,6 +366,7 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
 
       workspaceRef.current = result.workspace;
       setWorkspace(result.workspace);
+      setWorkspaceStorage(result.storageInfo);
       setStorageError(result.error);
       setPersistenceState(result.error ? "error" : "saved");
       setIsReady(true);
@@ -294,6 +376,118 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
       isDisposed = true;
     };
   }, []);
+
+  const connectWorkspaceFolder = useCallback(async () => {
+    const currentWorkspace = workspaceRef.current;
+
+    if (!currentWorkspace) {
+      return;
+    }
+
+    // showDirectoryPicker должен вызываться прямо из обработчика клика.
+    // Поэтому не ждём autosave до открытия системного диалога папки.
+    let folderHandle;
+
+    try {
+      folderHandle = await pickWorkspaceFolder();
+    } catch (error) {
+      if (!isAbortError(error)) {
+        setPersistenceState("error");
+        setStorageError(getPersistenceError(error));
+      }
+      return;
+    }
+
+    setIsWorkspaceStorageBusy(true);
+    setStorageError(null);
+
+    try {
+      await flushPendingChanges();
+
+      let permission = await getWorkspaceFolderPermission(folderHandle);
+
+      if (permission !== "granted") {
+        permission = await requestWorkspaceFolderPermission(folderHandle);
+      }
+
+      if (permission !== "granted") {
+        throw new Error("Нужен доступ к выбранной папке для чтения и записи.");
+      }
+
+      const folderSnapshot = await readFolderWorkspace(folderHandle);
+      const nextSnapshot =
+        folderSnapshot ??
+        (await initializeFolderWorkspace(folderHandle, currentWorkspace));
+      const nextWorkspace = nextSnapshot.workspace;
+
+      activateFolderWorkspaceHandle(folderHandle, nextSnapshot);
+      await savePersistedWorkspaceFolderHandle(folderHandle);
+
+      if (folderSnapshot) {
+        await persistBoardWorkspaceChange(
+          getWorkspacePersistenceChange(currentWorkspace, nextWorkspace),
+        );
+        workspaceRef.current = nextWorkspace;
+        setWorkspace(nextWorkspace);
+        updateHistoryState(resetHistory());
+      }
+
+      setWorkspaceStorage(toWorkspaceStorageInfo(folderHandle, "granted"));
+      setPersistenceState("saved");
+    } catch (error) {
+      if (!isAbortError(error)) {
+        setPersistenceState("error");
+        setStorageError(getPersistenceError(error));
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsWorkspaceStorageBusy(false);
+      }
+    }
+  }, [flushPendingChanges, updateHistoryState]);
+
+  const disconnectWorkspaceFolder = useCallback(async () => {
+    setIsWorkspaceStorageBusy(true);
+
+    try {
+      await flushPendingChanges();
+      clearActiveFolderWorkspace();
+      await clearPersistedWorkspaceFolderHandle();
+      setWorkspaceStorage(createBrowserStorageInfo());
+      setStorageError(null);
+      setPersistenceState("saved");
+    } catch (error) {
+      setPersistenceState("error");
+      setStorageError(getPersistenceError(error));
+    } finally {
+      if (isMountedRef.current) {
+        setIsWorkspaceStorageBusy(false);
+      }
+    }
+  }, [flushPendingChanges]);
+
+  const createFolderBackup = useCallback(async () => {
+    setIsWorkspaceStorageBusy(true);
+
+    try {
+      await flushPendingChanges();
+      const backupFileName = await createActiveFolderBackup();
+
+      if (!backupFileName) {
+        throw new Error("Сначала подключите папку хранилища.");
+      }
+
+      setStorageError(null);
+      setPersistenceState("saved");
+    } catch (error) {
+      setPersistenceState("error");
+      setStorageError(getPersistenceError(error));
+    } finally {
+      if (isMountedRef.current) {
+        setIsWorkspaceStorageBusy(false);
+      }
+    }
+  }, [flushPendingChanges]);
 
   const updateActiveBoard = useCallback(
     (
@@ -486,10 +680,15 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
     isReady,
     persistenceState,
     storageError,
+    workspaceStorage,
+    isWorkspaceStorageBusy,
     canUndo: historyState.past.length > 0,
     canRedo: historyState.future.length > 0,
+    connectWorkspaceFolder,
+    createFolderBackup,
     createProject,
     deleteProject,
+    disconnectWorkspaceFolder,
     redo,
     replaceWorkspace,
     selectProject,

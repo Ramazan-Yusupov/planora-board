@@ -53,6 +53,7 @@ export function CalendarPage() {
     isReady,
     persistenceState,
     storageError,
+    workspaceStorage,
     createProject,
     deleteProject,
     selectProject,
@@ -79,7 +80,11 @@ export function CalendarPage() {
       ? "Сохраняем…"
       : persistenceState === "error"
         ? "Ошибка сохранения"
-        : "Сохранено локально";
+        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
+          ? `Сохранено в папку: ${workspaceStorage.name}`
+          : workspaceStorage.kind === "folder"
+            ? "Папка требует доступа"
+            : "Сохранено в браузере";
 
   const openBoard = (boardId: string) => {
     selectProject(boardId);
