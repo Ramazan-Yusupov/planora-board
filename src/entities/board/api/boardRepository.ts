@@ -127,6 +127,8 @@ function migrateBoard(value: unknown): unknown {
     labels,
     labelIds,
     cards,
+    activityIds: isStringArray(value.activityIds) ? value.activityIds : [],
+    activities: isRecord(value.activities) ? value.activities : {},
   };
 }
 

@@ -32,6 +32,8 @@ export function createStarterBoard(options: StarterBoardOptions = {}): Board {
     checklistIds: [],
     checklists: {},
     checklistItems: {},
+    activityIds: [],
+    activities: {},
     listIds: ["list-ideas", "list-progress", "list-done"],
     lists: {
       "list-ideas": {
@@ -112,6 +114,8 @@ export function createEmptyBoard(title: string): Board {
     checklistIds: [],
     checklists: {},
     checklistItems: {},
+    activityIds: [],
+    activities: {},
     listIds: [listId],
     lists: {
       [listId]: {

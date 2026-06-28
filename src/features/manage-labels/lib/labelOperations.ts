@@ -1,4 +1,5 @@
 import {
+  appendBoardActivities,
   normalizeBoardLabelColor,
   normalizeBoardLabelName,
   normalizeCardLabelIds,
@@ -87,8 +88,7 @@ export function updateBoardLabel(
   }
 
   const timestamp = now();
-
-  return {
+  const nextBoard: Board = {
     ...board,
     labels: {
       ...board.labels,
@@ -101,16 +101,35 @@ export function updateBoardLabel(
     },
     updatedAt: timestamp,
   };
+  const affectedCardIds = Object.values(board.cards)
+    .filter((card) => card.labelIds.includes(labelId))
+    .map((card) => card.id);
+
+  return appendBoardActivities(
+    nextBoard,
+    affectedCardIds.map((cardId) => ({
+      cardId,
+      type: "card-labels-updated",
+      message:
+        label.name !== name
+          ? `Переименована метка: «${label.name}» → «${name}».`
+          : `Изменён цвет метки «${name}».`,
+      createdAt: timestamp,
+    })),
+  );
 }
 
 export function deleteBoardLabel(board: Board, labelId: string): Board {
-  if (!board.labels[labelId]) {
+  const label = board.labels[labelId];
+
+  if (!label) {
     return board;
   }
 
   const timestamp = now();
   const labels = { ...board.labels };
   delete labels[labelId];
+  const affectedCardIds: string[] = [];
 
   const cards = Object.fromEntries(
     Object.entries(board.cards).map(([cardId, card]) => {
@@ -118,6 +137,7 @@ export function deleteBoardLabel(board: Board, labelId: string): Board {
         return [cardId, card];
       }
 
+      affectedCardIds.push(cardId);
       return [
         cardId,
         {
@@ -130,13 +150,23 @@ export function deleteBoardLabel(board: Board, labelId: string): Board {
         },
       ];
     }),
-  );
+  ) as Record<string, typeof board.cards[string]>;
 
-  return {
+  const nextBoard: Board = {
     ...board,
     labelIds: board.labelIds.filter((currentLabelId) => currentLabelId !== labelId),
     labels,
     cards,
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(
+    nextBoard,
+    affectedCardIds.map((cardId) => ({
+      cardId,
+      type: "card-labels-updated",
+      message: `Удалена метка «${label.name}».`,
+      createdAt: timestamp,
+    })),
+  );
 }

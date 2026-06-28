@@ -34,6 +34,13 @@ export {
   normalizeCardSticker,
 } from "./lib/stickers";
 export {
+  appendBoardActivities,
+  formatActivityDueDate,
+  getCardActivities,
+  removeCardActivities,
+} from "./lib/activity";
+export type { BoardActivityInput } from "./lib/activity";
+export {
   createInitialBoardWorkspace,
   deleteBoardFromWorkspace,
   getActiveBoard,
@@ -47,6 +54,8 @@ export {
 } from "./model/types";
 export type {
   Board,
+  BoardActivity,
+  BoardActivityType,
   BoardAppearance,
   BoardBackgroundValue,
   BoardCard,

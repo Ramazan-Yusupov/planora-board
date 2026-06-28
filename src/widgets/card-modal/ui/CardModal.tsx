@@ -11,6 +11,7 @@ import {
 import { useId, useState } from "react";
 
 import {
+  type BoardActivity,
   type BoardCard,
   type BoardChecklist,
   type BoardChecklistItem,
@@ -22,6 +23,7 @@ import { CardChecklistsEditor } from "@/features/manage-checklist";
 import { CardLabelsEditor } from "@/features/manage-labels";
 import { CardStickerPicker } from "@/features/manage-card-sticker";
 import { Button, ConfirmDialog, Modal } from "@/shared/ui";
+import { CardActivity } from "./CardActivity";
 
 type CardListOption = Readonly<{
   id: string;
@@ -29,6 +31,7 @@ type CardListOption = Readonly<{
 }>;
 
 type CardModalProps = Readonly<{
+  activities: readonly BoardActivity[];
   card: BoardCard;
   checklists: readonly BoardChecklist[];
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
@@ -65,6 +68,7 @@ function createDraft(card: BoardCard): CardDraft {
 }
 
 export function CardModal({
+  activities,
   card,
   checklists,
   checklistItems,
@@ -257,6 +261,8 @@ export function CardModal({
             onRenameItem={onRenameChecklistItem}
             onToggleItem={onToggleChecklistItem}
           />
+
+          <CardActivity activities={activities} />
 
           <section className="rounded-2xl border border-white/10 bg-control/25 p-3 sm:p-4">
             <h3 className="text-sm font-semibold text-text">Действия</h3>

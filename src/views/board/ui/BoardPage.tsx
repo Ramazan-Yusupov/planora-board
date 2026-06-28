@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  getCardActivities,
   getCardChecklists,
   getOrderedBoardLabels,
   resolveBoardAppearance,
@@ -222,6 +223,9 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const selectedListTitle = selectedCard
     ? activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список"
     : "";
+  const selectedCardActivities = selectedCard
+    ? getCardActivities(activeBoard, selectedCard.id)
+    : [];
   const resolvedAppearance = resolveBoardAppearance(activeBoard.appearance);
   const boardLabels = getOrderedBoardLabels(activeBoard);
   const activeCardsCount = Object.values(activeBoard.cards).filter(
@@ -551,6 +555,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       {selectedCard ? (
         <CardModal
           key={selectedCard.id}
+          activities={selectedCardActivities}
           card={selectedCard}
           checklists={getCardChecklists(selectedCard, activeBoard.checklists)}
           checklistItems={activeBoard.checklistItems}

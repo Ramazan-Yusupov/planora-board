@@ -1,4 +1,4 @@
-import type { Board } from "@/entities/board";
+import { appendBoardActivities, type Board } from "@/entities/board";
 import { createId } from "@/shared/lib";
 
 const DEFAULT_CHECKLIST_TITLE = "Новый чек-лист";
@@ -17,6 +17,10 @@ function normalizeTitle(value: string, fallback?: string): string | null {
   return fallback ?? null;
 }
 
+function summarize(value: string, maxLength = 72): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
 export function createChecklist(board: Board, cardId: string, title: string): Board {
   const card = board.cards[cardId];
   const normalizedTitle = normalizeTitle(title, DEFAULT_CHECKLIST_TITLE);
@@ -27,8 +31,7 @@ export function createChecklist(board: Board, cardId: string, title: string): Bo
 
   const timestamp = now();
   const checklistId = createId("checklist");
-
-  return {
+  const nextBoard: Board = {
     ...board,
     checklistIds: [...board.checklistIds, checklistId],
     checklists: {
@@ -52,6 +55,15 @@ export function createChecklist(board: Board, cardId: string, title: string): Bo
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId,
+      type: "checklist-created",
+      message: `Добавлен чек-лист «${summarize(normalizedTitle.slice(0, 120))}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function renameChecklist(
@@ -66,20 +78,34 @@ export function renameChecklist(
     return board;
   }
 
-  const timestamp = now();
+  const nextTitle = normalizedTitle.slice(0, 120);
 
-  return {
+  if (checklist.title === nextTitle) {
+    return board;
+  }
+
+  const timestamp = now();
+  const nextBoard: Board = {
     ...board,
     checklists: {
       ...board.checklists,
       [checklistId]: {
         ...checklist,
-        title: normalizedTitle.slice(0, 120),
+        title: nextTitle,
         updatedAt: timestamp,
       },
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: checklist.cardId,
+      type: "checklist-renamed",
+      message: `Переименован чек-лист: «${summarize(checklist.title)}» → «${summarize(nextTitle)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function deleteChecklist(board: Board, checklistId: string): Board {
@@ -99,7 +125,7 @@ export function deleteChecklist(board: Board, checklistId: string): Board {
     delete nextChecklistItems[itemId];
   }
 
-  return {
+  const nextBoard: Board = {
     ...board,
     checklistIds: board.checklistIds.filter((id) => id !== checklistId),
     checklists: nextChecklists,
@@ -114,6 +140,15 @@ export function deleteChecklist(board: Board, checklistId: string): Board {
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: card.id,
+      type: "checklist-deleted",
+      message: `Удалён чек-лист «${summarize(checklist.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function createChecklistItem(
@@ -130,8 +165,7 @@ export function createChecklistItem(
 
   const timestamp = now();
   const itemId = createId("checklist-item");
-
-  return {
+  const nextBoard: Board = {
     ...board,
     checklists: {
       ...board.checklists,
@@ -154,6 +188,15 @@ export function createChecklistItem(
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: checklist.cardId,
+      type: "checklist-item-created",
+      message: `Добавлен пункт «${summarize(normalizedTitle)}» в чек-лист «${summarize(checklist.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function renameChecklistItem(
@@ -162,15 +205,19 @@ export function renameChecklistItem(
   title: string,
 ): Board {
   const item = board.checklistItems[itemId];
+  const checklist = item ? board.checklists[item.checklistId] : undefined;
   const normalizedTitle = normalizeTitle(title);
 
-  if (!item || !normalizedTitle) {
+  if (!item || !checklist || !normalizedTitle) {
+    return board;
+  }
+
+  if (item.title === normalizedTitle) {
     return board;
   }
 
   const timestamp = now();
-
-  return {
+  const nextBoard: Board = {
     ...board,
     checklistItems: {
       ...board.checklistItems,
@@ -182,6 +229,15 @@ export function renameChecklistItem(
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: checklist.cardId,
+      type: "checklist-item-renamed",
+      message: `Переименован пункт: «${summarize(item.title)}» → «${summarize(normalizedTitle)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function toggleChecklistItem(board: Board, itemId: string): Board {
@@ -193,8 +249,8 @@ export function toggleChecklistItem(board: Board, itemId: string): Board {
   }
 
   const timestamp = now();
-
-  return {
+  const isCompleted = !item.isCompleted;
+  const nextBoard: Board = {
     ...board,
     checklists: {
       ...board.checklists,
@@ -207,12 +263,23 @@ export function toggleChecklistItem(board: Board, itemId: string): Board {
       ...board.checklistItems,
       [itemId]: {
         ...item,
-        isCompleted: !item.isCompleted,
+        isCompleted,
         updatedAt: timestamp,
       },
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: checklist.cardId,
+      type: "checklist-item-toggled",
+      message: isCompleted
+        ? `Выполнен пункт «${summarize(item.title)}».`
+        : `Снята отметка с пункта «${summarize(item.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function deleteChecklistItem(board: Board, itemId: string): Board {
@@ -226,8 +293,7 @@ export function deleteChecklistItem(board: Board, itemId: string): Board {
   const timestamp = now();
   const nextChecklistItems = { ...board.checklistItems };
   delete nextChecklistItems[itemId];
-
-  return {
+  const nextBoard: Board = {
     ...board,
     checklists: {
       ...board.checklists,
@@ -240,6 +306,15 @@ export function deleteChecklistItem(board: Board, itemId: string): Board {
     checklistItems: nextChecklistItems,
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: checklist.cardId,
+      type: "checklist-item-deleted",
+      message: `Удалён пункт «${summarize(item.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function moveChecklistItem(
@@ -273,8 +348,7 @@ export function moveChecklistItem(
   itemIds.splice(sourceIndex, 1);
   itemIds.splice(safeIndex, 0, itemId);
   const timestamp = now();
-
-  return {
+  const nextBoard: Board = {
     ...board,
     checklists: {
       ...board.checklists,
@@ -286,4 +360,13 @@ export function moveChecklistItem(
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: checklist.cardId,
+      type: "checklist-item-moved",
+      message: `Изменён порядок пункта «${summarize(item.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }

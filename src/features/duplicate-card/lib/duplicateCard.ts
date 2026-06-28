@@ -1,8 +1,17 @@
-import type { Board, BoardChecklist, BoardChecklistItem } from "@/entities/board";
+import {
+  appendBoardActivities,
+  type Board,
+  type BoardChecklist,
+  type BoardChecklistItem,
+} from "@/entities/board";
 import { createId } from "@/shared/lib";
 
 function now(): number {
   return Date.now();
+}
+
+function summarize(value: string, maxLength = 72): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
 function createDuplicateTitle(board: Board, sourceTitle: string): string {
@@ -126,7 +135,7 @@ export function duplicateCard(board: Board, cardId: string): Board {
   const cardIds = [...sourceList.cardIds];
   cardIds.splice(sourceIndex + 1, 0, duplicateId);
 
-  return {
+  const nextBoard: Board = {
     ...board,
     checklistIds: [...board.checklistIds, ...copiedChecklists.checklistIds],
     checklists: {
@@ -151,4 +160,19 @@ export function duplicateCard(board: Board, cardId: string): Board {
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: sourceCard.id,
+      type: "card-duplicated",
+      message: `Создана копия «${summarize(duplicateTitle)}».`,
+      createdAt: timestamp,
+    },
+    {
+      cardId: duplicateId,
+      type: "card-created",
+      message: `Карточка создана как копия «${summarize(sourceCard.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }

@@ -1,9 +1,13 @@
 import {
+  appendBoardActivities,
+  formatActivityDueDate,
   getRandomCardSticker,
   normalizeCardLabelIds,
   normalizeCardSticker,
+  removeCardActivities,
   removeCardChecklists,
   type Board,
+  type BoardActivityInput,
   type BoardAppearance,
   type CardDraft,
 } from "@/entities/board";
@@ -23,6 +27,37 @@ function moveItem<T>(items: readonly T[], fromIndex: number, toIndex: number): T
 
   nextItems.splice(toIndex, 0, movedItem);
   return nextItems;
+}
+
+function areStringArraysEqual(
+  first: readonly string[],
+  second: readonly string[],
+): boolean {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
+}
+
+function summarize(value: string, maxLength = 72): string {
+  const normalized = value.trim().replace(/\s+/g, " ");
+
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, Math.max(0, maxLength - 1))}…`
+    : normalized;
+}
+
+function describeLabels(board: Board, labelIds: readonly string[]): string {
+  const names = labelIds.flatMap((labelId) => {
+    const label = board.labels[labelId];
+    return label ? [label.name] : [];
+  });
+
+  if (names.length === 0) {
+    return "Удалены все метки.";
+  }
+
+  const visibleNames = names.slice(0, 3);
+  const suffix = names.length > visibleNames.length ? ` и ещё ${names.length - visibleNames.length}` : "";
+
+  return `Обновлены метки: ${visibleNames.join(", ")}${suffix}.`;
 }
 
 export function renameBoard(board: Board, title: string): Board {
@@ -114,6 +149,7 @@ export function deleteList(board: Board, listId: string): Board {
     board.checklistItems,
     cardIdsToDelete,
   );
+  const relatedActivities = removeCardActivities(board, cardIdsToDelete);
 
   return {
     ...board,
@@ -124,6 +160,7 @@ export function deleteList(board: Board, listId: string): Board {
       (checklistId) => Boolean(relatedChecklists.checklists[checklistId]),
     ),
     ...relatedChecklists,
+    ...relatedActivities,
     updatedAt: now(),
   };
 }
@@ -138,8 +175,7 @@ export function addCard(board: Board, listId: string, title: string): Board {
 
   const timestamp = now();
   const cardId = createId("card");
-
-  return {
+  const nextBoard: Board = {
     ...board,
     lists: {
       ...board.lists,
@@ -166,6 +202,15 @@ export function addCard(board: Board, listId: string, title: string): Board {
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId,
+      type: "card-created",
+      message: `Создана карточка в списке «${summarize(list.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function updateCard(board: Board, cardId: string, draft: CardDraft): Board {
@@ -186,15 +231,82 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
     sticker: normalizeCardSticker(draft.sticker),
     updatedAt: timestamp,
   };
+  const activities: BoardActivityInput[] = [];
 
-  return {
-    ...board,
-    cards: {
-      ...board.cards,
-      [cardId]: nextCard,
+  if (card.title !== nextCard.title) {
+    activities.push({
+      cardId,
+      type: "card-title-updated",
+      message: `Изменено название: «${summarize(card.title)}» → «${summarize(nextCard.title)}».`,
+      createdAt: timestamp,
+    });
+  }
+
+  if (card.description !== nextCard.description) {
+    activities.push({
+      cardId,
+      type: "card-description-updated",
+      message: nextCard.description ? "Обновлено описание карточки." : "Очищено описание карточки.",
+      createdAt: timestamp,
+    });
+  }
+
+  if (card.dueDate !== nextCard.dueDate) {
+    if (!card.dueDate && nextCard.dueDate) {
+      activities.push({
+        cardId,
+        type: "card-due-date-set",
+        message: `Установлен срок: ${formatActivityDueDate(nextCard.dueDate)}.`,
+        createdAt: timestamp,
+      });
+    } else if (card.dueDate && nextCard.dueDate) {
+      activities.push({
+        cardId,
+        type: "card-due-date-changed",
+        message: `Изменён срок: ${formatActivityDueDate(card.dueDate)} → ${formatActivityDueDate(nextCard.dueDate)}.`,
+        createdAt: timestamp,
+      });
+    } else {
+      activities.push({
+        cardId,
+        type: "card-due-date-removed",
+        message: "Удалён срок карточки.",
+        createdAt: timestamp,
+      });
+    }
+  }
+
+  if (!areStringArraysEqual(card.labelIds, nextCard.labelIds)) {
+    activities.push({
+      cardId,
+      type: "card-labels-updated",
+      message: describeLabels(board, nextCard.labelIds),
+      createdAt: timestamp,
+    });
+  }
+
+  if (card.sticker !== nextCard.sticker) {
+    activities.push({
+      cardId,
+      type: "card-sticker-updated",
+      message: nextCard.sticker
+        ? `Изменён стикер: ${nextCard.sticker}.`
+        : "Удалён стикер карточки.",
+      createdAt: timestamp,
+    });
+  }
+
+  return appendBoardActivities(
+    {
+      ...board,
+      cards: {
+        ...board.cards,
+        [cardId]: nextCard,
+      },
+      updatedAt: timestamp,
     },
-    updatedAt: timestamp,
-  };
+    activities,
+  );
 }
 
 export function deleteCard(board: Board, cardId: string): Board {
@@ -213,6 +325,7 @@ export function deleteCard(board: Board, cardId: string): Board {
     board.checklistItems,
     new Set([cardId]),
   );
+  const relatedActivities = removeCardActivities(board, new Set([cardId]));
 
   return {
     ...board,
@@ -229,6 +342,7 @@ export function deleteCard(board: Board, cardId: string): Board {
       (checklistId) => Boolean(relatedChecklists.checklists[checklistId]),
     ),
     ...relatedChecklists,
+    ...relatedActivities,
     updatedAt: timestamp,
   };
 }
@@ -274,7 +388,7 @@ export function moveCard(
     };
   }
 
-  return {
+  const nextBoard: Board = {
     ...board,
     lists: {
       ...board.lists,
@@ -299,6 +413,15 @@ export function moveCard(
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId,
+      type: "card-moved",
+      message: `Перемещено из «${summarize(sourceList.title)}» в «${summarize(destinationList.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function moveList(board: Board, listId: string, destinationListId: string): Board {

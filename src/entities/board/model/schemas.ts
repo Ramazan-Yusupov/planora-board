@@ -17,6 +17,29 @@ const cardColorValues = [
   "custom",
 ] as const;
 
+const boardActivityTypeValues = [
+  "card-created",
+  "card-title-updated",
+  "card-description-updated",
+  "card-due-date-set",
+  "card-due-date-changed",
+  "card-due-date-removed",
+  "card-labels-updated",
+  "card-sticker-updated",
+  "card-moved",
+  "card-archived",
+  "card-restored",
+  "card-duplicated",
+  "checklist-created",
+  "checklist-renamed",
+  "checklist-deleted",
+  "checklist-item-created",
+  "checklist-item-renamed",
+  "checklist-item-toggled",
+  "checklist-item-deleted",
+  "checklist-item-moved",
+] as const;
+
 const hexColorSchema = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "Ожидается цвет в формате #RRGGBB.");
@@ -52,6 +75,15 @@ const boardChecklistSchema = z.object({
   itemIds: z.array(z.string().min(1)).default([]),
   createdAt: z.number(),
   updatedAt: z.number(),
+});
+
+const boardActivitySchema = z.object({
+  id: z.string().min(1),
+  cardId: z.string().min(1),
+  actorName: z.string().trim().min(1).max(80),
+  type: z.enum(boardActivityTypeValues),
+  message: z.string().trim().min(1).max(500),
+  createdAt: z.number(),
 });
 
 const boardCardSchema = z.object({
@@ -95,6 +127,8 @@ export const boardSchema = z
     checklistItems: z
       .record(z.string(), boardChecklistItemSchema)
       .default({}),
+    activityIds: z.array(z.string().min(1)).default([]),
+    activities: z.record(z.string(), boardActivitySchema).default({}),
     listIds: z.array(z.string().min(1)),
     lists: z.record(z.string(), boardListSchema),
     cards: z.record(z.string(), boardCardSchema),
@@ -104,6 +138,7 @@ export const boardSchema = z
   .superRefine((board, context) => {
     const boardLabelIds = new Set<string>();
     const boardChecklistIds = new Set<string>();
+    const boardActivityIds = new Set<string>();
     const boardListIds = new Set<string>();
     const cardOwners = new Map<string, string>();
     const checklistOwners = new Map<string, string>();
@@ -143,6 +178,52 @@ export const boardSchema = z
           code: "custom",
           path: ["labels", labelKey],
           message: "Метка отсутствует в порядке проекта.",
+        });
+      }
+    }
+
+    board.activityIds.forEach((activityId, index) => {
+      if (boardActivityIds.has(activityId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["activityIds", index],
+          message: "Событие не должно повторяться в истории.",
+        });
+      }
+
+      boardActivityIds.add(activityId);
+
+      if (!board.activities[activityId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["activityIds", index],
+          message: "Ссылка на событие истории не найдена.",
+        });
+      }
+    });
+
+    for (const [activityKey, activity] of Object.entries(board.activities)) {
+      if (activity.id !== activityKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["activities", activityKey, "id"],
+          message: "Ключ события должен совпадать с его id.",
+        });
+      }
+
+      if (!boardActivityIds.has(activityKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["activities", activityKey],
+          message: "Событие отсутствует в порядке истории.",
+        });
+      }
+
+      if (!board.cards[activity.cardId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["activities", activityKey, "cardId"],
+          message: "Карточка события истории не найдена.",
         });
       }
     }

@@ -84,6 +84,37 @@ export type BoardChecklistItem = {
   updatedAt: number;
 };
 
+export type BoardActivityType =
+  | "card-created"
+  | "card-title-updated"
+  | "card-description-updated"
+  | "card-due-date-set"
+  | "card-due-date-changed"
+  | "card-due-date-removed"
+  | "card-labels-updated"
+  | "card-sticker-updated"
+  | "card-moved"
+  | "card-archived"
+  | "card-restored"
+  | "card-duplicated"
+  | "checklist-created"
+  | "checklist-renamed"
+  | "checklist-deleted"
+  | "checklist-item-created"
+  | "checklist-item-renamed"
+  | "checklist-item-toggled"
+  | "checklist-item-deleted"
+  | "checklist-item-moved";
+
+export type BoardActivity = {
+  id: string;
+  cardId: string;
+  actorName: string;
+  type: BoardActivityType;
+  message: string;
+  createdAt: number;
+};
+
 export type BoardCard = {
   id: string;
   listId: string;
@@ -116,6 +147,8 @@ export type Board = {
   checklistIds: string[];
   checklists: Record<string, BoardChecklist>;
   checklistItems: Record<string, BoardChecklistItem>;
+  activityIds: string[];
+  activities: Record<string, BoardActivity>;
   listIds: string[];
   lists: Record<string, BoardList>;
   cards: Record<string, BoardCard>;

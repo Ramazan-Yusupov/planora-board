@@ -1,7 +1,11 @@
-import type { Board } from "@/entities/board";
+import { appendBoardActivities, type Board } from "@/entities/board";
 
 function now(): number {
   return Date.now();
+}
+
+function summarize(value: string, maxLength = 72): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
 export function archiveCard(board: Board, cardId: string): Board {
@@ -13,8 +17,7 @@ export function archiveCard(board: Board, cardId: string): Board {
   }
 
   const timestamp = now();
-
-  return {
+  const nextBoard: Board = {
     ...board,
     lists: {
       ...board.lists,
@@ -35,6 +38,15 @@ export function archiveCard(board: Board, cardId: string): Board {
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId,
+      type: "card-archived",
+      message: "Карточка архивирована.",
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function restoreCard(board: Board, cardId: string): Board {
@@ -54,7 +66,7 @@ export function restoreCard(board: Board, cardId: string): Board {
 
   delete restoredCard.archivedAt;
 
-  return {
+  const nextBoard: Board = {
     ...board,
     lists: {
       ...board.lists,
@@ -70,4 +82,13 @@ export function restoreCard(board: Board, cardId: string): Board {
     },
     updatedAt: timestamp,
   };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId,
+      type: "card-restored",
+      message: `Карточка восстановлена в список «${summarize(list.title)}».`,
+      createdAt: timestamp,
+    },
+  ]);
 }
