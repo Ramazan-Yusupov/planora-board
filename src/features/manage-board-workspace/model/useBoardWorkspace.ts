@@ -31,8 +31,8 @@ type UseBoardWorkspaceResult = {
   isReady: boolean;
   persistenceState: BoardPersistenceState;
   storageError: string | null;
-  createProject: (title: string) => void;
-  deleteProject: (boardId: string) => void;
+  createProject: (title: string) => string | null;
+  deleteProject: (boardId: string) => string | null;
   selectProject: (boardId: string) => void;
   updateActiveBoard: (
     updater: (currentBoard: Board) => Board,
@@ -288,11 +288,11 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
   );
 
   const createProject = useCallback(
-    (title: string) => {
+    (title: string): string | null => {
       const currentWorkspace = workspaceRef.current;
 
       if (!currentWorkspace) {
-        return;
+        return null;
       }
 
       const nextBoard = createEmptyBoard(title);
@@ -310,6 +310,8 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
         },
         "immediate",
       );
+
+      return nextBoard.id;
     },
     [commitWorkspace],
   );
@@ -341,17 +343,17 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
   );
 
   const deleteProject = useCallback(
-    (boardId: string) => {
+    (boardId: string): string | null => {
       const currentWorkspace = workspaceRef.current;
 
       if (!currentWorkspace) {
-        return;
+        return null;
       }
 
       const deletion = deleteBoardFromWorkspace(currentWorkspace, boardId);
 
       if (deletion.workspace === currentWorkspace) {
-        return;
+        return null;
       }
 
       commitWorkspace(
@@ -363,6 +365,8 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
         },
         "immediate",
       );
+
+      return deletion.workspace.activeBoardId;
     },
     [commitWorkspace],
   );

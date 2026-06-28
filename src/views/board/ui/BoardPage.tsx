@@ -1,13 +1,8 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Cloud,
-  LayoutDashboard,
-  Menu,
-  Palette,
-} from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { resolveBoardAppearance, type CardDraft } from "@/entities/board";
 import {
@@ -23,13 +18,17 @@ import {
   updateCard,
 } from "@/features/board-management";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
-import { APP_NAME } from "@/shared/config/app";
-import { cn } from "@/shared/lib";
-import { IconButton } from "@/shared/ui";
+import { CALENDAR_ROUTE, getBoardRoute } from "@/shared/config/routes";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
 import { CardModal } from "@/widgets/card-modal";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
+import { WorkspaceHeader } from "@/widgets/workspace-header";
+
+type BoardPageProps = Readonly<{
+  boardId: string;
+  initialCardId?: string;
+}>;
 
 function isMobileViewport(): boolean {
   return (
@@ -95,7 +94,8 @@ function BoardTitleInput({ title, disabled, onCommit }: BoardTitleInputProps) {
   );
 }
 
-export function BoardPage() {
+export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
+  const router = useRouter();
   const {
     workspace,
     activeBoard,
@@ -108,16 +108,41 @@ export function BoardPage() {
     updateActiveBoard,
   } = useBoardWorkspace();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [isInitialCardDismissed, setIsInitialCardDismissed] = useState(false);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
 
-  if (!isReady || !workspace || !activeBoard) {
+  useEffect(() => {
+    if (!isReady || !workspace || !activeBoard) {
+      return;
+    }
+
+    const requestedBoardExists = workspace.boards.some(
+      (board) => board.id === boardId,
+    );
+
+    if (!requestedBoardExists) {
+      router.replace(getBoardRoute(activeBoard.id));
+      return;
+    }
+
+    if (activeBoard.id !== boardId) {
+      selectProject(boardId);
+    }
+  }, [activeBoard, boardId, isReady, router, selectProject, workspace]);
+
+  const isRequestedBoardReady =
+    isReady && Boolean(workspace) && activeBoard?.id === boardId;
+
+  if (!isRequestedBoardReady || !workspace || !activeBoard) {
     return <BoardLoadingState />;
   }
 
   const selectedCard = selectedCardId
     ? activeBoard.cards[selectedCardId]
-    : undefined;
+    : !isInitialCardDismissed && initialCardId
+      ? activeBoard.cards[initialCardId]
+      : undefined;
   const selectedListTitle = selectedCard
     ? activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список"
     : "";
@@ -129,10 +154,17 @@ export function BoardPage() {
         ? "Ошибка сохранения"
         : "Сохранено локально";
 
-  const selectProjectFromSidebar = (boardId: string) => {
-    selectProject(boardId);
-    setSelectedCardId(null);
+  const closeSidebars = () => {
+    setIsProjectsOpen(false);
     setIsAppearanceOpen(false);
+  };
+
+  const selectProjectFromSidebar = (nextBoardId: string) => {
+    selectProject(nextBoardId);
+    setSelectedCardId(null);
+    setIsInitialCardDismissed(true);
+    setIsAppearanceOpen(false);
+    router.push(getBoardRoute(nextBoardId));
 
     if (isMobileViewport()) {
       setIsProjectsOpen(false);
@@ -149,75 +181,39 @@ export function BoardPage() {
     setIsProjectsOpen(false);
   };
 
+  const openCalendar = () => {
+    closeSidebars();
+    router.push(CALENDAR_ROUTE);
+  };
+
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
-      <header className="z-50 border-b border-white/10 bg-panel/95 px-3 py-3 backdrop-blur-xl sm:px-5">
-        <div className="mx-auto flex max-w-[1800px] items-center gap-2 sm:gap-4">
-          <IconButton
-            aria-pressed={isProjectsOpen}
-            className="text-text-muted hover:bg-control hover:text-text"
-            label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
-            size="lg"
-            onClick={toggleProjects}
-          >
-            <Menu aria-hidden="true" size={20} />
-          </IconButton>
-
-          <div className="hidden items-center gap-3 sm:flex">
-            <div className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm shadow-accent/20">
-              <LayoutDashboard aria-hidden="true" size={20} />
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
-                {APP_NAME}
-              </p>
-              <p className="text-xs text-text-muted">Локальные проекты</p>
-            </div>
-          </div>
-
-          <div className="min-w-0 flex-1 sm:max-w-xl">
-            <label className="sr-only" htmlFor="board-title">
-              Название проекта
-            </label>
-
-            <BoardTitleInput
-              key={activeBoard.id}
-              disabled={!isReady}
-              title={activeBoard.title}
-              onCommit={(title) =>
-                updateActiveBoard((board) => renameBoard(board, title), "immediate")
-              }
-            />
-          </div>
-
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-            <span
-              className={cn(
-                "hidden items-center gap-1.5 text-xs font-medium md:inline-flex",
-                persistenceState === "error" ? "text-red-300" : "text-text-muted",
-              )}
-            >
-              <Cloud aria-hidden="true" size={15} />
-              {statusLabel}
-            </span>
-
-            <IconButton
-              aria-pressed={isAppearanceOpen}
-              className={cn(
-                isAppearanceOpen
-                  ? "bg-accent text-accent-foreground"
-                  : "text-text-muted hover:bg-control hover:text-text",
-              )}
-              label="Оформление доски"
-              size="lg"
-              onClick={toggleAppearance}
-            >
-              <Palette aria-hidden="true" size={19} />
-            </IconButton>
-          </div>
-        </div>
-      </header>
+      <WorkspaceHeader
+        activeView="board"
+        isAppearanceOpen={isAppearanceOpen}
+        isPersistenceError={persistenceState === "error"}
+        isProjectsOpen={isProjectsOpen}
+        persistenceLabel={statusLabel}
+        onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
+        onOpenCalendar={openCalendar}
+        onToggleAppearance={toggleAppearance}
+        onToggleProjects={toggleProjects}
+      >
+        <label className="sr-only" htmlFor="board-title">
+          Название проекта
+        </label>
+        <BoardTitleInput
+          key={activeBoard.id}
+          disabled={!isReady}
+          title={activeBoard.title}
+          onCommit={(title) =>
+            updateActiveBoard(
+              (board) => renameBoard(board, title),
+              "immediate",
+            )
+          }
+        />
+      </WorkspaceHeader>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {isProjectsOpen || isAppearanceOpen ? (
@@ -225,10 +221,7 @@ export function BoardPage() {
             aria-label="Закрыть боковую панель"
             className="absolute inset-0 z-30 bg-black/55 lg:hidden"
             type="button"
-            onClick={() => {
-              setIsProjectsOpen(false);
-              setIsAppearanceOpen(false);
-            }}
+            onClick={closeSidebars}
           />
         ) : null}
 
@@ -238,13 +231,23 @@ export function BoardPage() {
           isOpen={isProjectsOpen}
           onClose={() => setIsProjectsOpen(false)}
           onCreateBoard={(title) => {
-            createProject(title);
-            setSelectedCardId(null);
-            setIsProjectsOpen(false);
+            const createdBoardId = createProject(title);
+
+            if (createdBoardId) {
+              setSelectedCardId(null);
+              setIsInitialCardDismissed(true);
+              setIsProjectsOpen(false);
+              router.push(getBoardRoute(createdBoardId));
+            }
           }}
-          onDeleteBoard={(boardId) => {
-            deleteProject(boardId);
+          onDeleteBoard={(deletedBoardId) => {
+            const nextActiveBoardId = deleteProject(deletedBoardId);
             setSelectedCardId(null);
+            setIsInitialCardDismissed(true);
+
+            if (deletedBoardId === boardId && nextActiveBoardId) {
+              router.replace(getBoardRoute(nextActiveBoardId));
+            }
           }}
           onSelectBoard={selectProjectFromSidebar}
         />
@@ -319,7 +322,10 @@ export function BoardPage() {
                     moveList(board, listId, destinationListId),
                   )
                 }
-                onOpenCard={setSelectedCardId}
+                onOpenCard={(cardId) => {
+                  setIsInitialCardDismissed(true);
+                  setSelectedCardId(cardId);
+                }}
                 onRenameList={(listId, title) =>
                   updateActiveBoard((board) => renameList(board, listId, title))
                 }
@@ -345,7 +351,10 @@ export function BoardPage() {
           key={selectedCard.id}
           card={selectedCard}
           listTitle={selectedListTitle}
-          onClose={() => setSelectedCardId(null)}
+          onClose={() => {
+            setIsInitialCardDismissed(true);
+            setSelectedCardId(null);
+          }}
           onDelete={(cardId) => {
             updateActiveBoard((board) => deleteCard(board, cardId));
           }}

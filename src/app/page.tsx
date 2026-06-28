@@ -1,5 +1,5 @@
-import { BoardPage } from "@/views/board";
+import { HomeRedirectPage } from "@/views/home";
 
 export default function Page() {
-  return <BoardPage />;
+  return <HomeRedirectPage />;
 }
