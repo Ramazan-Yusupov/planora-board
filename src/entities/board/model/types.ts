@@ -46,6 +46,16 @@ export const CARD_COLOR_OPTIONS = [
   { value: "custom", label: "Свой цвет", color: "#334155" },
 ] as const;
 
+export const CARD_COVER_COLOR_OPTIONS = [
+  "#0ea5e9",
+  "#8b5cf6",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#ec4899",
+  "#64748b",
+] as const;
+
 export type BoardBackgroundValue = (typeof BOARD_BACKGROUND_OPTIONS)[number]["value"];
 export type CardColorValue = (typeof CARD_COLOR_OPTIONS)[number]["value"];
 
@@ -84,6 +94,10 @@ export type BoardChecklistItem = {
   updatedAt: number;
 };
 
+/**
+ * Журнал хранится в доменной модели, но не показывается в обычной карточке.
+ * Админский интерфейс появится после серверной авторизации.
+ */
 export type BoardActivityType =
   | "card-created"
   | "card-title-updated"
@@ -115,6 +129,26 @@ export type BoardActivity = {
   createdAt: number;
 };
 
+export type BoardAttachment = {
+  id: string;
+  cardId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type CardCover =
+  | {
+      type: "color";
+      color: string;
+    }
+  | {
+      type: "attachment";
+      attachmentId: string;
+    };
+
 export type BoardCard = {
   id: string;
   listId: string;
@@ -123,7 +157,9 @@ export type BoardCard = {
   dueDate?: string;
   labelIds: string[];
   checklistIds: string[];
+  attachmentIds: string[];
   sticker?: string;
+  cover?: CardCover;
   isArchived: boolean;
   archivedAt?: number;
   createdAt: number;
@@ -134,6 +170,9 @@ export type BoardList = {
   id: string;
   title: string;
   cardIds: string[];
+  isArchived: boolean;
+  archivedAt?: number;
+  wipLimit?: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -147,6 +186,8 @@ export type Board = {
   checklistIds: string[];
   checklists: Record<string, BoardChecklist>;
   checklistItems: Record<string, BoardChecklistItem>;
+  attachmentIds: string[];
+  attachments: Record<string, BoardAttachment>;
   activityIds: string[];
   activities: Record<string, BoardActivity>;
   listIds: string[];
@@ -163,5 +204,5 @@ export type BoardWorkspace = {
 
 export type CardDraft = Pick<
   BoardCard,
-  "title" | "description" | "dueDate" | "labelIds" | "sticker"
+  "title" | "description" | "dueDate" | "labelIds" | "sticker" | "cover"
 >;

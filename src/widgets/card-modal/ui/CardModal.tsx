@@ -10,40 +10,38 @@ import {
 } from "lucide-react";
 import { useId, useState } from "react";
 
-import {
-  type BoardActivity,
-  type BoardCard,
-  type BoardChecklist,
-  type BoardChecklistItem,
-  type BoardLabel,
-  type BoardLabelDraft,
-  type CardDraft,
+import type {
+  BoardAttachment,
+  BoardCard,
+  BoardChecklist,
+  BoardChecklistItem,
+  BoardLabel,
+  BoardLabelDraft,
+  BoardList,
+  CardDraft,
 } from "@/entities/board";
+import { CardStickerPicker } from "@/features/manage-card-sticker";
+import { CardAttachmentsEditor } from "@/features/manage-attachments";
 import { CardChecklistsEditor } from "@/features/manage-checklist";
 import { CardLabelsEditor } from "@/features/manage-labels";
-import { CardStickerPicker } from "@/features/manage-card-sticker";
-import { Button, ConfirmDialog, Modal } from "@/shared/ui";
-import { CardActivity } from "./CardActivity";
-
-type CardListOption = Readonly<{
-  id: string;
-  title: string;
-}>;
+import { Button, ConfirmDialog, FieldLabel, Modal, Panel, Select, Textarea, TextField } from "@/shared/ui";
 
 type CardModalProps = Readonly<{
-  activities: readonly BoardActivity[];
   card: BoardCard;
+  attachments: readonly BoardAttachment[];
   checklists: readonly BoardChecklist[];
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   labels: readonly BoardLabel[];
-  lists: readonly CardListOption[];
+  lists: readonly BoardList[];
   listTitle: string;
+  onAddAttachment: (attachment: BoardAttachment) => void;
   onArchive: (cardId: string) => void;
   onClose: () => void;
   onCreateChecklist: (cardId: string, title: string) => void;
   onCreateChecklistItem: (checklistId: string, title: string) => void;
   onCreateLabel: (draft: BoardLabelDraft) => BoardLabel | null;
   onDelete: (cardId: string) => void;
+  onDeleteAttachment: (attachmentId: string) => void;
   onDeleteChecklist: (checklistId: string) => void;
   onDeleteChecklistItem: (itemId: string) => void;
   onDeleteLabel: (labelId: string) => void;
@@ -64,23 +62,26 @@ function createDraft(card: BoardCard): CardDraft {
     dueDate: card.dueDate,
     labelIds: [...card.labelIds],
     sticker: card.sticker,
+    cover: card.cover,
   };
 }
 
 export function CardModal({
-  activities,
   card,
+  attachments,
   checklists,
   checklistItems,
   labels,
   lists,
   listTitle,
+  onAddAttachment,
   onArchive,
   onClose,
   onCreateChecklist,
   onCreateChecklistItem,
   onCreateLabel,
   onDelete,
+  onDeleteAttachment,
   onDeleteChecklist,
   onDeleteChecklistItem,
   onDeleteLabel,
@@ -95,8 +96,7 @@ export function CardModal({
 }: CardModalProps) {
   const [draft, setDraft] = useState<CardDraft>(() => createDraft(card));
   const [destinationListId, setDestinationListId] = useState(card.listId);
-  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
-    useState(false);
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
   const dueDateId = useId();
@@ -145,36 +145,19 @@ export function CardModal({
         <div className="space-y-5">
           <CardStickerPicker
             sticker={draft.sticker}
-            onChange={(sticker) =>
-              setDraft((current) => ({
-                ...current,
-                sticker,
-              }))
-            }
+            onChange={(sticker) => setDraft((current) => ({ ...current, sticker }))}
           />
 
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">
-              Список: {listTitle}
-            </p>
-            <label
-              className="mt-2 block text-sm font-medium text-text"
-              htmlFor={titleId}
-            >
-              Название
-            </label>
-            <input
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Список: {listTitle}</p>
+            <FieldLabel className="mt-2" htmlFor={titleId}>Название</FieldLabel>
+            <TextField
               autoFocus
               id={titleId}
-              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text placeholder:text-text-muted"
+              className="mt-2"
               placeholder="Напишите понятное название задачи"
               value={draft.title}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
+              onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
               onKeyDown={(event) => {
                 if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
                   save();
@@ -184,66 +167,43 @@ export function CardModal({
           </div>
 
           <div>
-            <label
-              className="flex items-center gap-2 text-sm font-medium text-text"
-              htmlFor={descriptionId}
-            >
+            <FieldLabel htmlFor={descriptionId}>
               <FileText aria-hidden="true" size={17} />
               Описание
-            </label>
-            <textarea
+            </FieldLabel>
+            <Textarea
               id={descriptionId}
-              className="mt-2 min-h-32 w-full resize-y rounded-xl border border-white/10 bg-control/45 px-3 py-2.5 text-sm leading-6 text-text placeholder:text-text-muted"
+              className="mt-2 min-h-32"
               placeholder="Добавьте детали, критерии готовности или ссылки"
               value={draft.description}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
+              onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
             />
           </div>
 
           <div>
-            <label
-              className="flex items-center gap-2 text-sm font-medium text-text"
-              htmlFor={dueDateId}
-            >
+            <FieldLabel htmlFor={dueDateId}>
               <CalendarDays aria-hidden="true" size={17} />
               Срок
-            </label>
-            <input
+            </FieldLabel>
+            <TextField
               id={dueDateId}
-              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              className="mt-2"
               type="date"
               value={draft.dueDate ?? ""}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  dueDate: event.target.value || undefined,
-                }))
-              }
+              onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value || undefined }))}
             />
           </div>
 
           <CardLabelsEditor
             labels={labels}
             selectedLabelIds={draft.labelIds}
-            onChange={(labelIds) =>
-              setDraft((current) => ({
-                ...current,
-                labelIds,
-              }))
-            }
+            onChange={(labelIds) => setDraft((current) => ({ ...current, labelIds }))}
             onCreateLabel={onCreateLabel}
             onDeleteLabel={(labelId) => {
               onDeleteLabel(labelId);
               setDraft((current) => ({
                 ...current,
-                labelIds: current.labelIds.filter(
-                  (currentLabelId) => currentLabelId !== labelId,
-                ),
+                labelIds: current.labelIds.filter((currentLabelId) => currentLabelId !== labelId),
               }));
             }}
             onUpdateLabel={onUpdateLabel}
@@ -262,42 +222,31 @@ export function CardModal({
             onToggleItem={onToggleChecklistItem}
           />
 
-          <CardActivity activities={activities} />
+          <CardAttachmentsEditor
+            attachments={attachments}
+            cardId={card.id}
+            cover={draft.cover}
+            onAddAttachment={onAddAttachment}
+            onChangeCover={(cover) => setDraft((current) => ({ ...current, cover }))}
+            onDeleteAttachment={onDeleteAttachment}
+          />
 
-          <section className="rounded-2xl border border-white/10 bg-control/25 p-3 sm:p-4">
+          <Panel>
             <h3 className="text-sm font-semibold text-text">Действия</h3>
-            <p className="mt-1 text-xs leading-5 text-text-muted">
-              Перед действием текущие изменения карточки будут сохранены.
-            </p>
+            <p className="mt-1 text-xs leading-5 text-text-muted">Перед действием текущие изменения карточки будут сохранены.</p>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <div>
-                <label
-                  className="sr-only"
-                  htmlFor={destinationListIdInput}
-                >
-                  Список для перемещения карточки
-                </label>
-                <select
+                <label className="sr-only" htmlFor={destinationListIdInput}>Список для перемещения карточки</label>
+                <Select
                   id={destinationListIdInput}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-panel/70 px-3 text-sm text-text"
                   value={destinationListId}
                   onChange={(event) => setDestinationListId(event.target.value)}
                 >
-                  {lists.map((list) => (
-                    <option key={list.id} value={list.id}>
-                      {list.title}
-                    </option>
-                  ))}
-                </select>
+                  {lists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}
+                </Select>
               </div>
-
-              <Button
-                disabled={destinationListId === card.listId}
-                size="md"
-                variant="secondary"
-                onClick={moveToSelectedList}
-              >
+              <Button disabled={destinationListId === card.listId} variant="secondary" onClick={moveToSelectedList}>
                 <MoveRight aria-hidden="true" size={17} />
                 Переместить
               </Button>
@@ -313,25 +262,16 @@ export function CardModal({
                 Архивировать
               </Button>
             </div>
-          </section>
+          </Panel>
 
           <div className="flex flex-col-reverse justify-between gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center">
-            <Button
-              className="justify-center sm:justify-start"
-              variant="dangerGhost"
-              onClick={() => setIsDeleteConfirmationOpen(true)}
-            >
+            <Button className="justify-center sm:justify-start" variant="dangerGhost" onClick={() => setIsDeleteConfirmationOpen(true)}>
               <Trash2 aria-hidden="true" size={17} />
               Удалить карточку
             </Button>
-
             <div className="flex items-center justify-end gap-2">
-              <Button variant="ghost" onClick={onClose}>
-                Отмена
-              </Button>
-              <Button disabled={!draft.title.trim()} onClick={save}>
-                Сохранить
-              </Button>
+              <Button variant="ghost" onClick={onClose}>Отмена</Button>
+              <Button disabled={!draft.title.trim()} onClick={save}>Сохранить</Button>
             </div>
           </div>
         </div>

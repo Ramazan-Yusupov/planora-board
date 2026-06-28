@@ -1,11 +1,21 @@
 "use client";
 
-import { AlertTriangle, Search, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  CalendarDays,
+  Filter,
+  LayoutDashboard,
+  Palette,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-  getCardActivities,
+  getCardAttachments,
   getCardChecklists,
   getOrderedBoardLabels,
   resolveBoardAppearance,
@@ -15,25 +25,37 @@ import {
 } from "@/entities/board";
 import { archiveCard, restoreCard } from "@/features/archive-card";
 import {
+  addCard,
+  addList,
+  archiveList,
+  clearList,
+  deleteCard,
+  deleteList,
+  duplicateList,
+  getActiveBoardListIds,
+  moveAllCards,
+  moveCard,
+  moveList,
+  renameBoard,
+  renameList,
+  restoreList,
+  setListWipLimit,
+  updateBoardAppearance,
+  updateCard,
+} from "@/features/board-management";
+import { duplicateCard } from "@/features/duplicate-card";
+import {
   DEFAULT_CARD_FILTERS,
   getActiveCardFiltersCount,
   getVisibleCardIdsByList,
   hasActiveCardFilters,
   type CardFilters,
 } from "@/features/filter-cards";
-import { duplicateCard } from "@/features/duplicate-card";
+import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import {
-  addCard,
-  addList,
-  deleteCard,
-  deleteList,
-  moveCard,
-  moveList,
-  renameBoard,
-  renameList,
-  updateBoardAppearance,
-  updateCard,
-} from "@/features/board-management";
+  addAttachmentToCard,
+  removeAttachmentFromCard,
+} from "@/features/manage-attachments";
 import {
   createChecklist,
   createChecklistItem,
@@ -49,14 +71,21 @@ import {
   deleteBoardLabel,
   updateBoardLabel,
 } from "@/features/manage-labels";
-import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import { CALENDAR_ROUTE, getBoardRoute } from "@/shared/config/routes";
+import { IconButton, TextField } from "@/shared/ui";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
 import { CardArchiveModal } from "@/widgets/card-archive";
 import { CardFiltersSidebar } from "@/widgets/card-filters";
 import { CardModal } from "@/widgets/card-modal";
+import {
+  CommandPalette,
+  QuickCreateCardDialog,
+  type CommandPaletteAction,
+} from "@/widgets/command-palette";
+import { ListActionsDialog } from "@/widgets/list-actions";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
+import { WorkspaceDataModal } from "@/widgets/workspace-data";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
 type BoardPageProps = Readonly<{
@@ -109,7 +138,6 @@ function BoardTitleInput({ title, disabled, onCommit }: BoardTitleInputProps) {
 
   const commit = (value: string) => {
     const nextTitle = value.trim() || "Новый проект";
-
     setDraft(nextTitle);
 
     if (nextTitle !== title) {
@@ -118,9 +146,9 @@ function BoardTitleInput({ title, disabled, onCommit }: BoardTitleInputProps) {
   };
 
   return (
-    <input
+    <TextField
       id="board-title"
-      className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 text-base font-semibold text-text transition hover:border-white/10 focus:border-white/10 focus:bg-control disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-lg"
+      className="h-auto border-transparent bg-transparent px-2 py-2 text-base font-semibold hover:border-white/10 focus:bg-control sm:px-3 sm:text-lg"
       disabled={disabled}
       value={draft}
       onBlur={(event) => commit(event.currentTarget.value)}
@@ -149,9 +177,14 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     isReady,
     persistenceState,
     storageError,
+    canRedo,
+    canUndo,
     createProject,
     deleteProject,
+    redo,
+    replaceWorkspace,
     selectProject,
+    undo,
     updateActiveBoard,
   } = useBoardWorkspace();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -160,6 +193,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [isWorkspaceDataOpen, setIsWorkspaceDataOpen] = useState(false);
+  const [listActionsListId, setListActionsListId] = useState<string | null>(null);
   const [cardFilters, setCardFilters] = useState<CardFilters>({
     ...DEFAULT_CARD_FILTERS,
   });
@@ -186,26 +223,50 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key !== "/" ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.altKey ||
-        isTextEditingTarget(event.target)
-      ) {
+      if (isTextEditingTarget(event.target)) {
         return;
       }
 
-      event.preventDefault();
-      searchInputRef.current?.focus();
+      const key = event.key.toLocaleLowerCase();
+
+      if ((event.metaKey || event.ctrlKey) && key === "k") {
+        event.preventDefault();
+        setIsCommandPaletteOpen(true);
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+
+      if (event.key === "/" && !event.altKey && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if (key === "b" && !event.altKey && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        setIsProjectsOpen((current) => !current);
+        return;
+      }
+
+      if (key === "n" && !event.altKey && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        setIsQuickCreateOpen(true);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
 
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [redo, undo]);
 
   const isRequestedBoardReady =
     isReady && Boolean(workspace) && activeBoard?.id === boardId;
@@ -214,33 +275,39 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     return <BoardLoadingState />;
   }
 
+  const activeLists = getActiveBoardListIds(activeBoard).flatMap((listId) => {
+    const list = activeBoard.lists[listId];
+    return list ? [list] : [];
+  });
   const requestedCard = selectedCardId
     ? activeBoard.cards[selectedCardId]
     : !isInitialCardDismissed && initialCardId
       ? activeBoard.cards[initialCardId]
       : undefined;
-  const selectedCard = requestedCard?.isArchived ? undefined : requestedCard;
+  const selectedCard =
+    requestedCard &&
+    !requestedCard.isArchived &&
+    !activeBoard.lists[requestedCard.listId]?.isArchived
+      ? requestedCard
+      : undefined;
   const selectedListTitle = selectedCard
     ? activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список"
     : "";
-  const selectedCardActivities = selectedCard
-    ? getCardActivities(activeBoard, selectedCard.id)
-    : [];
   const resolvedAppearance = resolveBoardAppearance(activeBoard.appearance);
   const boardLabels = getOrderedBoardLabels(activeBoard);
   const activeCardsCount = Object.values(activeBoard.cards).filter(
-    (card) => !card.isArchived,
+    (card) => !card.isArchived && !activeBoard.lists[card.listId]?.isArchived,
   ).length;
-  const visibleCardIdsByList = getVisibleCardIdsByList(
-    activeBoard,
-    cardFilters,
-  );
-  const visibleCardsCount = Object.values(visibleCardIdsByList).reduce(
-    (count, cardIds) => count + cardIds.length,
+  const visibleCardIdsByList = getVisibleCardIdsByList(activeBoard, cardFilters);
+  const visibleCardsCount = activeLists.reduce(
+    (count, list) => count + (visibleCardIdsByList[list.id]?.length ?? 0),
     0,
   );
   const activeFiltersCount = getActiveCardFiltersCount(cardFilters);
   const isFiltering = hasActiveCardFilters(cardFilters);
+  const selectedListForActions = listActionsListId
+    ? activeBoard.lists[listActionsListId] ?? null
+    : null;
   const statusLabel =
     persistenceState === "saving"
       ? "Сохраняем…"
@@ -268,42 +335,66 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     }
   };
 
-  const toggleProjects = () => {
-    setIsProjectsOpen((current) => !current);
-    setIsAppearanceOpen(false);
-    setIsArchiveOpen(false);
-    setIsFiltersOpen(false);
-  };
-
-  const toggleAppearance = () => {
-    setIsAppearanceOpen((current) => !current);
-    setIsProjectsOpen(false);
-    setIsArchiveOpen(false);
-    setIsFiltersOpen(false);
-  };
-
-  const toggleFilters = () => {
-    setIsFiltersOpen((current) => !current);
-    setIsProjectsOpen(false);
-    setIsAppearanceOpen(false);
-    setIsArchiveOpen(false);
-  };
-
-  const toggleArchive = () => {
-    setIsArchiveOpen((current) => !current);
-    closePanels();
-  };
-
   const openCalendar = () => {
     closePanels();
     router.push(CALENDAR_ROUTE);
   };
+
+  const commandActions: CommandPaletteAction[] = [
+    {
+      id: "new-card",
+      label: "Новая карточка",
+      description: "Создать задачу в выбранном списке",
+      shortcut: "N",
+      icon: <Plus aria-hidden="true" size={18} />,
+      onSelect: () => setIsQuickCreateOpen(true),
+      disabled: activeLists.length === 0,
+    },
+    {
+      id: "projects",
+      label: "Проекты",
+      description: "Открыть список проектов",
+      shortcut: "B",
+      icon: <LayoutDashboard aria-hidden="true" size={18} />,
+      onSelect: () => setIsProjectsOpen(true),
+    },
+    {
+      id: "calendar",
+      label: "Календарь",
+      description: "Открыть задачи по срокам",
+      icon: <CalendarDays aria-hidden="true" size={18} />,
+      onSelect: openCalendar,
+    },
+    {
+      id: "filters",
+      label: "Фильтры",
+      description: "Открыть поиск и фильтры карточек",
+      icon: <Filter aria-hidden="true" size={18} />,
+      onSelect: () => setIsFiltersOpen(true),
+    },
+    {
+      id: "archive",
+      label: "Архив",
+      description: "Открыть архив карточек и списков",
+      icon: <Archive aria-hidden="true" size={18} />,
+      onSelect: () => setIsArchiveOpen(true),
+    },
+    {
+      id: "appearance",
+      label: "Оформление",
+      description: "Изменить фон и цвет карточек",
+      icon: <Palette aria-hidden="true" size={18} />,
+      onSelect: () => setIsAppearanceOpen(true),
+    },
+  ];
 
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
       <WorkspaceHeader
         activeFiltersCount={activeFiltersCount}
         activeView="board"
+        canRedo={canRedo}
+        canUndo={canUndo}
         isAppearanceOpen={isAppearanceOpen}
         isArchiveOpen={isArchiveOpen}
         isFiltersOpen={isFiltersOpen}
@@ -312,24 +403,39 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         persistenceLabel={statusLabel}
         onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
         onOpenCalendar={openCalendar}
-        onToggleAppearance={toggleAppearance}
-        onToggleArchive={toggleArchive}
-        onToggleFilters={toggleFilters}
-        onToggleProjects={toggleProjects}
+        onOpenCommands={() => setIsCommandPaletteOpen(true)}
+        onOpenWorkspaceData={() => setIsWorkspaceDataOpen(true)}
+        onRedo={redo}
+        onToggleAppearance={() => {
+          setIsAppearanceOpen((current) => !current);
+          setIsProjectsOpen(false);
+          setIsArchiveOpen(false);
+          setIsFiltersOpen(false);
+        }}
+        onToggleArchive={() => {
+          setIsArchiveOpen((current) => !current);
+          closePanels();
+        }}
+        onToggleFilters={() => {
+          setIsFiltersOpen((current) => !current);
+          setIsProjectsOpen(false);
+          setIsAppearanceOpen(false);
+          setIsArchiveOpen(false);
+        }}
+        onToggleProjects={() => {
+          setIsProjectsOpen((current) => !current);
+          setIsAppearanceOpen(false);
+          setIsArchiveOpen(false);
+          setIsFiltersOpen(false);
+        }}
+        onUndo={undo}
       >
-        <label className="sr-only" htmlFor="board-title">
-          Название проекта
-        </label>
+        <label className="sr-only" htmlFor="board-title">Название проекта</label>
         <BoardTitleInput
           key={activeBoard.id}
           disabled={!isReady}
           title={activeBoard.title}
-          onCommit={(title) =>
-            updateActiveBoard(
-              (board) => renameBoard(board, title),
-              "immediate",
-            )
-          }
+          onCommit={(title) => updateActiveBoard((board) => renameBoard(board, title), "immediate")}
         />
       </WorkspaceHeader>
 
@@ -350,13 +456,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           onClose={() => setIsProjectsOpen(false)}
           onCreateBoard={(title) => {
             const createdBoardId = createProject(title);
-
             if (createdBoardId) {
               setSelectedCardId(null);
               setIsInitialCardDismissed(true);
-              setIsProjectsOpen(false);
+              closePanels();
               setIsArchiveOpen(false);
-              setIsFiltersOpen(false);
               router.push(getBoardRoute(createdBoardId));
             }
           }}
@@ -366,7 +470,6 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             setIsInitialCardDismissed(true);
             setIsArchiveOpen(false);
             setIsFiltersOpen(false);
-
             if (deletedBoardId === boardId && nextActiveBoardId) {
               router.replace(getBoardRoute(nextActiveBoardId));
             }
@@ -378,11 +481,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           {storageError ? (
             <div className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">
               <div className="mx-auto flex max-w-[1800px] items-start gap-2 text-sm leading-5">
-                <AlertTriangle
-                  aria-hidden="true"
-                  className="mt-0.5 shrink-0"
-                  size={17}
-                />
+                <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={17} />
                 <p>{storageError}</p>
               </div>
             </div>
@@ -399,13 +498,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             <div className="flex flex-wrap items-start justify-between gap-4 px-4 py-4 sm:px-6">
               <div>
                 <h1 className="text-base font-semibold">Рабочая доска</h1>
-
-                <p
-                  className="mt-1 text-sm"
-                  style={{
-                    color: resolvedAppearance.canvasMutedTextColor,
-                  }}
-                >
+                <p className="mt-1 text-sm" style={{ color: resolvedAppearance.canvasMutedTextColor }}>
                   Перетаскивайте карточки и списки за значок с точками.
                 </p>
               </div>
@@ -413,48 +506,27 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               <div className="flex min-w-[min(100%,17rem)] flex-1 items-center justify-end gap-2 sm:max-w-xl">
                 <label className="relative min-w-0 flex-1 sm:max-w-sm">
                   <span className="sr-only">Поиск карточек</span>
-                  <Search
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-                    size={17}
-                    style={{ color: resolvedAppearance.canvasMutedTextColor }}
-                  />
-                  <input
+                  <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" size={17} style={{ color: resolvedAppearance.canvasMutedTextColor }} />
+                  <TextField
                     ref={searchInputRef}
-                    className="h-10 w-full rounded-xl border border-white/15 bg-slate-950/30 py-2 pl-10 pr-9 text-sm text-white placeholder:text-white/55 backdrop-blur-sm"
+                    className="border-white/15 bg-slate-950/30 py-2 pl-10 pr-9 text-white placeholder:text-white/55 backdrop-blur-sm"
                     placeholder="Поиск задач…  /"
                     value={cardFilters.query}
-                    onChange={(event) =>
-                      setCardFilters((current) => ({
-                        ...current,
-                        query: event.target.value,
-                      }))
-                    }
+                    onChange={(event) => setCardFilters((current) => ({ ...current, query: event.target.value }))}
                   />
                   {cardFilters.query ? (
-                    <button
-                      aria-label="Очистить поиск"
-                      className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white"
-                      type="button"
-                      onClick={() =>
-                        setCardFilters((current) => ({ ...current, query: "" }))
-                      }
+                    <IconButton
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-white/70 hover:bg-white/10 hover:text-white"
+                      label="Очистить поиск"
+                      size="sm"
+                      onClick={() => setCardFilters((current) => ({ ...current, query: "" }))}
                     >
                       <X aria-hidden="true" size={16} />
-                    </button>
+                    </IconButton>
                   ) : null}
                 </label>
-
-                <span
-                  className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium"
-                  style={{
-                    backgroundColor: "rgba(15, 23, 42, 0.35)",
-                    color: resolvedAppearance.canvasTextColor,
-                  }}
-                >
-                  {isFiltering
-                    ? `${visibleCardsCount} из ${activeCardsCount}`
-                    : `${activeCardsCount} задач`}
+                <span className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: "rgba(15, 23, 42, 0.35)", color: resolvedAppearance.canvasTextColor }}>
+                  {isFiltering ? `${visibleCardsCount} из ${activeCardsCount}` : `${activeCardsCount} задач`}
                 </span>
               </div>
             </div>
@@ -462,8 +534,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             {isFiltering ? (
               <div className="px-4 pb-3 sm:px-6">
                 <p className="rounded-xl border border-white/15 bg-slate-950/25 px-3 py-2 text-xs leading-5 text-white/75 backdrop-blur-sm">
-                  Во время поиска и фильтрации перенос карточек и списков временно
-                  выключен. Очистите фильтры, чтобы изменить порядок.
+                  Во время поиска и фильтрации перенос карточек и списков временно выключен. Очистите фильтры, чтобы изменить порядок.
                 </p>
               </div>
             ) : null}
@@ -474,37 +545,23 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                 board={activeBoard}
                 isFiltering={isFiltering}
                 visibleCardIdsByList={visibleCardIdsByList}
-                onAddCard={(listId, title) =>
-                  updateActiveBoard((board) => addCard(board, listId, title))
-                }
-                onAddList={(title) =>
-                  updateActiveBoard((board) => addList(board, title))
-                }
+                onAddCard={(listId, title) => updateActiveBoard((board) => addCard(board, listId, title))}
+                onAddList={(title) => updateActiveBoard((board) => addList(board, title))}
                 onDeleteList={(listId) => {
                   if (cardFilters.listId === listId) {
                     setCardFilters((current) => ({ ...current, listId: "all" }));
                   }
-
-                  updateActiveBoard((board) => deleteList(board, listId));
+                  updateActiveBoard((board) => deleteList(board, listId), "immediate");
                 }}
-                onMoveCard={(cardId, listId, index) =>
-                  updateActiveBoard((board) =>
-                    moveCard(board, cardId, listId, index),
-                  )
-                }
-                onMoveList={(listId, destinationListId) =>
-                  updateActiveBoard((board) =>
-                    moveList(board, listId, destinationListId),
-                  )
-                }
+                onMoveCard={(cardId, listId, index) => updateActiveBoard((board) => moveCard(board, cardId, listId, index))}
+                onMoveList={(listId, destinationListId) => updateActiveBoard((board) => moveList(board, listId, destinationListId))}
                 onOpenCard={(cardId) => {
                   setIsInitialCardDismissed(true);
                   setIsFiltersOpen(false);
                   setSelectedCardId(cardId);
                 }}
-                onRenameList={(listId, title) =>
-                  updateActiveBoard((board) => renameList(board, listId, title))
-                }
+                onOpenListActions={setListActionsListId}
+                onRenameList={(listId, title) => updateActiveBoard((board) => renameList(board, listId, title))}
               />
             </div>
           </section>
@@ -513,11 +570,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         <BoardAppearanceSidebar
           board={activeBoard}
           isOpen={isAppearanceOpen}
-          onChange={(appearance) =>
-            updateActiveBoard((board) =>
-              updateBoardAppearance(board, appearance),
-            )
-          }
+          onChange={(appearance) => updateActiveBoard((board) => updateBoardAppearance(board, appearance))}
           onClose={() => setIsAppearanceOpen(false)}
         />
 
@@ -525,11 +578,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           filters={cardFilters}
           isOpen={isFiltersOpen}
           labels={boardLabels}
-          lists={activeBoard.listIds.flatMap((listId) => {
-            const list = activeBoard.lists[listId];
-
-            return list ? [list] : [];
-          })}
+          lists={activeLists}
           onChange={setCardFilters}
           onClose={() => setIsFiltersOpen(false)}
         />
@@ -543,144 +592,103 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           labels={activeBoard.labels}
           lists={activeBoard.lists}
           onClose={() => setIsArchiveOpen(false)}
-          onDelete={(cardId) =>
-            updateActiveBoard((board) => deleteCard(board, cardId), "immediate")
-          }
-          onRestore={(cardId) =>
-            updateActiveBoard((board) => restoreCard(board, cardId), "immediate")
-          }
+          onDelete={(cardId) => updateActiveBoard((board) => deleteCard(board, cardId), "immediate")}
+          onRestore={(cardId) => updateActiveBoard((board) => restoreCard(board, cardId), "immediate")}
+          onRestoreList={(listId) => updateActiveBoard((board) => restoreList(board, listId), "immediate")}
         />
       ) : null}
+
+      <ListActionsDialog
+        availableLists={activeLists}
+        list={selectedListForActions}
+        onArchive={(listId) => {
+          if (cardFilters.listId === listId) {
+            setCardFilters((current) => ({ ...current, listId: "all" }));
+          }
+          updateActiveBoard((board) => archiveList(board, listId), "immediate");
+        }}
+        onClear={(listId) => updateActiveBoard((board) => clearList(board, listId), "immediate")}
+        onClose={() => setListActionsListId(null)}
+        onDuplicate={(listId) => updateActiveBoard((board) => duplicateList(board, listId), "immediate")}
+        onMoveAll={(sourceListId, destinationListId) => updateActiveBoard((board) => moveAllCards(board, sourceListId, destinationListId), "immediate")}
+        onSetWipLimit={(listId, limit) => updateActiveBoard((board) => setListWipLimit(board, listId, limit), "immediate")}
+      />
 
       {selectedCard ? (
         <CardModal
           key={selectedCard.id}
-          activities={selectedCardActivities}
+          attachments={getCardAttachments(activeBoard, selectedCard)}
           card={selectedCard}
           checklists={getCardChecklists(selectedCard, activeBoard.checklists)}
           checklistItems={activeBoard.checklistItems}
           labels={boardLabels}
-          lists={activeBoard.listIds.flatMap((listId) => {
-            const list = activeBoard.lists[listId];
-
-            return list ? [{ id: list.id, title: list.title }] : [];
-          })}
+          lists={activeLists}
           listTitle={selectedListTitle}
-          onArchive={(cardId) => {
-            updateActiveBoard((board) => archiveCard(board, cardId), "immediate");
-          }}
+          onAddAttachment={(attachment) => updateActiveBoard((board) => addAttachmentToCard(board, attachment), "immediate")}
+          onArchive={(cardId) => updateActiveBoard((board) => archiveCard(board, cardId), "immediate")}
           onClose={() => {
             setIsInitialCardDismissed(true);
             setSelectedCardId(null);
           }}
-          onCreateChecklist={(cardId, title) => {
-            updateActiveBoard(
-              (board) => createChecklist(board, cardId, title),
-              "immediate",
-            );
-          }}
-          onCreateChecklistItem={(checklistId, title) => {
-            updateActiveBoard(
-              (board) => createChecklistItem(board, checklistId, title),
-              "immediate",
-            );
-          }}
+          onCreateChecklist={(cardId, title) => updateActiveBoard((board) => createChecklist(board, cardId, title), "immediate")}
+          onCreateChecklistItem={(checklistId, title) => updateActiveBoard((board) => createChecklistItem(board, checklistId, title), "immediate")}
           onCreateLabel={(draft: BoardLabelDraft): BoardLabel | null => {
             let createdLabel: BoardLabel | null = null;
-
-            updateActiveBoard(
-              (board) => {
-                const result = createBoardLabel(board, draft);
-                createdLabel = result.label;
-                return result.board;
-              },
-              "immediate",
-            );
-
+            updateActiveBoard((board) => {
+              const result = createBoardLabel(board, draft);
+              createdLabel = result.label;
+              return result.board;
+            }, "immediate");
             return createdLabel;
           }}
-          onDelete={(cardId) => {
-            updateActiveBoard((board) => deleteCard(board, cardId), "immediate");
-          }}
-          onDeleteChecklist={(checklistId) => {
-            updateActiveBoard(
-              (board) => deleteChecklist(board, checklistId),
-              "immediate",
-            );
-          }}
-          onDeleteChecklistItem={(itemId) => {
-            updateActiveBoard(
-              (board) => deleteChecklistItem(board, itemId),
-              "immediate",
-            );
-          }}
+          onDelete={(cardId) => updateActiveBoard((board) => deleteCard(board, cardId), "immediate")}
+          onDeleteAttachment={(attachmentId) => updateActiveBoard((board) => removeAttachmentFromCard(board, attachmentId), "immediate")}
+          onDeleteChecklist={(checklistId) => updateActiveBoard((board) => deleteChecklist(board, checklistId), "immediate")}
+          onDeleteChecklistItem={(itemId) => updateActiveBoard((board) => deleteChecklistItem(board, itemId), "immediate")}
           onDeleteLabel={(labelId) => {
-            setCardFilters((current) => ({
-              ...current,
-              labelIds: current.labelIds.filter(
-                (currentLabelId) => currentLabelId !== labelId,
-              ),
-            }));
-            updateActiveBoard(
-              (board) => deleteBoardLabel(board, labelId),
-              "immediate",
-            );
+            setCardFilters((current) => ({ ...current, labelIds: current.labelIds.filter((currentLabelId) => currentLabelId !== labelId) }));
+            updateActiveBoard((board) => deleteBoardLabel(board, labelId), "immediate");
           }}
-          onDuplicate={(cardId) => {
-            updateActiveBoard((board) => duplicateCard(board, cardId), "immediate");
-          }}
-          onMove={(cardId, destinationListId) => {
-            updateActiveBoard(
-              (board) => {
-                const destinationList = board.lists[destinationListId];
-
-                return destinationList
-                  ? moveCard(
-                      board,
-                      cardId,
-                      destinationListId,
-                      destinationList.cardIds.length,
-                    )
-                  : board;
-              },
-              "immediate",
-            );
-          }}
-          onMoveChecklistItem={(itemId, destinationIndex) => {
-            updateActiveBoard(
-              (board) => moveChecklistItem(board, itemId, destinationIndex),
-              "immediate",
-            );
-          }}
-          onRenameChecklist={(checklistId, title) => {
-            updateActiveBoard(
-              (board) => renameChecklist(board, checklistId, title),
-              "immediate",
-            );
-          }}
-          onRenameChecklistItem={(itemId, title) => {
-            updateActiveBoard(
-              (board) => renameChecklistItem(board, itemId, title),
-              "immediate",
-            );
-          }}
-          onSave={(cardId, draft: CardDraft) => {
-            updateActiveBoard((board) => updateCard(board, cardId, draft));
-          }}
-          onToggleChecklistItem={(itemId) => {
-            updateActiveBoard(
-              (board) => toggleChecklistItem(board, itemId),
-              "immediate",
-            );
-          }}
-          onUpdateLabel={(labelId, draft) => {
-            updateActiveBoard(
-              (board) => updateBoardLabel(board, labelId, draft),
-              "immediate",
-            );
-          }}
+          onDuplicate={(cardId) => updateActiveBoard((board) => duplicateCard(board, cardId), "immediate")}
+          onMove={(cardId, destinationListId) => updateActiveBoard((board) => {
+            const destinationList = board.lists[destinationListId];
+            return destinationList ? moveCard(board, cardId, destinationListId, destinationList.cardIds.length) : board;
+          }, "immediate")}
+          onMoveChecklistItem={(itemId, destinationIndex) => updateActiveBoard((board) => moveChecklistItem(board, itemId, destinationIndex), "immediate")}
+          onRenameChecklist={(checklistId, title) => updateActiveBoard((board) => renameChecklist(board, checklistId, title), "immediate")}
+          onRenameChecklistItem={(itemId, title) => updateActiveBoard((board) => renameChecklistItem(board, itemId, title), "immediate")}
+          onSave={(cardId, draft: CardDraft) => updateActiveBoard((board) => updateCard(board, cardId, draft))}
+          onToggleChecklistItem={(itemId) => updateActiveBoard((board) => toggleChecklistItem(board, itemId), "immediate")}
+          onUpdateLabel={(labelId, draft) => updateActiveBoard((board) => updateBoardLabel(board, labelId, draft), "immediate")}
         />
       ) : null}
+
+      <QuickCreateCardDialog
+        isOpen={isQuickCreateOpen}
+        lists={activeLists}
+        onClose={() => setIsQuickCreateOpen(false)}
+        onCreate={(listId, title) => updateActiveBoard((board) => addCard(board, listId, title), "immediate")}
+      />
+
+      <CommandPalette
+        actions={commandActions}
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
+
+      <WorkspaceDataModal
+        activeBoard={activeBoard}
+        isOpen={isWorkspaceDataOpen}
+        workspace={workspace}
+        onClose={() => setIsWorkspaceDataOpen(false)}
+        onImport={(nextWorkspace) => {
+          replaceWorkspace(nextWorkspace);
+          const nextBoardId = nextWorkspace.activeBoardId ?? nextWorkspace.boards[0]?.id;
+          if (nextBoardId) {
+            router.replace(getBoardRoute(nextBoardId));
+          }
+        }}
+      />
     </main>
   );
 }

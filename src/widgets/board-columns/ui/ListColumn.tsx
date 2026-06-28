@@ -7,10 +7,18 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, GripVertical, Plus, Trash2, X } from "lucide-react";
+import {
+  Check,
+  GripVertical,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Fragment, type FormEvent, useState } from "react";
 
 import type {
+  BoardAttachment,
   BoardCard,
   BoardChecklist,
   BoardChecklistItem,
@@ -19,7 +27,13 @@ import type {
   CardSurface,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
-import { Button, ConfirmDialog, IconButton } from "@/shared/ui";
+import {
+  Button,
+  ConfirmDialog,
+  IconButton,
+  Textarea,
+  TextField,
+} from "@/shared/ui";
 
 import { CardItem } from "./CardItem";
 
@@ -30,12 +44,14 @@ type ListColumnProps = Readonly<{
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
+  attachments: Readonly<Record<string, BoardAttachment>>;
   isDragDisabled: boolean;
   totalCardCount: number;
   onOpenCard: (cardId: string) => void;
   onAddCard: (listId: string, title: string) => void;
   onRenameList: (listId: string, title: string) => void;
   onDeleteList: (listId: string) => void;
+  onOpenListActions: (listId: string) => void;
 }>;
 
 export function ListColumn({
@@ -45,12 +61,14 @@ export function ListColumn({
   checklistItems,
   checklists,
   labels,
+  attachments,
   isDragDisabled,
   totalCardCount,
   onOpenCard,
   onAddCard,
   onRenameList,
   onDeleteList,
+  onOpenListActions,
 }: ListColumnProps) {
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
@@ -142,10 +160,10 @@ export function ListColumn({
           </IconButton>
 
           {isEditingListTitle ? (
-            <input
+            <TextField
               aria-label="Название списка"
               autoFocus
-              className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-400"
+              className="h-auto min-w-0 flex-1 rounded-lg border-0 bg-white/10 px-2 py-1.5 text-sm font-semibold text-white placeholder:text-slate-400 focus:border-0"
               value={listTitle}
               onBlur={saveListTitle}
               onChange={(event) => setListTitle(event.target.value)}
@@ -171,9 +189,26 @@ export function ListColumn({
             </button>
           )}
 
-          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/10 text-xs font-semibold text-slate-200">
-            {cards.length}
+          <span
+            className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/10 text-xs font-semibold text-slate-200"
+            title={
+              list.wipLimit
+                ? `${totalCardCount} из ${list.wipLimit}`
+                : `${totalCardCount} задач`
+            }
+          >
+            {list.wipLimit
+              ? `${totalCardCount}/${list.wipLimit}`
+              : totalCardCount}
           </span>
+          <IconButton
+            className="text-slate-300 hover:bg-white/10 hover:text-white"
+            label={`Действия со списком ${list.title}`}
+            size="sm"
+            onClick={() => onOpenListActions(list.id)}
+          >
+            <MoreHorizontal aria-hidden="true" size={17} />
+          </IconButton>
           <IconButton
             className="text-slate-300 hover:bg-red-500/15 hover:text-red-200"
             label={`Удалить список ${list.title}`}
@@ -203,6 +238,7 @@ export function ListColumn({
                 checklistItems={checklistItems}
                 checklists={checklists}
                 labels={labels}
+                attachments={attachments}
                 isDragDisabled={isDragDisabled}
                 onOpen={onOpenCard}
               />
@@ -224,10 +260,10 @@ export function ListColumn({
             <label className="sr-only" htmlFor={`new-card-${list.id}`}>
               Название новой карточки
             </label>
-            <textarea
+            <Textarea
               autoFocus
               id={`new-card-${list.id}`}
-              className="min-h-20 w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-400"
+              className="min-h-20 resize-none rounded-lg bg-white/5 text-white placeholder:text-slate-400"
               placeholder="Например, подготовить макеты"
               value={cardTitle}
               onChange={(event) => setCardTitle(event.target.value)}
@@ -259,7 +295,13 @@ export function ListColumn({
           </form>
         ) : (
           <button
-            className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+            className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={Boolean(list.wipLimit && totalCardCount >= list.wipLimit)}
+            title={
+              list.wipLimit && totalCardCount >= list.wipLimit
+                ? `Лимит списка: ${list.wipLimit}`
+                : undefined
+            }
             type="button"
             onClick={() => setIsAddingCard(true)}
           >

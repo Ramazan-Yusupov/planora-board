@@ -115,7 +115,7 @@ export function getVisibleCardIdsByList(
     board.listIds.map((listId) => {
       const list = board.lists[listId];
 
-      if (!list) {
+      if (!list || list.isArchived) {
         return [listId, []];
       }
 

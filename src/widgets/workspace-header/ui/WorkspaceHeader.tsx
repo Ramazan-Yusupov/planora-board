@@ -4,10 +4,14 @@ import {
   Archive,
   CalendarDays,
   Cloud,
+  Command,
+  Download,
   LayoutDashboard,
   ListFilter,
   Menu,
   Palette,
+  Redo2,
+  Undo2,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -21,6 +25,8 @@ type WorkspaceHeaderProps = Readonly<{
   activeView: WorkspaceView;
   children: ReactNode;
   activeFiltersCount?: number;
+  canRedo?: boolean;
+  canUndo?: boolean;
   isAppearanceOpen?: boolean;
   isArchiveOpen?: boolean;
   isFiltersOpen?: boolean;
@@ -29,16 +35,22 @@ type WorkspaceHeaderProps = Readonly<{
   persistenceLabel: string;
   onOpenBoard: () => void;
   onOpenCalendar: () => void;
+  onOpenCommands?: () => void;
+  onOpenWorkspaceData?: () => void;
+  onRedo?: () => void;
   onToggleAppearance?: () => void;
   onToggleArchive?: () => void;
   onToggleFilters?: () => void;
   onToggleProjects: () => void;
+  onUndo?: () => void;
 }>;
 
 export function WorkspaceHeader({
   activeView,
   children,
   activeFiltersCount = 0,
+  canRedo = false,
+  canUndo = false,
   isAppearanceOpen = false,
   isArchiveOpen = false,
   isFiltersOpen = false,
@@ -47,10 +59,14 @@ export function WorkspaceHeader({
   persistenceLabel,
   onOpenBoard,
   onOpenCalendar,
+  onOpenCommands,
+  onOpenWorkspaceData,
+  onRedo,
   onToggleAppearance,
   onToggleArchive,
   onToggleFilters,
   onToggleProjects,
+  onUndo,
 }: WorkspaceHeaderProps) {
   const filtersLabel = activeFiltersCount
     ? `Открыть фильтры: активно ${activeFiltersCount}`
@@ -80,9 +96,7 @@ export function WorkspaceHeader({
           </button>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
-              {APP_NAME}
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">{APP_NAME}</p>
             <p className="text-xs text-text-muted">Локальные проекты</p>
           </div>
         </div>
@@ -99,6 +113,38 @@ export function WorkspaceHeader({
             <Cloud aria-hidden="true" size={15} />
             {persistenceLabel}
           </span>
+
+          {onUndo ? (
+            <IconButton
+              className="hidden text-text-muted hover:bg-control hover:text-text sm:grid"
+              disabled={!canUndo}
+              label="Отменить действие"
+              onClick={onUndo}
+            >
+              <Undo2 aria-hidden="true" size={18} />
+            </IconButton>
+          ) : null}
+          {onRedo ? (
+            <IconButton
+              className="hidden text-text-muted hover:bg-control hover:text-text sm:grid"
+              disabled={!canRedo}
+              label="Повторить действие"
+              onClick={onRedo}
+            >
+              <Redo2 aria-hidden="true" size={18} />
+            </IconButton>
+          ) : null}
+
+          {onOpenCommands ? (
+            <IconButton
+              className="text-text-muted hover:bg-control hover:text-text"
+              label="Открыть команды"
+              size="lg"
+              onClick={onOpenCommands}
+            >
+              <Command aria-hidden="true" size={18} />
+            </IconButton>
+          ) : null}
 
           <IconButton
             aria-current={activeView === "calendar" ? "page" : undefined}
@@ -145,11 +191,22 @@ export function WorkspaceHeader({
                   ? "bg-accent text-accent-foreground"
                   : "text-text-muted hover:bg-control hover:text-text",
               )}
-              label="Открыть архив карточек"
+              label="Открыть архив"
               size="lg"
               onClick={onToggleArchive}
             >
               <Archive aria-hidden="true" size={18} />
+            </IconButton>
+          ) : null}
+
+          {onOpenWorkspaceData ? (
+            <IconButton
+              className="text-text-muted hover:bg-control hover:text-text"
+              label="Экспорт и импорт"
+              size="lg"
+              onClick={onOpenWorkspaceData}
+            >
+              <Download aria-hidden="true" size={18} />
             </IconButton>
           ) : null}
 

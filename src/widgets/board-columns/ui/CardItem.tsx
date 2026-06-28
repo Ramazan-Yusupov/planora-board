@@ -3,11 +3,13 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, GripVertical, ListChecks } from "lucide-react";
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import {
   getCardChecklistProgress,
   getCardLabels,
+  loadAttachmentBlob,
+  type BoardAttachment,
   type BoardCard,
   type BoardChecklist,
   type BoardChecklistItem,
@@ -21,6 +23,7 @@ type CardItemProps = Readonly<{
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
+  attachments: Readonly<Record<string, BoardAttachment>>;
   isDragDisabled?: boolean;
   onOpen: (cardId: string) => void;
 }>;
@@ -33,7 +36,10 @@ type CardLabelsProps = Readonly<{
 function CardLabels({ card, labels }: CardLabelsProps) {
   const cardLabels = getCardLabels(card, labels);
   const visibleLabels = cardLabels.slice(0, 4);
-  const hiddenLabelsCount = Math.max(0, cardLabels.length - visibleLabels.length);
+  const hiddenLabelsCount = Math.max(
+    0,
+    cardLabels.length - visibleLabels.length,
+  );
 
   if (visibleLabels.length === 0) {
     return null;
@@ -51,12 +57,13 @@ function CardLabels({ card, labels }: CardLabelsProps) {
         />
       ))}
       {hiddenLabelsCount > 0 ? (
-        <span className="text-[10px] font-medium text-current/70">+{hiddenLabelsCount}</span>
+        <span className="text-[10px] font-medium text-current/70">
+          +{hiddenLabelsCount}
+        </span>
       ) : null}
     </div>
   );
 }
-
 
 type CardChecklistProgressProps = Readonly<{
   card: BoardCard;
@@ -103,9 +110,78 @@ function createSurfaceStyle(
   };
 }
 
+function AttachmentCardCover({
+  attachment,
+}: Readonly<{ attachment: BoardAttachment }>) {
+  const [source, setSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let disposed = false;
+
+    void loadAttachmentBlob(attachment.id).then((blob) => {
+      if (!blob || disposed) {
+        return;
+      }
+
+      objectUrl = URL.createObjectURL(blob);
+      setSource(objectUrl);
+    });
+
+    return () => {
+      disposed = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [attachment.id]);
+
+  if (!source) {
+    return (
+      <div aria-hidden="true" className="mb-3 h-20 rounded-lg bg-black/10" />
+    );
+  }
+
+  // Blob URLs from IndexedDB are not handled by Next Image optimisation.
+
+  return (
+    <img
+      alt=""
+      className="mb-3 h-20 w-full rounded-lg object-cover"
+      src={source}
+    />
+  );
+}
+
+function CardCover({
+  card,
+  attachments,
+}: Readonly<{
+  card: BoardCard;
+  attachments: Readonly<Record<string, BoardAttachment>>;
+}>) {
+  if (!card.cover) {
+    return null;
+  }
+
+  if (card.cover.type === "color") {
+    return (
+      <div
+        aria-hidden="true"
+        className="mb-3 h-10 rounded-lg"
+        style={{ backgroundColor: card.cover.color }}
+      />
+    );
+  }
+
+  const attachment = attachments[card.cover.attachmentId];
+
+  return attachment ? <AttachmentCardCover attachment={attachment} /> : null;
+}
+
 function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-h-7 min-w-0 items-center gap-2">
       {card.sticker ? (
         <span
           aria-hidden="true"
@@ -114,6 +190,7 @@ function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
           {card.sticker}
         </span>
       ) : null}
+
       <h3
         className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-current"
         title={card.title}
@@ -130,6 +207,7 @@ export function CardItem({
   checklistItems,
   checklists,
   labels,
+  attachments,
   isDragDisabled = false,
   onOpen,
 }: CardItemProps) {
@@ -164,10 +242,10 @@ export function CardItem({
         isDragging ? "opacity-35" : "opacity-100"
       }`}
     >
-      <div className="flex gap-2">
+      <div className="flex items-start gap-2">
         <button
           aria-label={`Переместить карточку: ${card.title}`}
-          className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg opacity-70 transition hover:bg-black/10 focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-35"
+          className="grid size-7 shrink-0 place-items-center rounded-lg opacity-70 transition hover:bg-black/10 focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-35"
           disabled={isDragDisabled}
           style={{ color: cardSurface.mutedTextColor }}
           type="button"
@@ -182,6 +260,7 @@ export function CardItem({
           type="button"
           onClick={() => onOpen(card.id)}
         >
+          <CardCover card={card} attachments={attachments} />
           <CardLabels card={card} labels={labels} />
           <CardTitle card={card} />
           {card.description ? (
@@ -227,12 +306,14 @@ export function CardPreview({
   checklistItems,
   checklists,
   labels,
+  attachments,
 }: Readonly<{
   card: BoardCard;
   cardSurface: CardSurface;
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
+  attachments: Readonly<Record<string, BoardAttachment>>;
 }>) {
   return (
     <article
@@ -243,6 +324,7 @@ export function CardPreview({
         color: cardSurface.textColor,
       }}
     >
+      <CardCover card={card} attachments={attachments} />
       <CardLabels card={card} labels={labels} />
       <CardTitle card={card} />
       <CardChecklistProgress

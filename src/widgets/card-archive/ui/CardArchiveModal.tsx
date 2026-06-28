@@ -23,6 +23,7 @@ type CardArchiveModalProps = Readonly<{
   onClose: () => void;
   onDelete: (cardId: string) => void;
   onRestore: (cardId: string) => void;
+  onRestoreList: (listId: string) => void;
 }>;
 
 function formatArchivedAt(timestamp: number | undefined): string {
@@ -53,6 +54,7 @@ export function CardArchiveModal({
   onClose,
   onDelete,
   onRestore,
+  onRestoreList,
 }: CardArchiveModalProps) {
   const [deleteCardId, setDeleteCardId] = useState<string | null>(null);
   const archivedCards = useMemo(
@@ -62,13 +64,21 @@ export function CardArchiveModal({
         .sort((first, second) => (second.archivedAt ?? 0) - (first.archivedAt ?? 0)),
     [cards],
   );
+  const archivedLists = useMemo(
+    () =>
+      Object.values(lists)
+        .filter((list) => list.isArchived)
+        .sort((first, second) => (second.archivedAt ?? 0) - (first.archivedAt ?? 0)),
+    [lists],
+  );
   const cardToDelete = deleteCardId
     ? archivedCards.find((card) => card.id === deleteCardId) ?? null
     : null;
 
   return (
     <>
-      <Modal title="Архив карточек" onClose={onClose}>
+      <Modal title="Архив" onClose={onClose}>
+        <div className="space-y-6">
         {archivedCards.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/15 bg-control/30 px-5 py-10 text-center">
             <p className="text-sm font-medium text-text">Архив пока пуст</p>
@@ -168,6 +178,29 @@ export function CardArchiveModal({
             </ul>
           </div>
         )}
+
+        <section className="border-t border-white/10 pt-5">
+          <h3 className="text-sm font-semibold text-text">Архивированные списки</h3>
+          {archivedLists.length === 0 ? (
+            <p className="mt-2 text-sm text-text-muted">Архивированных списков пока нет.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {archivedLists.map((list) => (
+                <li key={list.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-control/30 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text" title={list.title}>{list.title}</p>
+                    <p className="mt-1 text-xs text-text-muted">{list.cardIds.length} задач · архивирован {formatArchivedAt(list.archivedAt)}</p>
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => onRestoreList(list.id)}>
+                    <ArchiveRestore aria-hidden="true" size={16} />
+                    <span className="hidden sm:inline">Восстановить</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        </div>
       </Modal>
 
       <ConfirmDialog

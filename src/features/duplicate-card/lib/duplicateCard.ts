@@ -125,6 +125,8 @@ export function duplicateCard(board: Board, cardId: string): Board {
     id: duplicateId,
     title: duplicateTitle,
     checklistIds: copiedChecklists.checklistIds,
+    attachmentIds: [],
+    cover: sourceCard.cover?.type === "color" ? sourceCard.cover : undefined,
     isArchived: false,
     createdAt: timestamp,
     updatedAt: timestamp,

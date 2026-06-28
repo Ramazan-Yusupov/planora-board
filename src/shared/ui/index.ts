@@ -4,3 +4,8 @@ export { ConfirmDialog } from "./ConfirmDialog";
 export { IconButton } from "./IconButton";
 export type { IconButtonSize } from "./IconButton";
 export { Modal } from "./Modal";
+export { FieldLabel } from "./FieldLabel";
+export { Panel } from "./Panel";
+export { Select } from "./Select";
+export { Textarea } from "./Textarea";
+export { TextField } from "./TextField";

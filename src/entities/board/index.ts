@@ -1,6 +1,10 @@
 export {
+  deleteAttachmentBlobs,
+  loadAttachmentBlob,
   loadBoardWorkspace,
+  parseBoardData,
   persistBoardWorkspaceChange,
+  saveAttachmentBlob,
 } from "./api/boardRepository";
 export type { BoardWorkspacePersistenceChange } from "./api/boardRepository";
 export {
@@ -11,6 +15,11 @@ export {
 } from "./lib/appearance";
 export type { CardSurface, ResolvedBoardAppearance } from "./lib/appearance";
 export { createEmptyBoard, createStarterBoard } from "./lib/createStarterBoard";
+export {
+  formatAttachmentSize,
+  getCardAttachments,
+  isImageAttachment,
+} from "./lib/attachments";
 export {
   getCardChecklistProgress,
   getCardChecklists,
@@ -44,6 +53,8 @@ export {
   createInitialBoardWorkspace,
   deleteBoardFromWorkspace,
   getActiveBoard,
+  getRemovedAttachmentIds,
+  getWorkspacePersistenceChange,
   replaceBoardInWorkspace,
   selectBoardInWorkspace,
 } from "./lib/workspace";
@@ -51,12 +62,14 @@ export { boardSchema } from "./model/schemas";
 export {
   BOARD_BACKGROUND_OPTIONS,
   CARD_COLOR_OPTIONS,
+  CARD_COVER_COLOR_OPTIONS,
 } from "./model/types";
 export type {
   Board,
   BoardActivity,
   BoardActivityType,
   BoardAppearance,
+  BoardAttachment,
   BoardBackgroundValue,
   BoardCard,
   BoardChecklist,
@@ -66,6 +79,7 @@ export type {
   BoardList,
   BoardWorkspace,
   CardColorValue,
+  CardCover,
   CardDraft,
 } from "./model/types";
 export { BoardLabelSelector } from "./ui";

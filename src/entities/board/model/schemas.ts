@@ -86,6 +86,27 @@ const boardActivitySchema = z.object({
   createdAt: z.number(),
 });
 
+const cardCoverSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("color"),
+    color: hexColorSchema,
+  }),
+  z.object({
+    type: z.literal("attachment"),
+    attachmentId: z.string().min(1),
+  }),
+]);
+
+const boardAttachmentSchema = z.object({
+  id: z.string().min(1),
+  cardId: z.string().min(1),
+  name: z.string().trim().min(1).max(240),
+  mimeType: z.string().trim().min(1).max(160),
+  size: z.number().int().nonnegative().max(10 * 1024 * 1024),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
 const boardCardSchema = z.object({
   id: z.string().min(1),
   listId: z.string().min(1),
@@ -96,6 +117,8 @@ const boardCardSchema = z.object({
   // Чек-листы добавлены после первой версии доски. Для старых записей
   // пустой массив создаётся при чтении и сохраняется при следующей записи.
   checklistIds: z.array(z.string().min(1)).default([]),
+  attachmentIds: z.array(z.string().min(1)).default([]),
+  cover: cardCoverSchema.optional(),
   // Стикер добавлен после первой версии доски, поэтому старые записи
   // продолжают быть валидными без принудительной миграции.
   sticker: z.string().trim().min(1).max(32).optional(),
@@ -111,6 +134,9 @@ const boardListSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   cardIds: z.array(z.string().min(1)),
+  isArchived: z.boolean().default(false),
+  archivedAt: z.number().optional(),
+  wipLimit: z.number().int().positive().max(999).optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -127,6 +153,8 @@ export const boardSchema = z
     checklistItems: z
       .record(z.string(), boardChecklistItemSchema)
       .default({}),
+    attachmentIds: z.array(z.string().min(1)).default([]),
+    attachments: z.record(z.string(), boardAttachmentSchema).default({}),
     activityIds: z.array(z.string().min(1)).default([]),
     activities: z.record(z.string(), boardActivitySchema).default({}),
     listIds: z.array(z.string().min(1)),
@@ -178,6 +206,55 @@ export const boardSchema = z
           code: "custom",
           path: ["labels", labelKey],
           message: "Метка отсутствует в порядке проекта.",
+        });
+      }
+    }
+
+    const boardAttachmentIds = new Set<string>();
+    const attachmentOwners = new Map<string, string>();
+
+    board.attachmentIds.forEach((attachmentId, index) => {
+      if (boardAttachmentIds.has(attachmentId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["attachmentIds", index],
+          message: "Вложение не должно повторяться в порядке проекта.",
+        });
+      }
+
+      boardAttachmentIds.add(attachmentId);
+
+      if (!board.attachments[attachmentId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["attachmentIds", index],
+          message: "Ссылка на вложение не найдена.",
+        });
+      }
+    });
+
+    for (const [attachmentKey, attachment] of Object.entries(board.attachments)) {
+      if (attachment.id !== attachmentKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["attachments", attachmentKey, "id"],
+          message: "Ключ вложения должен совпадать с его id.",
+        });
+      }
+
+      if (!boardAttachmentIds.has(attachmentKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["attachments", attachmentKey],
+          message: "Вложение отсутствует в порядке проекта.",
+        });
+      }
+
+      if (!board.cards[attachment.cardId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["attachments", attachmentKey, "cardId"],
+          message: "Родительская карточка вложения не найдена.",
         });
       }
     }
@@ -369,6 +446,50 @@ export const boardSchema = z
         }
       });
 
+      const seenCardAttachmentIds = new Set<string>();
+      card.attachmentIds.forEach((attachmentId, index) => {
+        if (seenCardAttachmentIds.has(attachmentId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "attachmentIds", index],
+            message: "Вложение не должно повторяться на карточке.",
+          });
+        }
+
+        seenCardAttachmentIds.add(attachmentId);
+        attachmentOwners.set(attachmentId, cardKey);
+        const attachment = board.attachments[attachmentId];
+
+        if (!attachment) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "attachmentIds", index],
+            message: "Карточка ссылается на несуществующее вложение.",
+          });
+          return;
+        }
+
+        if (attachment.cardId !== cardKey) {
+          context.addIssue({
+            code: "custom",
+            path: ["attachments", attachmentId, "cardId"],
+            message: "Родительская карточка вложения не совпадает.",
+          });
+        }
+      });
+
+      if (card.cover?.type === "attachment") {
+        const coverAttachment = board.attachments[card.cover.attachmentId];
+
+        if (!coverAttachment || coverAttachment.cardId !== cardKey) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "cover"],
+            message: "Обложка должна ссылаться на вложение этой карточки.",
+          });
+        }
+      }
+
       if (!board.lists[card.listId]) {
         context.addIssue({
           code: "custom",
@@ -406,6 +527,16 @@ export const boardSchema = z
           code: "custom",
           path: ["cards", cardKey, "archivedAt"],
           message: "У активной карточки не должно быть времени архивации.",
+        });
+      }
+    }
+
+    for (const [attachmentKey, attachment] of Object.entries(board.attachments)) {
+      if (attachmentOwners.get(attachmentKey) !== attachment.cardId) {
+        context.addIssue({
+          code: "custom",
+          path: ["attachments", attachmentKey],
+          message: "Вложение отсутствует в порядке своей карточки.",
         });
       }
     }

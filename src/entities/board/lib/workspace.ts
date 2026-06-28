@@ -84,3 +84,36 @@ export function deleteBoardFromWorkspace(
     createdBoard: null,
   };
 }
+
+export function getWorkspacePersistenceChange(
+  currentWorkspace: BoardWorkspace,
+  nextWorkspace: BoardWorkspace,
+): import("../api/boardRepository").BoardWorkspacePersistenceChange {
+  const currentBoardsById = new Map(
+    currentWorkspace.boards.map((board) => [board.id, board]),
+  );
+  const nextBoardsById = new Map(nextWorkspace.boards.map((board) => [board.id, board]));
+
+  return {
+    boardsToSave: nextWorkspace.boards.filter(
+      (board) => currentBoardsById.get(board.id) !== board,
+    ),
+    boardIdsToDelete: currentWorkspace.boards
+      .filter((board) => !nextBoardsById.has(board.id))
+      .map((board) => board.id),
+    activeBoardId: nextWorkspace.activeBoardId,
+  };
+}
+
+export function getRemovedAttachmentIds(
+  currentWorkspace: BoardWorkspace,
+  nextWorkspace: BoardWorkspace,
+): string[] {
+  const nextAttachmentIds = new Set(
+    nextWorkspace.boards.flatMap((board) => board.attachmentIds),
+  );
+
+  return currentWorkspace.boards.flatMap((board) =>
+    board.attachmentIds.filter((attachmentId) => !nextAttachmentIds.has(attachmentId)),
+  );
+}

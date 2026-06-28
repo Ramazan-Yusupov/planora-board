@@ -9,6 +9,12 @@ import {
   type Board,
   type BoardActivityInput,
   type BoardAppearance,
+  type BoardAttachment,
+  type BoardCard,
+  type BoardChecklist,
+  type BoardChecklistItem,
+  type BoardList,
+  type CardCover,
   type CardDraft,
 } from "@/entities/board";
 import { createId } from "@/shared/lib";
@@ -60,6 +66,151 @@ function describeLabels(board: Board, labelIds: readonly string[]): string {
   return `Обновлены метки: ${visibleNames.join(", ")}${suffix}.`;
 }
 
+function normalizeCardCover(
+  board: Board,
+  cardId: string,
+  cover: CardCover | undefined,
+): CardCover | undefined {
+  if (!cover) {
+    return undefined;
+  }
+
+  if (cover.type === "color") {
+    return /^#[0-9a-fA-F]{6}$/.test(cover.color)
+      ? { type: "color", color: cover.color }
+      : undefined;
+  }
+
+  const attachment = board.attachments[cover.attachmentId];
+
+  return attachment?.cardId === cardId ? cover : undefined;
+}
+
+function removeCardAttachments(
+  board: Board,
+  cardIds: ReadonlySet<string>,
+): Pick<Board, "attachmentIds" | "attachments"> {
+  const attachmentIds = board.attachmentIds.filter((attachmentId) => {
+    const attachment = board.attachments[attachmentId];
+    return attachment ? !cardIds.has(attachment.cardId) : false;
+  });
+  const attachments = Object.fromEntries(
+    attachmentIds.flatMap((attachmentId) => {
+      const attachment = board.attachments[attachmentId];
+      return attachment ? [[attachmentId, attachment]] : [];
+    }),
+  ) as Record<string, BoardAttachment>;
+
+  return { attachmentIds, attachments };
+}
+
+function removeCardsFromBoard(board: Board, cardIds: ReadonlySet<string>): Board {
+  if (cardIds.size === 0) {
+    return board;
+  }
+
+  const timestamp = now();
+  const cards = Object.fromEntries(
+    Object.entries(board.cards).filter(([cardId]) => !cardIds.has(cardId)),
+  ) as Record<string, BoardCard>;
+  const lists = Object.fromEntries(
+    Object.entries(board.lists).map(([listId, list]) => [
+      listId,
+      list.cardIds.some((cardId) => cardIds.has(cardId))
+        ? {
+            ...list,
+            cardIds: list.cardIds.filter((cardId) => !cardIds.has(cardId)),
+            updatedAt: timestamp,
+          }
+        : list,
+    ]),
+  ) as Record<string, BoardList>;
+  const relatedChecklists = removeCardChecklists(
+    board.checklists,
+    board.checklistItems,
+    cardIds,
+  );
+  const relatedActivities = removeCardActivities(board, cardIds);
+  const relatedAttachments = removeCardAttachments(board, cardIds);
+
+  return {
+    ...board,
+    lists,
+    cards,
+    checklistIds: board.checklistIds.filter(
+      (checklistId) => Boolean(relatedChecklists.checklists[checklistId]),
+    ),
+    ...relatedChecklists,
+    ...relatedActivities,
+    ...relatedAttachments,
+    updatedAt: timestamp,
+  };
+}
+
+function copyCardChecklists(
+  board: Board,
+  sourceCard: BoardCard,
+  targetCardId: string,
+  timestamp: number,
+): Readonly<{
+  checklistIds: string[];
+  checklists: Record<string, BoardChecklist>;
+  checklistItems: Record<string, BoardChecklistItem>;
+}> {
+  const checklistIds: string[] = [];
+  const checklists: Record<string, BoardChecklist> = {};
+  const checklistItems: Record<string, BoardChecklistItem> = {};
+
+  for (const sourceChecklistId of sourceCard.checklistIds) {
+    const sourceChecklist = board.checklists[sourceChecklistId];
+
+    if (!sourceChecklist) {
+      continue;
+    }
+
+    const checklistId = createId("checklist");
+    const itemIds: string[] = [];
+
+    for (const sourceItemId of sourceChecklist.itemIds) {
+      const sourceItem = board.checklistItems[sourceItemId];
+
+      if (!sourceItem) {
+        continue;
+      }
+
+      const itemId = createId("checklist-item");
+      itemIds.push(itemId);
+      checklistItems[itemId] = {
+        ...sourceItem,
+        id: itemId,
+        checklistId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    }
+
+    checklistIds.push(checklistId);
+    checklists[checklistId] = {
+      ...sourceChecklist,
+      id: checklistId,
+      cardId: targetCardId,
+      itemIds,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  }
+
+  return { checklistIds, checklists, checklistItems };
+}
+
+export function isListAtWipLimit(list: BoardList): boolean {
+  return Boolean(list.wipLimit && list.cardIds.length >= list.wipLimit);
+}
+
+export function getActiveBoardListIds(board: Board): string[] {
+  return board.listIds.filter((listId) => !board.lists[listId]?.isArchived);
+}
+
 export function renameBoard(board: Board, title: string): Board {
   const normalizedTitle = title.trim();
 
@@ -96,6 +247,7 @@ export function addList(board: Board, title: string): Board {
         id: listId,
         title: normalizedTitle,
         cardIds: [],
+        isArchived: false,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -135,41 +287,234 @@ export function deleteList(board: Board, listId: string): Board {
 
   const remainingLists = { ...board.lists };
   delete remainingLists[listId];
-
   const cardIdsToDelete = new Set(
     Object.entries(board.cards)
       .filter(([, card]) => card.listId === listId)
       .map(([cardId]) => cardId),
   );
-  const nextCards = Object.fromEntries(
-    Object.entries(board.cards).filter(([cardId]) => !cardIdsToDelete.has(cardId)),
-  );
-  const relatedChecklists = removeCardChecklists(
-    board.checklists,
-    board.checklistItems,
-    cardIdsToDelete,
-  );
-  const relatedActivities = removeCardActivities(board, cardIdsToDelete);
+  const boardWithoutCards = removeCardsFromBoard(board, cardIdsToDelete);
+
+  return {
+    ...boardWithoutCards,
+    listIds: board.listIds.filter((id) => id !== listId),
+    lists: remainingLists,
+    updatedAt: now(),
+  };
+}
+
+export function archiveList(board: Board, listId: string): Board {
+  const list = board.lists[listId];
+
+  if (!list || list.isArchived) {
+    return board;
+  }
+
+  const timestamp = now();
 
   return {
     ...board,
-    listIds: board.listIds.filter((id) => id !== listId),
-    lists: remainingLists,
-    cards: nextCards,
-    checklistIds: board.checklistIds.filter(
-      (checklistId) => Boolean(relatedChecklists.checklists[checklistId]),
-    ),
-    ...relatedChecklists,
-    ...relatedActivities,
-    updatedAt: now(),
+    lists: {
+      ...board.lists,
+      [listId]: {
+        ...list,
+        isArchived: true,
+        archivedAt: timestamp,
+        updatedAt: timestamp,
+      },
+    },
+    updatedAt: timestamp,
   };
+}
+
+export function restoreList(board: Board, listId: string): Board {
+  const list = board.lists[listId];
+
+  if (!list || !list.isArchived) {
+    return board;
+  }
+
+  const timestamp = now();
+  const restoredList = { ...list, isArchived: false, updatedAt: timestamp };
+  delete restoredList.archivedAt;
+
+  return {
+    ...board,
+    lists: {
+      ...board.lists,
+      [listId]: restoredList,
+    },
+    updatedAt: timestamp,
+  };
+}
+
+export function duplicateList(board: Board, listId: string): Board {
+  const sourceList = board.lists[listId];
+
+  if (!sourceList || sourceList.isArchived) {
+    return board;
+  }
+
+  const timestamp = now();
+  const newListId = createId("list");
+  const nextCards: Record<string, BoardCard> = { ...board.cards };
+  const nextChecklists: Record<string, BoardChecklist> = { ...board.checklists };
+  const nextChecklistItems: Record<string, BoardChecklistItem> = {
+    ...board.checklistItems,
+  };
+  const duplicateCardIds: string[] = [];
+  const duplicatedChecklistIds: string[] = [];
+
+  for (const sourceCardId of sourceList.cardIds) {
+    const sourceCard = board.cards[sourceCardId];
+
+    if (!sourceCard || sourceCard.isArchived) {
+      continue;
+    }
+
+    const cardId = createId("card");
+    const copiedChecklists = copyCardChecklists(board, sourceCard, cardId, timestamp);
+    duplicateCardIds.push(cardId);
+    duplicatedChecklistIds.push(...copiedChecklists.checklistIds);
+    nextCards[cardId] = {
+      ...sourceCard,
+      id: cardId,
+      listId: newListId,
+      checklistIds: copiedChecklists.checklistIds,
+      attachmentIds: [],
+      cover: sourceCard.cover?.type === "color" ? sourceCard.cover : undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    Object.assign(nextChecklists, copiedChecklists.checklists);
+    Object.assign(nextChecklistItems, copiedChecklists.checklistItems);
+  }
+
+  const sourceIndex = board.listIds.indexOf(sourceList.id);
+  const nextListIds = [...board.listIds];
+  nextListIds.splice(sourceIndex + 1, 0, newListId);
+
+  return {
+    ...board,
+    listIds: nextListIds,
+    lists: {
+      ...board.lists,
+      [newListId]: {
+        id: newListId,
+        title: `${sourceList.title} (копия)`,
+        cardIds: duplicateCardIds,
+        isArchived: false,
+        wipLimit: sourceList.wipLimit,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    },
+    cards: nextCards,
+    checklistIds: [...board.checklistIds, ...duplicatedChecklistIds],
+    checklists: nextChecklists,
+    checklistItems: nextChecklistItems,
+    updatedAt: timestamp,
+  };
+}
+
+export function setListWipLimit(
+  board: Board,
+  listId: string,
+  wipLimit: number | undefined,
+): Board {
+  const list = board.lists[listId];
+  const normalizedLimit =
+    wipLimit === undefined || !Number.isFinite(wipLimit) || wipLimit <= 0
+      ? undefined
+      : Math.min(999, Math.floor(wipLimit));
+
+  if (!list || list.wipLimit === normalizedLimit) {
+    return board;
+  }
+
+  const timestamp = now();
+  const nextList = { ...list, wipLimit: normalizedLimit, updatedAt: timestamp };
+
+  return {
+    ...board,
+    lists: {
+      ...board.lists,
+      [listId]: nextList,
+    },
+    updatedAt: timestamp,
+  };
+}
+
+export function moveAllCards(
+  board: Board,
+  sourceListId: string,
+  destinationListId: string,
+): Board {
+  const sourceList = board.lists[sourceListId];
+  const destinationList = board.lists[destinationListId];
+
+  if (
+    !sourceList ||
+    !destinationList ||
+    sourceList.id === destinationList.id ||
+    sourceList.isArchived ||
+    destinationList.isArchived
+  ) {
+    return board;
+  }
+
+  const activeCardIds = sourceList.cardIds.filter((cardId) => !board.cards[cardId]?.isArchived);
+
+  if (
+    destinationList.wipLimit &&
+    destinationList.cardIds.length + activeCardIds.length > destinationList.wipLimit
+  ) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    lists: {
+      ...board.lists,
+      [sourceList.id]: {
+        ...sourceList,
+        cardIds: sourceList.cardIds.filter((cardId) => !activeCardIds.includes(cardId)),
+        updatedAt: timestamp,
+      },
+      [destinationList.id]: {
+        ...destinationList,
+        cardIds: [...destinationList.cardIds, ...activeCardIds],
+        updatedAt: timestamp,
+      },
+    },
+    cards: Object.fromEntries(
+      Object.entries(board.cards).map(([cardId, card]) => [
+        cardId,
+        activeCardIds.includes(cardId)
+          ? { ...card, listId: destinationList.id, updatedAt: timestamp }
+          : card,
+      ]),
+    ) as Record<string, BoardCard>,
+    updatedAt: timestamp,
+  };
+}
+
+export function clearList(board: Board, listId: string): Board {
+  const list = board.lists[listId];
+
+  if (!list || list.cardIds.length === 0) {
+    return board;
+  }
+
+  return removeCardsFromBoard(board, new Set(list.cardIds));
 }
 
 export function addCard(board: Board, listId: string, title: string): Board {
   const list = board.lists[listId];
   const normalizedTitle = title.trim();
 
-  if (!list || !normalizedTitle) {
+  if (!list || list.isArchived || !normalizedTitle || isListAtWipLimit(list)) {
     return board;
   }
 
@@ -194,6 +539,7 @@ export function addCard(board: Board, listId: string, title: string): Board {
         description: "",
         labelIds: [],
         checklistIds: [],
+        attachmentIds: [],
         sticker: getRandomCardSticker(),
         isArchived: false,
         createdAt: timestamp,
@@ -222,13 +568,14 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
   }
 
   const timestamp = now();
-  const nextCard = {
+  const nextCard: BoardCard = {
     ...card,
     title: normalizedTitle,
     description: draft.description.trim(),
     dueDate: draft.dueDate || undefined,
     labelIds: normalizeCardLabelIds(draft.labelIds, board.labels),
     sticker: normalizeCardSticker(draft.sticker),
+    cover: normalizeCardCover(board, cardId, draft.cover),
     updatedAt: timestamp,
   };
   const activities: BoardActivityInput[] = [];
@@ -310,41 +657,11 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
 }
 
 export function deleteCard(board: Board, cardId: string): Board {
-  const card = board.cards[cardId];
-  const list = card ? board.lists[card.listId] : undefined;
-
-  if (!card || !list) {
+  if (!board.cards[cardId]) {
     return board;
   }
 
-  const remainingCards = { ...board.cards };
-  delete remainingCards[cardId];
-  const timestamp = now();
-  const relatedChecklists = removeCardChecklists(
-    board.checklists,
-    board.checklistItems,
-    new Set([cardId]),
-  );
-  const relatedActivities = removeCardActivities(board, new Set([cardId]));
-
-  return {
-    ...board,
-    lists: {
-      ...board.lists,
-      [list.id]: {
-        ...list,
-        cardIds: list.cardIds.filter((id) => id !== cardId),
-        updatedAt: timestamp,
-      },
-    },
-    cards: remainingCards,
-    checklistIds: board.checklistIds.filter(
-      (checklistId) => Boolean(relatedChecklists.checklists[checklistId]),
-    ),
-    ...relatedChecklists,
-    ...relatedActivities,
-    updatedAt: timestamp,
-  };
+  return removeCardsFromBoard(board, new Set([cardId]));
 }
 
 export function moveCard(
@@ -357,12 +674,27 @@ export function moveCard(
   const sourceList = card ? board.lists[card.listId] : undefined;
   const destinationList = board.lists[destinationListId];
 
-  if (!card || !sourceList || !destinationList || card.isArchived) {
+  if (
+    !card ||
+    !sourceList ||
+    !destinationList ||
+    card.isArchived ||
+    sourceList.isArchived ||
+    destinationList.isArchived
+  ) {
     return board;
   }
 
   const sourceIndex = sourceList.cardIds.indexOf(cardId);
   if (sourceIndex === -1) {
+    return board;
+  }
+
+  if (
+    sourceList.id !== destinationList.id &&
+    destinationList.wipLimit &&
+    destinationList.cardIds.length >= destinationList.wipLimit
+  ) {
     return board;
   }
 

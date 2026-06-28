@@ -27,8 +27,9 @@ import type {
 } from "@/entities/board";
 import { getCardMoveDestination } from "@/features/move-card";
 import { getListMoveDestination } from "@/features/move-list";
+import { getActiveBoardListIds } from "@/features/board-management";
 import { cn, readDndItemData, type DndItemData } from "@/shared/lib";
-import { Button, IconButton } from "@/shared/ui";
+import { Button, IconButton, TextField } from "@/shared/ui";
 
 import { CardPreview } from "./CardItem";
 import { ListColumn, ListPreview } from "./ListColumn";
@@ -42,6 +43,7 @@ type BoardColumnsProps = Readonly<{
   onAddList: (title: string) => void;
   onRenameList: (listId: string, title: string) => void;
   onDeleteList: (listId: string) => void;
+  onOpenListActions: (listId: string) => void;
   onOpenCard: (cardId: string) => void;
   onMoveCard: (cardId: string, listId: string, index: number) => void;
   onMoveList: (listId: string, destinationListId: string) => void;
@@ -68,6 +70,7 @@ export function BoardColumns({
   onAddList,
   onRenameList,
   onDeleteList,
+  onOpenListActions,
   onOpenCard,
   onMoveCard,
   onMoveList,
@@ -82,6 +85,7 @@ export function BoardColumns({
     }),
   );
   const isDragEnabled = !isFiltering;
+  const activeListIds = getActiveBoardListIds(board);
 
   const activeCard = activeItem?.cardId
     ? board.cards[activeItem.cardId]
@@ -158,11 +162,11 @@ export function BoardColumns({
     >
       <div className="h-full overflow-x-auto overflow-y-hidden px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6">
         <SortableContext
-          items={board.listIds}
+          items={activeListIds}
           strategy={horizontalListSortingStrategy}
         >
           <div className="flex h-full min-w-max items-start gap-3">
-            {board.listIds.map((listId) => {
+            {activeListIds.map((listId) => {
               const list = board.lists[listId];
 
               if (!list) {
@@ -183,11 +187,13 @@ export function BoardColumns({
                   checklistItems={board.checklistItems}
                   checklists={board.checklists}
                   labels={board.labels}
+                  attachments={board.attachments}
                   isDragDisabled={!isDragEnabled}
                   list={visibleList}
                   totalCardCount={list.cardIds.length}
                   onAddCard={onAddCard}
                   onDeleteList={onDeleteList}
+                  onOpenListActions={onOpenListActions}
                   onOpenCard={onOpenCard}
                   onRenameList={onRenameList}
                 />
@@ -202,10 +208,10 @@ export function BoardColumns({
                 <label className="sr-only" htmlFor="new-list-title">
                   Название нового списка
                 </label>
-                <input
+                <TextField
                   autoFocus
                   id="new-list-title"
-                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-400"
+                  className="bg-white/5 text-white placeholder:text-slate-400"
                   placeholder="Например, На проверке"
                   value={listTitle}
                   onChange={(event) => setListTitle(event.target.value)}
@@ -260,6 +266,7 @@ export function BoardColumns({
               checklistItems={board.checklistItems}
               checklists={board.checklists}
               labels={board.labels}
+              attachments={board.attachments}
             />
           ) : null}
           {activeList && activeItem?.type === "list" ? (

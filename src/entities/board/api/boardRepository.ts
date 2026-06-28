@@ -20,6 +20,13 @@ interface PlanoraDatabase extends DBSchema {
       value: string;
     };
   };
+  attachmentBlobs: {
+    key: string;
+    value: {
+      id: string;
+      blob: Blob;
+    };
+  };
 }
 
 export type BoardWorkspacePersistenceChange = Readonly<{
@@ -29,7 +36,7 @@ export type BoardWorkspacePersistenceChange = Readonly<{
 }>;
 
 const DATABASE_NAME = "planora-board-db";
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 const ACTIVE_BOARD_KEY = "activeBoardId";
 
 let databasePromise: Promise<IDBPDatabase<PlanoraDatabase>> | null = null;
@@ -49,6 +56,10 @@ function getDatabase(): Promise<IDBPDatabase<PlanoraDatabase>> {
 
         if (!database.objectStoreNames.contains("metadata")) {
           database.createObjectStore("metadata", { keyPath: "key" });
+        }
+
+        if (!database.objectStoreNames.contains("attachmentBlobs")) {
+          database.createObjectStore("attachmentBlobs", { keyPath: "id" });
         }
       },
     });
@@ -113,11 +124,41 @@ function migrateBoard(value: unknown): unknown {
             {
               ...cardWithoutLegacyLabel,
               labelIds: labelIdsForCard,
+              checklistIds: isStringArray(cardValue.checklistIds)
+                ? cardValue.checklistIds
+                : [],
+              attachmentIds: isStringArray(cardValue.attachmentIds)
+                ? cardValue.attachmentIds
+                : [],
             },
           ];
         }),
       )
     : value.cards;
+  const lists = isRecord(value.lists)
+    ? Object.fromEntries(
+        Object.entries(value.lists).map(([listId, listValue]) => {
+          if (!isRecord(listValue)) {
+            return [listId, listValue];
+          }
+
+          return [
+            listId,
+            {
+              ...listValue,
+              isArchived:
+                typeof listValue.isArchived === "boolean"
+                  ? listValue.isArchived
+                  : false,
+              ...(typeof listValue.isArchived === "boolean" ||
+              listValue.archivedAt === undefined
+                ? {}
+                : { archivedAt: undefined }),
+            },
+          ];
+        }),
+      )
+    : value.lists;
 
   return {
     ...value,
@@ -127,12 +168,18 @@ function migrateBoard(value: unknown): unknown {
     labels,
     labelIds,
     cards,
+    lists,
+    checklistIds: isStringArray(value.checklistIds) ? value.checklistIds : [],
+    checklists: isRecord(value.checklists) ? value.checklists : {},
+    checklistItems: isRecord(value.checklistItems) ? value.checklistItems : {},
+    attachmentIds: isStringArray(value.attachmentIds) ? value.attachmentIds : [],
+    attachments: isRecord(value.attachments) ? value.attachments : {},
     activityIds: isStringArray(value.activityIds) ? value.activityIds : [],
     activities: isRecord(value.activities) ? value.activities : {},
   };
 }
 
-function parseBoard(value: unknown): Board {
+export function parseBoardData(value: unknown): Board {
   return boardSchema.parse(migrateBoard(value));
 }
 
@@ -149,7 +196,7 @@ function normalizeChange(
   change: BoardWorkspacePersistenceChange,
 ): BoardWorkspacePersistenceChange {
   const boardsById = new Map(
-    change.boardsToSave.map((board) => [board.id, parseBoard(board)]),
+    change.boardsToSave.map((board) => [board.id, parseBoardData(board)]),
   );
   const boardIdsToDelete = new Set(change.boardIdsToDelete);
 
@@ -171,7 +218,7 @@ export async function loadBoardWorkspace(): Promise<BoardWorkspace> {
     database.get("metadata", ACTIVE_BOARD_KEY),
   ]);
   const boards = storedBoards
-    .map(parseBoard)
+    .map(parseBoardData)
     .sort((first, second) => first.createdAt - second.createdAt);
   const requestedActiveBoardId = metadata?.value;
   const activeBoardId = boards.some((board) => board.id === requestedActiveBoardId)
@@ -204,6 +251,39 @@ export function persistBoardWorkspaceChange(
       key: ACTIVE_BOARD_KEY,
       value: normalizedChange.activeBoardId ?? "",
     });
+    await transaction.done;
+  });
+}
+
+export function saveAttachmentBlob(attachmentId: string, blob: Blob): Promise<void> {
+  return queueWrite(async () => {
+    const database = await getDatabase();
+    await database.put("attachmentBlobs", { id: attachmentId, blob });
+  });
+}
+
+export async function loadAttachmentBlob(attachmentId: string): Promise<Blob | null> {
+  const database = await getDatabase();
+  const entry = await database.get("attachmentBlobs", attachmentId);
+
+  return entry?.blob ?? null;
+}
+
+export function deleteAttachmentBlobs(attachmentIds: readonly string[]): Promise<void> {
+  const uniqueAttachmentIds = [...new Set(attachmentIds)];
+
+  if (uniqueAttachmentIds.length === 0) {
+    return Promise.resolve();
+  }
+
+  return queueWrite(async () => {
+    const database = await getDatabase();
+    const transaction = database.transaction("attachmentBlobs", "readwrite");
+
+    for (const attachmentId of uniqueAttachmentIds) {
+      await transaction.store.delete(attachmentId);
+    }
+
     await transaction.done;
   });
 }
