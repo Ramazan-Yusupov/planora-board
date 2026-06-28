@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Check,
   Download,
   FilePlus2,
   FileText,
@@ -25,13 +26,17 @@ import {
   createBoardAttachment,
   MAX_ATTACHMENT_SIZE,
 } from "../lib/attachmentOperations";
+import { cn } from "@/shared/lib";
 
 type AttachmentThumbnailProps = Readonly<{
   attachment: BoardAttachment;
   className?: string;
 }>;
 
-function AttachmentThumbnail({ attachment, className }: AttachmentThumbnailProps) {
+function AttachmentThumbnail({
+  attachment,
+  className,
+}: AttachmentThumbnailProps) {
   const [source, setSource] = useState<string | null>(null);
 
   useEffect(() => {
@@ -108,7 +113,9 @@ export function CardAttachmentsEditor({
     }
 
     const selectedFiles = [...files];
-    const oversizedFile = selectedFiles.find((file) => file.size > MAX_ATTACHMENT_SIZE);
+    const oversizedFile = selectedFiles.find(
+      (file) => file.size > MAX_ATTACHMENT_SIZE,
+    );
 
     if (oversizedFile) {
       setError(`«${oversizedFile.name}» больше 10 МБ.`);
@@ -149,7 +156,11 @@ export function CardAttachmentsEditor({
             </p>
           </div>
           {cover ? (
-            <Button size="sm" variant="ghost" onClick={() => onChangeCover(undefined)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onChangeCover(undefined)}
+            >
               <X aria-hidden="true" size={15} />
               Убрать
             </Button>
@@ -157,17 +168,32 @@ export function CardAttachmentsEditor({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {CARD_COVER_COLOR_OPTIONS.map((color) => (
-            <button
-              key={color}
-              aria-label={`Выбрать обложку ${color}`}
-              aria-pressed={cover?.type === "color" && cover.color === color}
-              className="size-8 rounded-lg border border-white/20 transition focus-visible:outline-offset-2"
-              style={{ backgroundColor: color }}
-              type="button"
-              onClick={() => onChangeCover({ type: "color", color })}
-            />
-          ))}
+          {CARD_COVER_COLOR_OPTIONS.map((color) => {
+            const isActive = cover?.type === "color" && cover.color === color;
+
+            return (
+              <button
+                key={color}
+                aria-label={`Выбрать обложку ${color}`}
+                aria-pressed={isActive}
+                className={cn(
+                  "relative grid size-8 place-items-center rounded-lg border transition focus-visible:outline-offset-2",
+                  isActive
+                    ? "border-white ring-2 ring-accent ring-offset-2 ring-offset-panel"
+                    : "border-white/20 hover:border-white/60",
+                )}
+                style={{ backgroundColor: color }}
+                type="button"
+                onClick={() => onChangeCover({ type: "color", color })}
+              >
+                {isActive ? (
+                  <span className="grid size-4 justify-center items-center pt-0.5 rounded-full bg-black/45 text-white shadow-sm">
+                    <Check aria-hidden="true" size={11} strokeWidth={3} />
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
 
         {attachments.some(isImageAttachment) ? (
@@ -177,18 +203,34 @@ export function CardAttachmentsEditor({
                 key={attachment.id}
                 aria-label={`Сделать «${attachment.name}» обложкой`}
                 aria-pressed={
-                  cover?.type === "attachment" && cover.attachmentId === attachment.id
+                  cover?.type === "attachment" &&
+                  cover.attachmentId === attachment.id
                 }
-                className="relative aspect-square overflow-hidden rounded-xl border border-white/15 bg-panel transition hover:border-accent focus-visible:outline-offset-2"
+                className={cn(
+                  "relative aspect-square overflow-hidden rounded-xl border bg-panel transition focus-visible:outline-offset-2",
+                  cover?.type === "attachment" &&
+                    cover.attachmentId === attachment.id
+                    ? "border-white ring-2 ring-accent ring-offset-2 ring-offset-panel"
+                    : "border-white/15 hover:border-white/60",
+                )}
                 type="button"
                 onClick={() =>
-                  onChangeCover({ type: "attachment", attachmentId: attachment.id })
+                  onChangeCover({
+                    type: "attachment",
+                    attachmentId: attachment.id,
+                  })
                 }
               >
                 <AttachmentThumbnail
                   attachment={attachment}
                   className="size-full object-cover"
                 />
+                {cover?.type === "attachment" &&
+                cover.attachmentId === attachment.id ? (
+                  <span className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-accent text-accent-foreground shadow-md">
+                    <Check aria-hidden="true" size={13} strokeWidth={3} />
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -210,9 +252,18 @@ export function CardAttachmentsEditor({
             type="file"
             onChange={(event) => void uploadFiles(event.target.files)}
           />
-          <Button disabled={isUploading} size="sm" variant="secondary" onClick={() => inputRef.current?.click()}>
+          <Button
+            disabled={isUploading}
+            size="sm"
+            variant="secondary"
+            onClick={() => inputRef.current?.click()}
+          >
             {isUploading ? (
-              <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
+              <LoaderCircle
+                aria-hidden="true"
+                className="animate-spin"
+                size={16}
+              />
             ) : (
               <FilePlus2 aria-hidden="true" size={16} />
             )}
@@ -244,7 +295,10 @@ export function CardAttachmentsEditor({
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text" title={attachment.name}>
+                  <p
+                    className="truncate text-sm font-medium text-text"
+                    title={attachment.name}
+                  >
                     {attachment.name}
                   </p>
                   <p className="mt-0.5 text-xs text-text-muted">
