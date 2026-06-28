@@ -16,7 +16,6 @@ const cardColorValues = [
   "frost",
   "custom",
 ] as const;
-const labelValues = ["none", "blue", "violet", "orange", "green"] as const;
 
 const hexColorSchema = z
   .string()
@@ -29,13 +28,21 @@ const boardAppearanceSchema = z.object({
   customCardColor: hexColorSchema.optional(),
 });
 
+const boardLabelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(48),
+  color: hexColorSchema,
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
 const boardCardSchema = z.object({
   id: z.string().min(1),
   listId: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
   dueDate: z.string().optional(),
-  label: z.enum(labelValues),
+  labelIds: z.array(z.string().min(1)).default([]),
   // Стикер добавлен после первой версии доски, поэтому старые записи
   // продолжают быть валидными без принудительной миграции.
   sticker: z.string().trim().min(1).max(32).optional(),
@@ -60,6 +67,8 @@ export const boardSchema = z
     id: z.string().min(1),
     title: z.string().min(1),
     appearance: boardAppearanceSchema,
+    labelIds: z.array(z.string().min(1)),
+    labels: z.record(z.string(), boardLabelSchema),
     listIds: z.array(z.string().min(1)),
     lists: z.record(z.string(), boardListSchema),
     cards: z.record(z.string(), boardCardSchema),
@@ -67,8 +76,47 @@ export const boardSchema = z
     updatedAt: z.number(),
   })
   .superRefine((board, context) => {
+    const boardLabelIds = new Set<string>();
     const boardListIds = new Set<string>();
     const cardOwners = new Map<string, string>();
+
+    board.labelIds.forEach((labelId, index) => {
+      if (boardLabelIds.has(labelId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["labelIds", index],
+          message: "Метка не должна повторяться в порядке проекта.",
+        });
+      }
+
+      boardLabelIds.add(labelId);
+
+      if (!board.labels[labelId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["labelIds", index],
+          message: "Ссылка на метку не найдена.",
+        });
+      }
+    });
+
+    for (const [labelKey, label] of Object.entries(board.labels)) {
+      if (label.id !== labelKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["labels", labelKey, "id"],
+          message: "Ключ метки должен совпадать с её id.",
+        });
+      }
+
+      if (!boardLabelIds.has(labelKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["labels", labelKey],
+          message: "Метка отсутствует в порядке проекта.",
+        });
+      }
+    }
 
     board.listIds.forEach((listId, index) => {
       if (boardListIds.has(listId)) {
@@ -156,6 +204,27 @@ export const boardSchema = z
           message: "Ключ карточки должен совпадать с её id.",
         });
       }
+
+      const seenCardLabelIds = new Set<string>();
+      card.labelIds.forEach((labelId, index) => {
+        if (seenCardLabelIds.has(labelId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "labelIds", index],
+            message: "Метка не должна повторяться на карточке.",
+          });
+        }
+
+        seenCardLabelIds.add(labelId);
+
+        if (!board.labels[labelId]) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "labelIds", index],
+            message: "Карточка ссылается на несуществующую метку.",
+          });
+        }
+      });
 
       if (!board.lists[card.listId]) {
         context.addIssue({

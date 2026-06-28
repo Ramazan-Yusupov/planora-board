@@ -1,9 +1,15 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, CircleDot, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleDot, Search, Tag } from "lucide-react";
 import { useMemo } from "react";
 
-import { LABEL_OPTIONS, type Board } from "@/entities/board";
+import {
+  BoardLabelSelector,
+  getCardLabels,
+  getOrderedBoardLabels,
+  type Board,
+  type BoardLabel,
+} from "@/entities/board";
 import {
   isCardMatchingFilters,
   toCardFilters,
@@ -33,6 +39,26 @@ type CalendarViewProps = Readonly<{
 
 const weekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
+function getCalendarLabels(
+  boards: readonly Board[],
+  selectedBoardId: string | null,
+): BoardLabel[] {
+  const visibleBoards = selectedBoardId
+    ? boards.filter((board) => board.id === selectedBoardId)
+    : boards;
+  const labelsById = new Map<string, BoardLabel>();
+
+  for (const board of visibleBoards) {
+    for (const label of getOrderedBoardLabels(board)) {
+      if (!labelsById.has(label.id)) {
+        labelsById.set(label.id, label);
+      }
+    }
+  }
+
+  return [...labelsById.values()];
+}
+
 export function CalendarView({
   boards,
   filters,
@@ -45,6 +71,10 @@ export function CalendarView({
   onShowToday,
 }: CalendarViewProps) {
   const days = useMemo(() => getCalendarDays(month), [month]);
+  const availableLabels = useMemo(
+    () => getCalendarLabels(boards, selectedBoardId),
+    [boards, selectedBoardId],
+  );
   const itemsByDate = useMemo(() => {
     const nextItemsByDate = new Map<string, CalendarItem[]>();
     const cardFilters = toCardFilters(filters);
@@ -122,27 +152,21 @@ export function CalendarView({
               ))}
             </select>
           </label>
+        </div>
 
-          <label className="min-w-[min(100%,10rem)] flex-1 text-sm text-text-muted xl:w-44 xl:flex-none">
-            <span className="sr-only">Фильтр по метке</span>
-            <select
-              className="h-10 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
-              value={filters.label}
-              onChange={(event) =>
-                onChangeFilters({
-                  ...filters,
-                  label: event.target.value as CalendarCardFilters["label"],
-                })
-              }
-            >
-              <option value="all">Все метки</option>
-              {LABEL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="w-full border-t border-white/10 pt-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-text">
+            <Tag aria-hidden="true" size={16} />
+            <span>Метки</span>
+          </div>
+          <div className="mt-2">
+            <BoardLabelSelector
+              labels={availableLabels}
+              selectedLabelIds={filters.labelIds}
+              onChange={(labelIds) => onChangeFilters({ ...filters, labelIds })}
+              emptyMessage="Нет меток для фильтрации в выбранных проектах."
+            />
+          </div>
         </div>
       </div>
 
@@ -190,31 +214,47 @@ export function CalendarView({
                   </div>
 
                   <div className="space-y-1">
-                    {visibleItems.map((item) => (
-                      <button
-                        key={`${item.boardId}-${item.card.id}`}
-                        className="flex w-full items-center gap-1.5 rounded-lg border border-white/10 bg-control/55 px-2 py-1 text-left text-xs text-text transition hover:bg-control-hover focus-visible:outline-offset-1"
-                        title={`${item.boardTitle}: ${item.card.title}`}
-                        type="button"
-                        onClick={() => onOpenCard(item)}
-                      >
-                        {item.card.sticker ? (
-                          <span
-                            aria-hidden="true"
-                            className="shrink-0 text-sm leading-none"
-                          >
-                            {item.card.sticker}
-                          </span>
-                        ) : (
-                          <CircleDot
-                            aria-hidden="true"
-                            className="shrink-0 text-accent"
-                            size={12}
-                          />
-                        )}
-                        <span className="truncate">{item.card.title}</span>
-                      </button>
-                    ))}
+                    {visibleItems.map((item) => {
+                      const labels = getCardLabels(item.card, item.labels).slice(0, 2);
+
+                      return (
+                        <button
+                          key={`${item.boardId}-${item.card.id}`}
+                          className="flex w-full items-center gap-1.5 rounded-lg border border-white/10 bg-control/55 px-2 py-1 text-left text-xs text-text transition hover:bg-control-hover focus-visible:outline-offset-1"
+                          title={`${item.boardTitle}: ${item.card.title}`}
+                          type="button"
+                          onClick={() => onOpenCard(item)}
+                        >
+                          {item.card.sticker ? (
+                            <span
+                              aria-hidden="true"
+                              className="shrink-0 text-sm leading-none"
+                            >
+                              {item.card.sticker}
+                            </span>
+                          ) : (
+                            <CircleDot
+                              aria-hidden="true"
+                              className="shrink-0 text-accent"
+                              size={12}
+                            />
+                          )}
+                          <span className="min-w-0 flex-1 truncate">{item.card.title}</span>
+                          {labels.length > 0 ? (
+                            <span className="flex shrink-0 gap-0.5" aria-label="Метки карточки">
+                              {labels.map((label) => (
+                                <span
+                                  key={label.id}
+                                  className="size-1.5 rounded-full"
+                                  style={{ backgroundColor: label.color }}
+                                  title={label.name}
+                                />
+                              ))}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
 
                     {hiddenItemsCount > 0 ? (
                       <p className="px-2 text-xs text-text-muted">

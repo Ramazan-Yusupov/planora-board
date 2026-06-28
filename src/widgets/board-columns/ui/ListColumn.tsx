@@ -10,7 +10,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { Check, GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Fragment, type FormEvent, useState } from "react";
 
-import type { BoardCard, BoardList, CardSurface } from "@/entities/board";
+import type {
+  BoardCard,
+  BoardLabel,
+  BoardList,
+  CardSurface,
+} from "@/entities/board";
 import { cn } from "@/shared/lib";
 import { Button, ConfirmDialog, IconButton } from "@/shared/ui";
 
@@ -20,6 +25,7 @@ type ListColumnProps = Readonly<{
   list: BoardList;
   cards: BoardCard[];
   cardSurface: CardSurface;
+  labels: Readonly<Record<string, BoardLabel>>;
   isDragDisabled: boolean;
   totalCardCount: number;
   onOpenCard: (cardId: string) => void;
@@ -32,6 +38,7 @@ export function ListColumn({
   list,
   cards,
   cardSurface,
+  labels,
   isDragDisabled,
   totalCardCount,
   onOpenCard,
@@ -167,6 +174,7 @@ export function ListColumn({
                 key={card.id}
                 card={card}
                 cardSurface={cardSurface}
+                labels={labels}
                 isDragDisabled={isDragDisabled}
                 onOpen={onOpenCard}
               />

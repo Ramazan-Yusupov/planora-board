@@ -3,7 +3,11 @@
 import { CalendarDays, ListFilter, RotateCcw, Search, Tag, X } from "lucide-react";
 import { useEffect, useId } from "react";
 
-import { LABEL_OPTIONS, type BoardList } from "@/entities/board";
+import {
+  BoardLabelSelector,
+  type BoardLabel,
+  type BoardList,
+} from "@/entities/board";
 import {
   CARD_DUE_FILTER_OPTIONS,
   DEFAULT_CARD_FILTERS,
@@ -14,6 +18,7 @@ import { IconButton } from "@/shared/ui";
 type CardFiltersSidebarProps = Readonly<{
   filters: CardFilters;
   isOpen: boolean;
+  labels: readonly BoardLabel[];
   lists: readonly BoardList[];
   onChange: (filters: CardFilters) => void;
   onClose: () => void;
@@ -22,12 +27,12 @@ type CardFiltersSidebarProps = Readonly<{
 export function CardFiltersSidebar({
   filters,
   isOpen,
+  labels,
   lists,
   onChange,
   onClose,
 }: CardFiltersSidebarProps) {
   const searchId = useId();
-  const labelId = useId();
   const dueDateId = useId();
   const listId = useId();
 
@@ -103,30 +108,21 @@ export function CardFiltersSidebar({
         </div>
 
         <div className="mt-6">
-          <label
-            className="flex items-center gap-2 text-sm font-medium text-text"
-            htmlFor={labelId}
-          >
+          <div className="flex items-center gap-2 text-sm font-medium text-text">
             <Tag aria-hidden="true" size={17} />
-            Метка
-          </label>
-          <select
-            id={labelId}
-            className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
-            value={filters.label}
-            onChange={(event) =>
-              patchFilters({
-                label: event.target.value as CardFilters["label"],
-              })
-            }
-          >
-            <option value="all">Все метки</option>
-            {LABEL_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            <p>Метки</p>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-text-muted">
+            Подходят карточки хотя бы с одной выбранной меткой.
+          </p>
+          <div className="mt-3">
+            <BoardLabelSelector
+              labels={labels}
+              selectedLabelIds={filters.labelIds}
+              onChange={(labelIds) => patchFilters({ labelIds })}
+              emptyMessage="В этом проекте нет меток для фильтрации."
+            />
+          </div>
         </div>
 
         <div className="mt-6">

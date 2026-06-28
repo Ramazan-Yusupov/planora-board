@@ -12,6 +12,16 @@ export {
 export type { CardSurface, ResolvedBoardAppearance } from "./lib/appearance";
 export { createEmptyBoard, createStarterBoard } from "./lib/createStarterBoard";
 export {
+  BOARD_LABEL_COLOR_OPTIONS,
+  createDefaultBoardLabelCollection,
+  getCardLabels,
+  getOrderedBoardLabels,
+  normalizeBoardLabelColor,
+  normalizeBoardLabelName,
+  normalizeCardLabelIds,
+} from "./lib/labels";
+export type { BoardLabelCollection } from "./lib/labels";
+export {
   CARD_STICKERS,
   getRandomCardSticker,
   normalizeCardSticker,
@@ -27,16 +37,17 @@ export { boardSchema } from "./model/schemas";
 export {
   BOARD_BACKGROUND_OPTIONS,
   CARD_COLOR_OPTIONS,
-  LABEL_OPTIONS,
 } from "./model/types";
 export type {
   Board,
   BoardAppearance,
   BoardBackgroundValue,
   BoardCard,
+  BoardLabel,
+  BoardLabelDraft,
   BoardList,
   BoardWorkspace,
   CardColorValue,
   CardDraft,
-  LabelValue,
 } from "./model/types";
+export { BoardLabelSelector } from "./ui";

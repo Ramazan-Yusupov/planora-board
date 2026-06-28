@@ -4,7 +4,13 @@ import { AlertTriangle, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { resolveBoardAppearance, type CardDraft } from "@/entities/board";
+import {
+  getOrderedBoardLabels,
+  resolveBoardAppearance,
+  type BoardLabel,
+  type BoardLabelDraft,
+  type CardDraft,
+} from "@/entities/board";
 import { archiveCard, restoreCard } from "@/features/archive-card";
 import {
   DEFAULT_CARD_FILTERS,
@@ -26,6 +32,11 @@ import {
   updateBoardAppearance,
   updateCard,
 } from "@/features/board-management";
+import {
+  createBoardLabel,
+  deleteBoardLabel,
+  updateBoardLabel,
+} from "@/features/manage-labels";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import { CALENDAR_ROUTE, getBoardRoute } from "@/shared/config/routes";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
@@ -201,6 +212,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     ? activeBoard.lists[selectedCard.listId]?.title ?? "Удалённый список"
     : "";
   const resolvedAppearance = resolveBoardAppearance(activeBoard.appearance);
+  const boardLabels = getOrderedBoardLabels(activeBoard);
   const activeCardsCount = Object.values(activeBoard.cards).filter(
     (card) => !card.isArchived,
   ).length;
@@ -497,6 +509,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         <CardFiltersSidebar
           filters={cardFilters}
           isOpen={isFiltersOpen}
+          labels={boardLabels}
           lists={activeBoard.listIds.flatMap((listId) => {
             const list = activeBoard.lists[listId];
 
@@ -510,6 +523,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       {isArchiveOpen ? (
         <CardArchiveModal
           cards={Object.values(activeBoard.cards)}
+          labels={activeBoard.labels}
           lists={activeBoard.lists}
           onClose={() => setIsArchiveOpen(false)}
           onDelete={(cardId) =>
@@ -525,6 +539,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         <CardModal
           key={selectedCard.id}
           card={selectedCard}
+          labels={boardLabels}
           lists={activeBoard.listIds.flatMap((listId) => {
             const list = activeBoard.lists[listId];
 
@@ -538,8 +553,34 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             setIsInitialCardDismissed(true);
             setSelectedCardId(null);
           }}
+          onCreateLabel={(draft: BoardLabelDraft): BoardLabel | null => {
+            let createdLabel: BoardLabel | null = null;
+
+            updateActiveBoard(
+              (board) => {
+                const result = createBoardLabel(board, draft);
+                createdLabel = result.label;
+                return result.board;
+              },
+              "immediate",
+            );
+
+            return createdLabel;
+          }}
           onDelete={(cardId) => {
             updateActiveBoard((board) => deleteCard(board, cardId), "immediate");
+          }}
+          onDeleteLabel={(labelId) => {
+            setCardFilters((current) => ({
+              ...current,
+              labelIds: current.labelIds.filter(
+                (currentLabelId) => currentLabelId !== labelId,
+              ),
+            }));
+            updateActiveBoard(
+              (board) => deleteBoardLabel(board, labelId),
+              "immediate",
+            );
           }}
           onDuplicate={(cardId) => {
             updateActiveBoard((board) => duplicateCard(board, cardId), "immediate");
@@ -563,6 +604,12 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           }}
           onSave={(cardId, draft: CardDraft) => {
             updateActiveBoard((board) => updateCard(board, cardId, draft));
+          }}
+          onUpdateLabel={(labelId, draft) => {
+            updateActiveBoard(
+              (board) => updateBoardLabel(board, labelId, draft),
+              "immediate",
+            );
           }}
         />
       ) : null}

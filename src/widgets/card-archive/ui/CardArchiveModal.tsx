@@ -3,12 +3,18 @@
 import { ArchiveRestore, CalendarDays, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { type BoardCard, type BoardList } from "@/entities/board";
+import {
+  getCardLabels,
+  type BoardCard,
+  type BoardLabel,
+  type BoardList,
+} from "@/entities/board";
 import { Button, ConfirmDialog, IconButton, Modal } from "@/shared/ui";
 
 type CardArchiveModalProps = Readonly<{
   cards: readonly BoardCard[];
   lists: Readonly<Record<string, BoardList>>;
+  labels: Readonly<Record<string, BoardLabel>>;
   onClose: () => void;
   onDelete: (cardId: string) => void;
   onRestore: (cardId: string) => void;
@@ -36,6 +42,7 @@ function formatDueDate(value: string): string {
 export function CardArchiveModal({
   cards,
   lists,
+  labels,
   onClose,
   onDelete,
   onRestore,
@@ -71,6 +78,7 @@ export function CardArchiveModal({
             <ul className="space-y-2" aria-label="Архивированные карточки">
               {archivedCards.map((card) => {
                 const listTitle = lists[card.listId]?.title ?? "Удалённый список";
+                const cardLabels = getCardLabels(card, labels).slice(0, 4);
 
                 return (
                   <li
@@ -95,6 +103,18 @@ export function CardArchiveModal({
                         <p className="mt-1 text-xs text-text-muted">
                           {listTitle} · архивирована {formatArchivedAt(card.archivedAt)}
                         </p>
+                        {cardLabels.length > 0 ? (
+                          <div className="mt-2 flex gap-1" aria-label="Метки карточки">
+                            {cardLabels.map((label) => (
+                              <span
+                                key={label.id}
+                                className="h-1.5 min-w-7 rounded-full"
+                                style={{ backgroundColor: label.color }}
+                                title={label.name}
+                              />
+                            ))}
+                          </div>
+                        ) : null}
                         {card.dueDate ? (
                           <span className="mt-2 inline-flex items-center gap-1 rounded-md bg-panel/70 px-2 py-1 text-[11px] font-medium text-text-muted">
                             <CalendarDays aria-hidden="true" size={13} />

@@ -6,16 +6,17 @@ import {
   Copy,
   FileText,
   MoveRight,
-  Tag,
   Trash2,
 } from "lucide-react";
 import { useId, useState } from "react";
 
 import {
-  LABEL_OPTIONS,
   type BoardCard,
+  type BoardLabel,
+  type BoardLabelDraft,
   type CardDraft,
 } from "@/entities/board";
+import { CardLabelsEditor } from "@/features/manage-labels";
 import { CardStickerPicker } from "@/features/manage-card-sticker";
 import { Button, ConfirmDialog, Modal } from "@/shared/ui";
 
@@ -26,14 +27,18 @@ type CardListOption = Readonly<{
 
 type CardModalProps = Readonly<{
   card: BoardCard;
+  labels: readonly BoardLabel[];
   lists: readonly CardListOption[];
   listTitle: string;
   onArchive: (cardId: string) => void;
   onClose: () => void;
+  onCreateLabel: (draft: BoardLabelDraft) => BoardLabel | null;
   onDelete: (cardId: string) => void;
+  onDeleteLabel: (labelId: string) => void;
   onDuplicate: (cardId: string) => void;
   onMove: (cardId: string, destinationListId: string) => void;
   onSave: (cardId: string, draft: CardDraft) => void;
+  onUpdateLabel: (labelId: string, draft: BoardLabelDraft) => void;
 }>;
 
 function createDraft(card: BoardCard): CardDraft {
@@ -41,21 +46,25 @@ function createDraft(card: BoardCard): CardDraft {
     title: card.title,
     description: card.description,
     dueDate: card.dueDate,
-    label: card.label,
+    labelIds: [...card.labelIds],
     sticker: card.sticker,
   };
 }
 
 export function CardModal({
   card,
+  labels,
   lists,
   listTitle,
   onArchive,
   onClose,
+  onCreateLabel,
   onDelete,
+  onDeleteLabel,
   onDuplicate,
   onMove,
   onSave,
+  onUpdateLabel,
 }: CardModalProps) {
   const [draft, setDraft] = useState<CardDraft>(() => createDraft(card));
   const [destinationListId, setDestinationListId] = useState(card.listId);
@@ -64,7 +73,6 @@ export function CardModal({
   const titleId = useId();
   const descriptionId = useId();
   const dueDateId = useId();
-  const labelId = useId();
   const destinationListIdInput = useId();
 
   const saveDraft = (): boolean => {
@@ -170,62 +178,49 @@ export function CardModal({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label
-                className="flex items-center gap-2 text-sm font-medium text-text"
-                htmlFor={dueDateId}
-              >
-                <CalendarDays aria-hidden="true" size={17} />
-                Срок
-              </label>
-              <input
-                id={dueDateId}
-                className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
-                type="date"
-                value={draft.dueDate ?? ""}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    dueDate: event.target.value || undefined,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label
-                className="flex items-center gap-2 text-sm font-medium text-text"
-                htmlFor={labelId}
-              >
-                <Tag aria-hidden="true" size={17} />
-                Метка
-              </label>
-              <select
-                id={labelId}
-                className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
-                value={draft.label}
-                onChange={(event) => {
-                  const option = LABEL_OPTIONS.find(
-                    (item) => item.value === event.target.value,
-                  );
-
-                  if (option) {
-                    setDraft((current) => ({
-                      ...current,
-                      label: option.value,
-                    }));
-                  }
-                }}
-              >
-                {LABEL_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label
+              className="flex items-center gap-2 text-sm font-medium text-text"
+              htmlFor={dueDateId}
+            >
+              <CalendarDays aria-hidden="true" size={17} />
+              Срок
+            </label>
+            <input
+              id={dueDateId}
+              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              type="date"
+              value={draft.dueDate ?? ""}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  dueDate: event.target.value || undefined,
+                }))
+              }
+            />
           </div>
+
+          <CardLabelsEditor
+            labels={labels}
+            selectedLabelIds={draft.labelIds}
+            onChange={(labelIds) =>
+              setDraft((current) => ({
+                ...current,
+                labelIds,
+              }))
+            }
+            onCreateLabel={onCreateLabel}
+            onDeleteLabel={(labelId) => {
+              onDeleteLabel(labelId);
+              setDraft((current) => ({
+                ...current,
+                labelIds: current.labelIds.filter(
+                  (currentLabelId) => currentLabelId !== labelId,
+                ),
+              }));
+            }}
+            onUpdateLabel={onUpdateLabel}
+          />
 
           <section className="rounded-2xl border border-white/10 bg-control/25 p-3 sm:p-4">
             <h3 className="text-sm font-semibold text-text">Действия</h3>

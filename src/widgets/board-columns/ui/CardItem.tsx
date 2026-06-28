@@ -6,20 +6,50 @@ import { CalendarDays, GripVertical } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import {
-  LABEL_OPTIONS,
+  getCardLabels,
   type BoardCard,
+  type BoardLabel,
   type CardSurface,
 } from "@/entities/board";
 
 type CardItemProps = Readonly<{
   card: BoardCard;
   cardSurface: CardSurface;
+  labels: Readonly<Record<string, BoardLabel>>;
   isDragDisabled?: boolean;
   onOpen: (cardId: string) => void;
 }>;
 
-function getLabel(card: BoardCard) {
-  return LABEL_OPTIONS.find((option) => option.value === card.label);
+type CardLabelsProps = Readonly<{
+  card: BoardCard;
+  labels: Readonly<Record<string, BoardLabel>>;
+}>;
+
+function CardLabels({ card, labels }: CardLabelsProps) {
+  const cardLabels = getCardLabels(card, labels);
+  const visibleLabels = cardLabels.slice(0, 4);
+  const hiddenLabelsCount = Math.max(0, cardLabels.length - visibleLabels.length);
+
+  if (visibleLabels.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-2 flex items-center gap-1" aria-label="Метки карточки">
+      {visibleLabels.map((label) => (
+        <span
+          key={label.id}
+          aria-label={label.name}
+          className="h-1.5 min-w-7 rounded-full"
+          style={{ backgroundColor: label.color }}
+          title={label.name}
+        />
+      ))}
+      {hiddenLabelsCount > 0 ? (
+        <span className="text-[10px] font-medium text-current/70">+{hiddenLabelsCount}</span>
+      ) : null}
+    </div>
+  );
 }
 
 function createSurfaceStyle(
@@ -42,12 +72,15 @@ function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
       {card.sticker ? (
         <span
           aria-hidden="true"
-          className="grid size-7 shrink-0 place-items-center rounded-lg bg-black/5 text-base leading-none"
+          className="grid size-7 shrink-0 place-items-center rounded-lg bg-black/5 text-lg leading-none"
         >
           {card.sticker}
         </span>
       ) : null}
-      <h3 className="wrap-break-word text-sm font-medium leading-5 text-current">
+      <h3
+        className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-current"
+        title={card.title}
+      >
         {card.title}
       </h3>
     </div>
@@ -57,6 +90,7 @@ function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
 export function CardItem({
   card,
   cardSurface,
+  labels,
   isDragDisabled = false,
   onOpen,
 }: CardItemProps) {
@@ -77,7 +111,6 @@ export function CardItem({
     },
   });
 
-  const label = getLabel(card);
   const style = createSurfaceStyle(
     CSS.Transform.toString(transform),
     transition,
@@ -110,11 +143,7 @@ export function CardItem({
           type="button"
           onClick={() => onOpen(card.id)}
         >
-          {label && label.value !== "none" ? (
-            <span
-              className={`mb-2 block h-1.5 w-11 rounded-full ${label.color}`}
-            />
-          ) : null}
+          <CardLabels card={card} labels={labels} />
           <CardTitle card={card} />
           {card.description ? (
             <p
@@ -148,9 +177,12 @@ export function CardItem({
 export function CardPreview({
   card,
   cardSurface,
-}: Readonly<{ card: BoardCard; cardSurface: CardSurface }>) {
-  const label = getLabel(card);
-
+  labels,
+}: Readonly<{
+  card: BoardCard;
+  cardSurface: CardSurface;
+  labels: Readonly<Record<string, BoardLabel>>;
+}>) {
   return (
     <article
       className="w-72 rotate-1 rounded-xl border p-3 shadow-xl"
@@ -160,9 +192,7 @@ export function CardPreview({
         color: cardSurface.textColor,
       }}
     >
-      {label && label.value !== "none" ? (
-        <span className={`mb-2 block h-1.5 w-11 rounded-full ${label.color}`} />
-      ) : null}
+      <CardLabels card={card} labels={labels} />
       <CardTitle card={card} />
     </article>
   );

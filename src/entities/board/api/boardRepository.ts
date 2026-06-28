@@ -1,6 +1,10 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 import { DEFAULT_BOARD_APPEARANCE } from "../lib/appearance";
+import {
+  createDefaultBoardLabelCollection,
+  LEGACY_LABEL_ID_BY_VALUE,
+} from "../lib/labels";
 import { boardSchema } from "../model/schemas";
 import type { Board, BoardWorkspace } from "../model/types";
 
@@ -25,7 +29,7 @@ export type BoardWorkspacePersistenceChange = Readonly<{
 }>;
 
 const DATABASE_NAME = "planora-board-db";
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 const ACTIVE_BOARD_KEY = "activeBoardId";
 
 let databasePromise: Promise<IDBPDatabase<PlanoraDatabase>> | null = null;
@@ -57,18 +61,72 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function getMigrationTimestamp(value: Record<string, unknown>): number {
+  return typeof value.updatedAt === "number"
+    ? value.updatedAt
+    : typeof value.createdAt === "number"
+      ? value.createdAt
+      : Date.now();
+}
+
 function migrateBoard(value: unknown): unknown {
   if (!isRecord(value)) {
     return value;
   }
 
-  if (isRecord(value.appearance)) {
-    return value;
-  }
+  const timestamp = getMigrationTimestamp(value);
+  const defaultLabels = createDefaultBoardLabelCollection(timestamp);
+  const labels: Record<string, unknown> = isRecord(value.labels)
+    ? value.labels
+    : defaultLabels.labels;
+  const hasLabels = isRecord(value.labels);
+  const labelIds = isStringArray(value.labelIds)
+    ? value.labelIds
+    : hasLabels
+      ? Object.keys(labels)
+      : defaultLabels.labelIds;
+  const cards = isRecord(value.cards)
+    ? Object.fromEntries(
+        Object.entries(value.cards).map(([cardId, cardValue]) => {
+          if (!isRecord(cardValue)) {
+            return [cardId, cardValue];
+          }
+
+          const legacyLabel = cardValue.label;
+          const labelIdsForCard = isStringArray(cardValue.labelIds)
+            ? cardValue.labelIds
+            : legacyLabel === "blue" ||
+                legacyLabel === "violet" ||
+                legacyLabel === "orange" ||
+                legacyLabel === "green"
+              ? [LEGACY_LABEL_ID_BY_VALUE[legacyLabel]]
+              : [];
+          const cardWithoutLegacyLabel = { ...cardValue };
+          delete cardWithoutLegacyLabel.label;
+
+          return [
+            cardId,
+            {
+              ...cardWithoutLegacyLabel,
+              labelIds: labelIdsForCard,
+            },
+          ];
+        }),
+      )
+    : value.cards;
 
   return {
     ...value,
-    appearance: { ...DEFAULT_BOARD_APPEARANCE },
+    appearance: isRecord(value.appearance)
+      ? value.appearance
+      : { ...DEFAULT_BOARD_APPEARANCE },
+    labels,
+    labelIds,
+    cards,
   };
 }
 

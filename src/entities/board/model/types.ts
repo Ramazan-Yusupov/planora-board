@@ -46,17 +46,8 @@ export const CARD_COLOR_OPTIONS = [
   { value: "custom", label: "Свой цвет", color: "#334155" },
 ] as const;
 
-export const LABEL_OPTIONS = [
-  { value: "none", label: "Без метки", color: "" },
-  { value: "blue", label: "Идея", color: "bg-sky-400" },
-  { value: "violet", label: "В работе", color: "bg-violet-400" },
-  { value: "orange", label: "Срочно", color: "bg-orange-400" },
-  { value: "green", label: "Готово", color: "bg-emerald-400" },
-] as const;
-
 export type BoardBackgroundValue = (typeof BOARD_BACKGROUND_OPTIONS)[number]["value"];
 export type CardColorValue = (typeof CARD_COLOR_OPTIONS)[number]["value"];
-export type LabelValue = (typeof LABEL_OPTIONS)[number]["value"];
 
 export type BoardAppearance = {
   background: BoardBackgroundValue;
@@ -65,13 +56,23 @@ export type BoardAppearance = {
   customCardColor?: string;
 };
 
+export type BoardLabel = {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type BoardLabelDraft = Pick<BoardLabel, "name" | "color">;
+
 export type BoardCard = {
   id: string;
   listId: string;
   title: string;
   description: string;
   dueDate?: string;
-  label: LabelValue;
+  labelIds: string[];
   sticker?: string;
   isArchived: boolean;
   archivedAt?: number;
@@ -91,6 +92,8 @@ export type Board = {
   id: string;
   title: string;
   appearance: BoardAppearance;
+  labelIds: string[];
+  labels: Record<string, BoardLabel>;
   listIds: string[];
   lists: Record<string, BoardList>;
   cards: Record<string, BoardCard>;
@@ -105,5 +108,5 @@ export type BoardWorkspace = {
 
 export type CardDraft = Pick<
   BoardCard,
-  "title" | "description" | "dueDate" | "label" | "sticker"
+  "title" | "description" | "dueDate" | "labelIds" | "sticker"
 >;

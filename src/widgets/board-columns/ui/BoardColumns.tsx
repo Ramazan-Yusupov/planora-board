@@ -180,6 +180,7 @@ export function BoardColumns({
                   key={list.id}
                   cardSurface={appearance.cardSurface}
                   cards={cards}
+                  labels={board.labels}
                   isDragDisabled={!isDragEnabled}
                   list={visibleList}
                   totalCardCount={list.cardIds.length}
@@ -251,7 +252,11 @@ export function BoardColumns({
       {isDragEnabled ? (
         <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
           {activeCard ? (
-            <CardPreview card={activeCard} cardSurface={appearance.cardSurface} />
+            <CardPreview
+              card={activeCard}
+              cardSurface={appearance.cardSurface}
+              labels={board.labels}
+            />
           ) : null}
           {activeList && activeItem?.type === "list" ? (
             <ListPreview list={activeList} />
