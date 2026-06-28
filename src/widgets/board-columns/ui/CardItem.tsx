@@ -2,12 +2,15 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, GripVertical } from "lucide-react";
+import { CalendarDays, GripVertical, ListChecks } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import {
+  getCardChecklistProgress,
   getCardLabels,
   type BoardCard,
+  type BoardChecklist,
+  type BoardChecklistItem,
   type BoardLabel,
   type CardSurface,
 } from "@/entities/board";
@@ -15,6 +18,8 @@ import {
 type CardItemProps = Readonly<{
   card: BoardCard;
   cardSurface: CardSurface;
+  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
+  checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
   isDragDisabled?: boolean;
   onOpen: (cardId: string) => void;
@@ -49,6 +54,38 @@ function CardLabels({ card, labels }: CardLabelsProps) {
         <span className="text-[10px] font-medium text-current/70">+{hiddenLabelsCount}</span>
       ) : null}
     </div>
+  );
+}
+
+
+type CardChecklistProgressProps = Readonly<{
+  card: BoardCard;
+  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
+  checklists: Readonly<Record<string, BoardChecklist>>;
+  mutedTextColor: string;
+}>;
+
+function CardChecklistProgress({
+  card,
+  checklistItems,
+  checklists,
+  mutedTextColor,
+}: CardChecklistProgressProps) {
+  const progress = getCardChecklistProgress(card, checklists, checklistItems);
+
+  if (progress.total === 0) {
+    return null;
+  }
+
+  return (
+    <span
+      className="mt-3 inline-flex items-center gap-1 rounded-md bg-black/10 px-2 py-1 text-[11px] font-medium"
+      style={{ color: mutedTextColor }}
+      title={`Чек-лист: ${progress.completed} из ${progress.total}`}
+    >
+      <ListChecks aria-hidden="true" size={13} />
+      {progress.completed}/{progress.total}
+    </span>
   );
 }
 
@@ -90,6 +127,8 @@ function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
 export function CardItem({
   card,
   cardSurface,
+  checklistItems,
+  checklists,
   labels,
   isDragDisabled = false,
   onOpen,
@@ -153,21 +192,29 @@ export function CardItem({
               {card.description}
             </p>
           ) : null}
-          {card.dueDate ? (
-            <span
-              className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium"
-              style={{
-                backgroundColor: cardSurface.chipBackgroundColor,
-                color: cardSurface.textColor,
-              }}
-            >
-              <CalendarDays aria-hidden="true" size={13} />
-              {new Intl.DateTimeFormat("ru-RU", {
-                day: "2-digit",
-                month: "short",
-              }).format(new Date(`${card.dueDate}T12:00:00`))}
-            </span>
-          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {card.dueDate ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium"
+                style={{
+                  backgroundColor: cardSurface.chipBackgroundColor,
+                  color: cardSurface.textColor,
+                }}
+              >
+                <CalendarDays aria-hidden="true" size={13} />
+                {new Intl.DateTimeFormat("ru-RU", {
+                  day: "2-digit",
+                  month: "short",
+                }).format(new Date(`${card.dueDate}T12:00:00`))}
+              </span>
+            ) : null}
+            <CardChecklistProgress
+              card={card}
+              checklistItems={checklistItems}
+              checklists={checklists}
+              mutedTextColor={cardSurface.mutedTextColor}
+            />
+          </div>
         </button>
       </div>
     </article>
@@ -177,10 +224,14 @@ export function CardItem({
 export function CardPreview({
   card,
   cardSurface,
+  checklistItems,
+  checklists,
   labels,
 }: Readonly<{
   card: BoardCard;
   cardSurface: CardSurface;
+  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
+  checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
 }>) {
   return (
@@ -194,6 +245,12 @@ export function CardPreview({
     >
       <CardLabels card={card} labels={labels} />
       <CardTitle card={card} />
+      <CardChecklistProgress
+        card={card}
+        checklistItems={checklistItems}
+        checklists={checklists}
+        mutedTextColor={cardSurface.mutedTextColor}
+      />
     </article>
   );
 }

@@ -1,11 +1,14 @@
 "use client";
 
-import { ArchiveRestore, CalendarDays, Trash2 } from "lucide-react";
+import { ArchiveRestore, CalendarDays, ListChecks, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
+  getCardChecklistProgress,
   getCardLabels,
   type BoardCard,
+  type BoardChecklist,
+  type BoardChecklistItem,
   type BoardLabel,
   type BoardList,
 } from "@/entities/board";
@@ -13,6 +16,8 @@ import { Button, ConfirmDialog, IconButton, Modal } from "@/shared/ui";
 
 type CardArchiveModalProps = Readonly<{
   cards: readonly BoardCard[];
+  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
+  checklists: Readonly<Record<string, BoardChecklist>>;
   lists: Readonly<Record<string, BoardList>>;
   labels: Readonly<Record<string, BoardLabel>>;
   onClose: () => void;
@@ -41,6 +46,8 @@ function formatDueDate(value: string): string {
 
 export function CardArchiveModal({
   cards,
+  checklistItems,
+  checklists,
   lists,
   labels,
   onClose,
@@ -79,6 +86,11 @@ export function CardArchiveModal({
               {archivedCards.map((card) => {
                 const listTitle = lists[card.listId]?.title ?? "Удалённый список";
                 const cardLabels = getCardLabels(card, labels).slice(0, 4);
+                const checklistProgress = getCardChecklistProgress(
+                  card,
+                  checklists,
+                  checklistItems,
+                );
 
                 return (
                   <li
@@ -115,12 +127,20 @@ export function CardArchiveModal({
                             ))}
                           </div>
                         ) : null}
-                        {card.dueDate ? (
-                          <span className="mt-2 inline-flex items-center gap-1 rounded-md bg-panel/70 px-2 py-1 text-[11px] font-medium text-text-muted">
-                            <CalendarDays aria-hidden="true" size={13} />
-                            Срок: {formatDueDate(card.dueDate)}
-                          </span>
-                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {card.dueDate ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-panel/70 px-2 py-1 text-[11px] font-medium text-text-muted">
+                              <CalendarDays aria-hidden="true" size={13} />
+                              Срок: {formatDueDate(card.dueDate)}
+                            </span>
+                          ) : null}
+                          {checklistProgress.total > 0 ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-panel/70 px-2 py-1 text-[11px] font-medium text-text-muted">
+                              <ListChecks aria-hidden="true" size={13} />
+                              {checklistProgress.completed}/{checklistProgress.total}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1">

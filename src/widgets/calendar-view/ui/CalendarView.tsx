@@ -1,10 +1,18 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, CircleDot, Search, Tag } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
+  ListChecks,
+  Search,
+  Tag,
+} from "lucide-react";
 import { useMemo } from "react";
 
 import {
   BoardLabelSelector,
+  getCardChecklistProgress,
   getCardLabels,
   getOrderedBoardLabels,
   type Board,
@@ -216,6 +224,11 @@ export function CalendarView({
                   <div className="space-y-1">
                     {visibleItems.map((item) => {
                       const labels = getCardLabels(item.card, item.labels).slice(0, 2);
+                      const checklistProgress = getCardChecklistProgress(
+                        item.card,
+                        item.checklists,
+                        item.checklistItems,
+                      );
 
                       return (
                         <button
@@ -240,6 +253,15 @@ export function CalendarView({
                             />
                           )}
                           <span className="min-w-0 flex-1 truncate">{item.card.title}</span>
+                          {checklistProgress.total > 0 ? (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-0.5 text-[10px] text-text-muted"
+                              title={`Чек-лист: ${checklistProgress.completed} из ${checklistProgress.total}`}
+                            >
+                              <ListChecks aria-hidden="true" size={12} />
+                              {checklistProgress.completed}/{checklistProgress.total}
+                            </span>
+                          ) : null}
                           {labels.length > 0 ? (
                             <span className="flex shrink-0 gap-0.5" aria-label="Метки карточки">
                               {labels.map((label) => (

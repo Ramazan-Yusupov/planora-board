@@ -1,4 +1,4 @@
-import type { Board } from "@/entities/board";
+import type { Board, BoardChecklist, BoardChecklistItem } from "@/entities/board";
 import { createId } from "@/shared/lib";
 
 function now(): number {
@@ -26,6 +26,68 @@ function createDuplicateTitle(board: Board, sourceTitle: string): string {
   return nextTitle;
 }
 
+function duplicateCardChecklists(
+  board: Board,
+  sourceCardId: string,
+  duplicateCardId: string,
+  timestamp: number,
+): Readonly<{
+  checklistIds: string[];
+  checklists: Record<string, BoardChecklist>;
+  checklistItems: Record<string, BoardChecklistItem>;
+}> {
+  const sourceCard = board.cards[sourceCardId];
+
+  if (!sourceCard) {
+    return { checklistIds: [], checklists: {}, checklistItems: {} };
+  }
+
+  const checklists: Record<string, BoardChecklist> = {};
+  const checklistItems: Record<string, BoardChecklistItem> = {};
+  const checklistIds: string[] = [];
+
+  for (const sourceChecklistId of sourceCard.checklistIds) {
+    const sourceChecklist = board.checklists[sourceChecklistId];
+
+    if (!sourceChecklist) {
+      continue;
+    }
+
+    const checklistId = createId("checklist");
+    const itemIds: string[] = [];
+
+    for (const sourceItemId of sourceChecklist.itemIds) {
+      const sourceItem = board.checklistItems[sourceItemId];
+
+      if (!sourceItem) {
+        continue;
+      }
+
+      const itemId = createId("checklist-item");
+      itemIds.push(itemId);
+      checklistItems[itemId] = {
+        ...sourceItem,
+        id: itemId,
+        checklistId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    }
+
+    checklistIds.push(checklistId);
+    checklists[checklistId] = {
+      ...sourceChecklist,
+      id: checklistId,
+      cardId: duplicateCardId,
+      itemIds,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  }
+
+  return { checklistIds, checklists, checklistItems };
+}
+
 export function duplicateCard(board: Board, cardId: string): Board {
   const sourceCard = board.cards[cardId];
   const sourceList = sourceCard ? board.lists[sourceCard.listId] : undefined;
@@ -43,22 +105,38 @@ export function duplicateCard(board: Board, cardId: string): Board {
   const timestamp = now();
   const duplicateId = createId("card");
   const duplicateTitle = createDuplicateTitle(board, sourceCard.title);
-  const duplicateCard = {
+  const copiedChecklists = duplicateCardChecklists(
+    board,
+    sourceCard.id,
+    duplicateId,
+    timestamp,
+  );
+  const duplicate = {
     ...sourceCard,
     id: duplicateId,
     title: duplicateTitle,
+    checklistIds: copiedChecklists.checklistIds,
     isArchived: false,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
 
-  delete duplicateCard.archivedAt;
+  delete duplicate.archivedAt;
 
   const cardIds = [...sourceList.cardIds];
   cardIds.splice(sourceIndex + 1, 0, duplicateId);
 
   return {
     ...board,
+    checklistIds: [...board.checklistIds, ...copiedChecklists.checklistIds],
+    checklists: {
+      ...board.checklists,
+      ...copiedChecklists.checklists,
+    },
+    checklistItems: {
+      ...board.checklistItems,
+      ...copiedChecklists.checklistItems,
+    },
     lists: {
       ...board.lists,
       [sourceList.id]: {
@@ -69,7 +147,7 @@ export function duplicateCard(board: Board, cardId: string): Board {
     },
     cards: {
       ...board.cards,
-      [duplicateId]: duplicateCard,
+      [duplicateId]: duplicate,
     },
     updatedAt: timestamp,
   };

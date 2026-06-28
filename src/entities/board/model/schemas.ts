@@ -36,6 +36,24 @@ const boardLabelSchema = z.object({
   updatedAt: z.number(),
 });
 
+const boardChecklistItemSchema = z.object({
+  id: z.string().min(1),
+  checklistId: z.string().min(1),
+  title: z.string().trim().min(1).max(320),
+  isCompleted: z.boolean(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const boardChecklistSchema = z.object({
+  id: z.string().min(1),
+  cardId: z.string().min(1),
+  title: z.string().trim().min(1).max(120),
+  itemIds: z.array(z.string().min(1)).default([]),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
 const boardCardSchema = z.object({
   id: z.string().min(1),
   listId: z.string().min(1),
@@ -43,6 +61,9 @@ const boardCardSchema = z.object({
   description: z.string(),
   dueDate: z.string().optional(),
   labelIds: z.array(z.string().min(1)).default([]),
+  // Чек-листы добавлены после первой версии доски. Для старых записей
+  // пустой массив создаётся при чтении и сохраняется при следующей записи.
+  checklistIds: z.array(z.string().min(1)).default([]),
   // Стикер добавлен после первой версии доски, поэтому старые записи
   // продолжают быть валидными без принудительной миграции.
   sticker: z.string().trim().min(1).max(32).optional(),
@@ -69,6 +90,11 @@ export const boardSchema = z
     appearance: boardAppearanceSchema,
     labelIds: z.array(z.string().min(1)),
     labels: z.record(z.string(), boardLabelSchema),
+    checklistIds: z.array(z.string().min(1)).default([]),
+    checklists: z.record(z.string(), boardChecklistSchema).default({}),
+    checklistItems: z
+      .record(z.string(), boardChecklistItemSchema)
+      .default({}),
     listIds: z.array(z.string().min(1)),
     lists: z.record(z.string(), boardListSchema),
     cards: z.record(z.string(), boardCardSchema),
@@ -77,8 +103,11 @@ export const boardSchema = z
   })
   .superRefine((board, context) => {
     const boardLabelIds = new Set<string>();
+    const boardChecklistIds = new Set<string>();
     const boardListIds = new Set<string>();
     const cardOwners = new Map<string, string>();
+    const checklistOwners = new Map<string, string>();
+    const checklistItemOwners = new Map<string, string>();
 
     board.labelIds.forEach((labelId, index) => {
       if (boardLabelIds.has(labelId)) {
@@ -226,6 +255,39 @@ export const boardSchema = z
         }
       });
 
+      const seenCardChecklistIds = new Set<string>();
+      card.checklistIds.forEach((checklistId, index) => {
+        if (seenCardChecklistIds.has(checklistId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "checklistIds", index],
+            message: "Чек-лист не должен повторяться на карточке.",
+          });
+        }
+
+        seenCardChecklistIds.add(checklistId);
+        checklistOwners.set(checklistId, cardKey);
+
+        const checklist = board.checklists[checklistId];
+
+        if (!checklist) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "checklistIds", index],
+            message: "Карточка ссылается на несуществующий чек-лист.",
+          });
+          return;
+        }
+
+        if (checklist.cardId !== cardKey) {
+          context.addIssue({
+            code: "custom",
+            path: ["checklists", checklistId, "cardId"],
+            message: "Родительская карточка чек-листа не совпадает.",
+          });
+        }
+      });
+
       if (!board.lists[card.listId]) {
         context.addIssue({
           code: "custom",
@@ -263,6 +325,119 @@ export const boardSchema = z
           code: "custom",
           path: ["cards", cardKey, "archivedAt"],
           message: "У активной карточки не должно быть времени архивации.",
+        });
+      }
+    }
+
+    board.checklistIds.forEach((checklistId, index) => {
+      if (boardChecklistIds.has(checklistId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklistIds", index],
+          message: "Чек-лист не должен повторяться в порядке проекта.",
+        });
+      }
+
+      boardChecklistIds.add(checklistId);
+
+      if (!board.checklists[checklistId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklistIds", index],
+          message: "Ссылка на чек-лист не найдена.",
+        });
+      }
+    });
+
+    for (const [checklistKey, checklist] of Object.entries(board.checklists)) {
+      if (checklist.id !== checklistKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklists", checklistKey, "id"],
+          message: "Ключ чек-листа должен совпадать с его id.",
+        });
+      }
+
+      if (!boardChecklistIds.has(checklistKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklists", checklistKey],
+          message: "Чек-лист отсутствует в порядке проекта.",
+        });
+      }
+
+      if (!board.cards[checklist.cardId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklists", checklistKey, "cardId"],
+          message: "Родительская карточка чек-листа не найдена.",
+        });
+      }
+
+      if (checklistOwners.get(checklistKey) !== checklist.cardId) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklists", checklistKey],
+          message: "Чек-лист отсутствует в порядке своей карточки.",
+        });
+      }
+
+      const seenChecklistItemIds = new Set<string>();
+      checklist.itemIds.forEach((itemId, index) => {
+        if (seenChecklistItemIds.has(itemId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["checklists", checklistKey, "itemIds", index],
+            message: "Пункт не должен повторяться в порядке чек-листа.",
+          });
+        }
+
+        seenChecklistItemIds.add(itemId);
+        checklistItemOwners.set(itemId, checklistKey);
+
+        const item = board.checklistItems[itemId];
+
+        if (!item) {
+          context.addIssue({
+            code: "custom",
+            path: ["checklists", checklistKey, "itemIds", index],
+            message: "Ссылка на пункт чек-листа не найдена.",
+          });
+          return;
+        }
+
+        if (item.checklistId !== checklistKey) {
+          context.addIssue({
+            code: "custom",
+            path: ["checklistItems", itemId, "checklistId"],
+            message: "Родительский чек-лист пункта не совпадает.",
+          });
+        }
+      });
+    }
+
+    for (const [itemKey, item] of Object.entries(board.checklistItems)) {
+      if (item.id !== itemKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklistItems", itemKey, "id"],
+          message: "Ключ пункта чек-листа должен совпадать с его id.",
+        });
+      }
+
+      if (!board.checklists[item.checklistId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklistItems", itemKey, "checklistId"],
+          message: "Родительский чек-лист пункта не найден.",
+        });
+      }
+
+      if (checklistItemOwners.get(itemKey) !== item.checklistId) {
+        context.addIssue({
+          code: "custom",
+          path: ["checklistItems", itemKey],
+          message: "Пункт отсутствует в порядке своего чек-листа.",
         });
       }
     }

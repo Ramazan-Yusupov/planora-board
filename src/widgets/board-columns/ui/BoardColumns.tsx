@@ -180,6 +180,8 @@ export function BoardColumns({
                   key={list.id}
                   cardSurface={appearance.cardSurface}
                   cards={cards}
+                  checklistItems={board.checklistItems}
+                  checklists={board.checklists}
                   labels={board.labels}
                   isDragDisabled={!isDragEnabled}
                   list={visibleList}
@@ -255,6 +257,8 @@ export function BoardColumns({
             <CardPreview
               card={activeCard}
               cardSurface={appearance.cardSurface}
+              checklistItems={board.checklistItems}
+              checklists={board.checklists}
               labels={board.labels}
             />
           ) : null}

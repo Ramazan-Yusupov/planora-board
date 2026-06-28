@@ -66,6 +66,24 @@ export type BoardLabel = {
 
 export type BoardLabelDraft = Pick<BoardLabel, "name" | "color">;
 
+export type BoardChecklist = {
+  id: string;
+  cardId: string;
+  title: string;
+  itemIds: string[];
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type BoardChecklistItem = {
+  id: string;
+  checklistId: string;
+  title: string;
+  isCompleted: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type BoardCard = {
   id: string;
   listId: string;
@@ -73,6 +91,7 @@ export type BoardCard = {
   description: string;
   dueDate?: string;
   labelIds: string[];
+  checklistIds: string[];
   sticker?: string;
   isArchived: boolean;
   archivedAt?: number;
@@ -94,6 +113,9 @@ export type Board = {
   appearance: BoardAppearance;
   labelIds: string[];
   labels: Record<string, BoardLabel>;
+  checklistIds: string[];
+  checklists: Record<string, BoardChecklist>;
+  checklistItems: Record<string, BoardChecklistItem>;
   listIds: string[];
   lists: Record<string, BoardList>;
   cards: Record<string, BoardCard>;

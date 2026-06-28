@@ -29,6 +29,9 @@ export function createStarterBoard(options: StarterBoardOptions = {}): Board {
     title,
     appearance: resolveAppearance(options.appearance),
     ...labels,
+    checklistIds: [],
+    checklists: {},
+    checklistItems: {},
     listIds: ["list-ideas", "list-progress", "list-done"],
     lists: {
       "list-ideas": {
@@ -60,6 +63,7 @@ export function createStarterBoard(options: StarterBoardOptions = {}): Board {
         title: "Откройте карточку и отредактируйте её",
         description: "В карточке доступны название, описание, срок и несколько цветных меток.",
         labelIds: ["label-idea"],
+        checklistIds: [],
         sticker: "👋",
         isArchived: false,
         createdAt,
@@ -71,6 +75,7 @@ export function createStarterBoard(options: StarterBoardOptions = {}): Board {
         title: "Добавьте новую задачу",
         description: "Нажмите кнопку «Добавить карточку» внизу списка.",
         labelIds: [],
+        checklistIds: [],
         sticker: "➕",
         isArchived: false,
         createdAt,
@@ -82,6 +87,7 @@ export function createStarterBoard(options: StarterBoardOptions = {}): Board {
         title: "Перетащите карточку между колонками",
         description: "Можно менять порядок карточек внутри одной колонки или переносить их в другую.",
         labelIds: ["label-progress"],
+        checklistIds: [],
         sticker: "↔️",
         isArchived: false,
         createdAt,
@@ -103,6 +109,9 @@ export function createEmptyBoard(title: string): Board {
     title: title.trim() || "Новый проект",
     appearance: { ...DEFAULT_BOARD_APPEARANCE },
     ...labels,
+    checklistIds: [],
+    checklists: {},
+    checklistItems: {},
     listIds: [listId],
     lists: {
       [listId]: {

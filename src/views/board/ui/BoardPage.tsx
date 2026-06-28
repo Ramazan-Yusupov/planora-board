@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  getCardChecklists,
   getOrderedBoardLabels,
   resolveBoardAppearance,
   type BoardLabel,
@@ -32,6 +33,16 @@ import {
   updateBoardAppearance,
   updateCard,
 } from "@/features/board-management";
+import {
+  createChecklist,
+  createChecklistItem,
+  deleteChecklist,
+  deleteChecklistItem,
+  moveChecklistItem,
+  renameChecklist,
+  renameChecklistItem,
+  toggleChecklistItem,
+} from "@/features/manage-checklist";
 import {
   createBoardLabel,
   deleteBoardLabel,
@@ -523,6 +534,8 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       {isArchiveOpen ? (
         <CardArchiveModal
           cards={Object.values(activeBoard.cards)}
+          checklistItems={activeBoard.checklistItems}
+          checklists={activeBoard.checklists}
           labels={activeBoard.labels}
           lists={activeBoard.lists}
           onClose={() => setIsArchiveOpen(false)}
@@ -539,6 +552,8 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         <CardModal
           key={selectedCard.id}
           card={selectedCard}
+          checklists={getCardChecklists(selectedCard, activeBoard.checklists)}
+          checklistItems={activeBoard.checklistItems}
           labels={boardLabels}
           lists={activeBoard.listIds.flatMap((listId) => {
             const list = activeBoard.lists[listId];
@@ -552,6 +567,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           onClose={() => {
             setIsInitialCardDismissed(true);
             setSelectedCardId(null);
+          }}
+          onCreateChecklist={(cardId, title) => {
+            updateActiveBoard(
+              (board) => createChecklist(board, cardId, title),
+              "immediate",
+            );
+          }}
+          onCreateChecklistItem={(checklistId, title) => {
+            updateActiveBoard(
+              (board) => createChecklistItem(board, checklistId, title),
+              "immediate",
+            );
           }}
           onCreateLabel={(draft: BoardLabelDraft): BoardLabel | null => {
             let createdLabel: BoardLabel | null = null;
@@ -569,6 +596,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           }}
           onDelete={(cardId) => {
             updateActiveBoard((board) => deleteCard(board, cardId), "immediate");
+          }}
+          onDeleteChecklist={(checklistId) => {
+            updateActiveBoard(
+              (board) => deleteChecklist(board, checklistId),
+              "immediate",
+            );
+          }}
+          onDeleteChecklistItem={(itemId) => {
+            updateActiveBoard(
+              (board) => deleteChecklistItem(board, itemId),
+              "immediate",
+            );
           }}
           onDeleteLabel={(labelId) => {
             setCardFilters((current) => ({
@@ -602,8 +641,32 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               "immediate",
             );
           }}
+          onMoveChecklistItem={(itemId, destinationIndex) => {
+            updateActiveBoard(
+              (board) => moveChecklistItem(board, itemId, destinationIndex),
+              "immediate",
+            );
+          }}
+          onRenameChecklist={(checklistId, title) => {
+            updateActiveBoard(
+              (board) => renameChecklist(board, checklistId, title),
+              "immediate",
+            );
+          }}
+          onRenameChecklistItem={(itemId, title) => {
+            updateActiveBoard(
+              (board) => renameChecklistItem(board, itemId, title),
+              "immediate",
+            );
+          }}
           onSave={(cardId, draft: CardDraft) => {
             updateActiveBoard((board) => updateCard(board, cardId, draft));
+          }}
+          onToggleChecklistItem={(itemId) => {
+            updateActiveBoard(
+              (board) => toggleChecklistItem(board, itemId),
+              "immediate",
+            );
           }}
           onUpdateLabel={(labelId, draft) => {
             updateActiveBoard(

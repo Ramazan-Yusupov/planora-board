@@ -22,18 +22,18 @@ type ModalProps = Readonly<{
 }>;
 
 const focusableSelector = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(focusableSelector)).filter(
-    (element) => element.getAttribute("aria-hidden") !== "true",
-  );
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(focusableSelector),
+  ).filter((element) => element.getAttribute("aria-hidden") !== "true");
 }
 
 export function Modal({
@@ -49,7 +49,9 @@ export function Modal({
 
   useEffect(() => {
     previouslyFocusedElementRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
 
     const frameId = window.requestAnimationFrame(() => {
       const dialog = dialogRef.current;
@@ -129,11 +131,14 @@ export function Modal({
     >
       <section
         ref={dialogRef}
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-white/10 bg-panel shadow-2xl sm:max-w-2xl sm:rounded-2xl"
+        className="max-h-[92dvh] scrollbar-none w-full overflow-y-auto rounded-t-3xl border border-white/10 bg-panel shadow-2xl sm:max-w-2xl sm:rounded-2xl"
         tabIndex={-1}
       >
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-white/10 bg-panel/95 px-5 py-4 backdrop-blur sm:px-6">
-          <h2 id={titleId} className="min-w-0 truncate text-base font-semibold text-text">
+          <h2
+            id={titleId}
+            className="min-w-0 truncate text-base font-semibold text-text"
+          >
             {title}
           </h2>
           <IconButton

@@ -12,6 +12,8 @@ import { Fragment, type FormEvent, useState } from "react";
 
 import type {
   BoardCard,
+  BoardChecklist,
+  BoardChecklistItem,
   BoardLabel,
   BoardList,
   CardSurface,
@@ -25,6 +27,8 @@ type ListColumnProps = Readonly<{
   list: BoardList;
   cards: BoardCard[];
   cardSurface: CardSurface;
+  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
+  checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
   isDragDisabled: boolean;
   totalCardCount: number;
@@ -38,6 +42,8 @@ export function ListColumn({
   list,
   cards,
   cardSurface,
+  checklistItems,
+  checklists,
   labels,
   isDragDisabled,
   totalCardCount,
@@ -49,17 +55,24 @@ export function ListColumn({
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
   const [listTitle, setListTitle] = useState(list.title);
+  const [isEditingListTitle, setIsEditingListTitle] = useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
     useState(false);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({
-      disabled: isDragDisabled,
-      id: list.id,
-      data: {
-        type: "list",
-        listId: list.id,
-      },
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    disabled: isDragDisabled,
+    id: list.id,
+    data: {
+      type: "list",
+      listId: list.id,
+    },
+  });
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     disabled: isDragDisabled,
     id: `list-drop-${list.id}`,
@@ -92,10 +105,11 @@ export function ListColumn({
 
     if (normalizedTitle) {
       onRenameList(list.id, normalizedTitle);
-      return;
+    } else {
+      setListTitle(list.title);
     }
 
-    setListTitle(list.title);
+    setIsEditingListTitle(false);
   };
 
   const deleteDescription = totalCardCount
@@ -127,23 +141,35 @@ export function ListColumn({
             <GripVertical aria-hidden="true" size={18} />
           </IconButton>
 
-          <input
-            aria-label="Название списка"
-            className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-400 focus:bg-white/10"
-            value={listTitle}
-            onBlur={saveListTitle}
-            onChange={(event) => setListTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.currentTarget.blur();
-              }
+          {isEditingListTitle ? (
+            <input
+              aria-label="Название списка"
+              autoFocus
+              className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-400"
+              value={listTitle}
+              onBlur={saveListTitle}
+              onChange={(event) => setListTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.currentTarget.blur();
+                }
 
-              if (event.key === "Escape") {
-                setListTitle(list.title);
-                event.currentTarget.blur();
-              }
-            }}
-          />
+                if (event.key === "Escape") {
+                  setListTitle(list.title);
+                  setIsEditingListTitle(false);
+                }
+              }}
+            />
+          ) : (
+            <button
+              className="min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-white transition hover:bg-white/10 focus:bg-white/10"
+              title={list.title}
+              type="button"
+              onClick={() => setIsEditingListTitle(true)}
+            >
+              {list.title}
+            </button>
+          )}
 
           <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/10 text-xs font-semibold text-slate-200">
             {cards.length}
@@ -165,7 +191,7 @@ export function ListColumn({
           <div
             ref={setDropRef}
             className={cn(
-              "min-h-20 space-y-2 overflow-y-auto rounded-xl p-1 transition",
+              "min-h-20 scrollbar-none space-y-2 overflow-y-auto rounded-xl p-1 transition",
               isOver ? "bg-white/10 ring-1 ring-white/30" : "",
             )}
           >
@@ -174,6 +200,8 @@ export function ListColumn({
                 key={card.id}
                 card={card}
                 cardSurface={cardSurface}
+                checklistItems={checklistItems}
+                checklists={checklists}
                 labels={labels}
                 isDragDisabled={isDragDisabled}
                 onOpen={onOpenCard}
@@ -262,7 +290,12 @@ export function ListPreview({ list }: Readonly<{ list: BoardList }>) {
     <section className="w-80 rotate-1 rounded-2xl border border-white/10 bg-slate-950/80 p-3 shadow-xl backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <GripVertical aria-hidden="true" className="text-slate-300" size={18} />
-        <p className="font-semibold text-white">{list.title}</p>
+        <p
+          className="min-w-0 flex-1 truncate font-semibold text-white"
+          title={list.title}
+        >
+          {list.title}
+        </p>
       </div>
     </section>
   );

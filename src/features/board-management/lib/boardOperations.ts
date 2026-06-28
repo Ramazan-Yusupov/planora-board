@@ -2,6 +2,7 @@ import {
   getRandomCardSticker,
   normalizeCardLabelIds,
   normalizeCardSticker,
+  removeCardChecklists,
   type Board,
   type BoardAppearance,
   type CardDraft,
@@ -99,8 +100,19 @@ export function deleteList(board: Board, listId: string): Board {
 
   const remainingLists = { ...board.lists };
   delete remainingLists[listId];
+
+  const cardIdsToDelete = new Set(
+    Object.entries(board.cards)
+      .filter(([, card]) => card.listId === listId)
+      .map(([cardId]) => cardId),
+  );
   const nextCards = Object.fromEntries(
-    Object.entries(board.cards).filter(([, card]) => card.listId !== listId),
+    Object.entries(board.cards).filter(([cardId]) => !cardIdsToDelete.has(cardId)),
+  );
+  const relatedChecklists = removeCardChecklists(
+    board.checklists,
+    board.checklistItems,
+    cardIdsToDelete,
   );
 
   return {
@@ -108,6 +120,10 @@ export function deleteList(board: Board, listId: string): Board {
     listIds: board.listIds.filter((id) => id !== listId),
     lists: remainingLists,
     cards: nextCards,
+    checklistIds: board.checklistIds.filter(
+      (checklistId) => Boolean(relatedChecklists.checklists[checklistId]),
+    ),
+    ...relatedChecklists,
     updatedAt: now(),
   };
 }
@@ -141,6 +157,7 @@ export function addCard(board: Board, listId: string, title: string): Board {
         title: normalizedTitle,
         description: "",
         labelIds: [],
+        checklistIds: [],
         sticker: getRandomCardSticker(),
         isArchived: false,
         createdAt: timestamp,
@@ -191,6 +208,11 @@ export function deleteCard(board: Board, cardId: string): Board {
   const remainingCards = { ...board.cards };
   delete remainingCards[cardId];
   const timestamp = now();
+  const relatedChecklists = removeCardChecklists(
+    board.checklists,
+    board.checklistItems,
+    new Set([cardId]),
+  );
 
   return {
     ...board,
@@ -203,6 +225,10 @@ export function deleteCard(board: Board, cardId: string): Board {
       },
     },
     cards: remainingCards,
+    checklistIds: board.checklistIds.filter(
+      (checklistId) => Boolean(relatedChecklists.checklists[checklistId]),
+    ),
+    ...relatedChecklists,
     updatedAt: timestamp,
   };
 }

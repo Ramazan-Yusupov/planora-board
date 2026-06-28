@@ -12,6 +12,13 @@ export {
 export type { CardSurface, ResolvedBoardAppearance } from "./lib/appearance";
 export { createEmptyBoard, createStarterBoard } from "./lib/createStarterBoard";
 export {
+  getCardChecklistProgress,
+  getCardChecklists,
+  getChecklistItems,
+  removeCardChecklists,
+} from "./lib/checklists";
+export type { CardChecklistProgress } from "./lib/checklists";
+export {
   BOARD_LABEL_COLOR_OPTIONS,
   createDefaultBoardLabelCollection,
   getCardLabels,
@@ -43,6 +50,8 @@ export type {
   BoardAppearance,
   BoardBackgroundValue,
   BoardCard,
+  BoardChecklist,
+  BoardChecklistItem,
   BoardLabel,
   BoardLabelDraft,
   BoardList,

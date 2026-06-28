@@ -1,4 +1,10 @@
-import type { Board, BoardCard, BoardLabel } from "@/entities/board";
+import type {
+  Board,
+  BoardCard,
+  BoardChecklist,
+  BoardChecklistItem,
+  BoardLabel,
+} from "@/entities/board";
 
 export type CalendarDay = Readonly<{
   date: Date;
@@ -11,6 +17,8 @@ export type CalendarItem = Readonly<{
   boardId: string;
   boardTitle: string;
   card: BoardCard;
+  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
+  checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
 }>;
 
@@ -96,6 +104,8 @@ export function getCalendarItems(
         boardId: board.id,
         boardTitle: board.title,
         card,
+        checklistItems: board.checklistItems,
+        checklists: board.checklists,
         labels: board.labels,
       });
       itemsByDate.set(card.dueDate, items);

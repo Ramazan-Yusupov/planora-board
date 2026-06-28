@@ -12,10 +12,13 @@ import { useId, useState } from "react";
 
 import {
   type BoardCard,
+  type BoardChecklist,
+  type BoardChecklistItem,
   type BoardLabel,
   type BoardLabelDraft,
   type CardDraft,
 } from "@/entities/board";
+import { CardChecklistsEditor } from "@/features/manage-checklist";
 import { CardLabelsEditor } from "@/features/manage-labels";
 import { CardStickerPicker } from "@/features/manage-card-sticker";
 import { Button, ConfirmDialog, Modal } from "@/shared/ui";
@@ -27,17 +30,27 @@ type CardListOption = Readonly<{
 
 type CardModalProps = Readonly<{
   card: BoardCard;
+  checklists: readonly BoardChecklist[];
+  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   labels: readonly BoardLabel[];
   lists: readonly CardListOption[];
   listTitle: string;
   onArchive: (cardId: string) => void;
   onClose: () => void;
+  onCreateChecklist: (cardId: string, title: string) => void;
+  onCreateChecklistItem: (checklistId: string, title: string) => void;
   onCreateLabel: (draft: BoardLabelDraft) => BoardLabel | null;
   onDelete: (cardId: string) => void;
+  onDeleteChecklist: (checklistId: string) => void;
+  onDeleteChecklistItem: (itemId: string) => void;
   onDeleteLabel: (labelId: string) => void;
   onDuplicate: (cardId: string) => void;
   onMove: (cardId: string, destinationListId: string) => void;
+  onMoveChecklistItem: (itemId: string, destinationIndex: number) => void;
+  onRenameChecklist: (checklistId: string, title: string) => void;
+  onRenameChecklistItem: (itemId: string, title: string) => void;
   onSave: (cardId: string, draft: CardDraft) => void;
+  onToggleChecklistItem: (itemId: string) => void;
   onUpdateLabel: (labelId: string, draft: BoardLabelDraft) => void;
 }>;
 
@@ -53,17 +66,27 @@ function createDraft(card: BoardCard): CardDraft {
 
 export function CardModal({
   card,
+  checklists,
+  checklistItems,
   labels,
   lists,
   listTitle,
   onArchive,
   onClose,
+  onCreateChecklist,
+  onCreateChecklistItem,
   onCreateLabel,
   onDelete,
+  onDeleteChecklist,
+  onDeleteChecklistItem,
   onDeleteLabel,
   onDuplicate,
   onMove,
+  onMoveChecklistItem,
+  onRenameChecklist,
+  onRenameChecklistItem,
   onSave,
+  onToggleChecklistItem,
   onUpdateLabel,
 }: CardModalProps) {
   const [draft, setDraft] = useState<CardDraft>(() => createDraft(card));
@@ -220,6 +243,19 @@ export function CardModal({
               }));
             }}
             onUpdateLabel={onUpdateLabel}
+          />
+
+          <CardChecklistsEditor
+            checklists={checklists}
+            checklistItems={checklistItems}
+            onCreateChecklist={(title) => onCreateChecklist(card.id, title)}
+            onCreateItem={onCreateChecklistItem}
+            onDeleteChecklist={onDeleteChecklist}
+            onDeleteItem={onDeleteChecklistItem}
+            onMoveItem={onMoveChecklistItem}
+            onRenameChecklist={onRenameChecklist}
+            onRenameItem={onRenameChecklistItem}
+            onToggleItem={onToggleChecklistItem}
           />
 
           <section className="rounded-2xl border border-white/10 bg-control/25 p-3 sm:p-4">
