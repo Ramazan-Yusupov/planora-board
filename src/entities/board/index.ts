@@ -12,6 +12,11 @@ export {
 export type { CardSurface, ResolvedBoardAppearance } from "./lib/appearance";
 export { createEmptyBoard, createStarterBoard } from "./lib/createStarterBoard";
 export {
+  CARD_STICKERS,
+  getRandomCardSticker,
+  normalizeCardSticker,
+} from "./lib/stickers";
+export {
   createInitialBoardWorkspace,
   deleteBoardFromWorkspace,
   getActiveBoard,

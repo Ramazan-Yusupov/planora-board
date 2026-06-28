@@ -16,6 +16,7 @@ import {
   type BoardCard,
   type CardDraft,
 } from "@/entities/board";
+import { CardStickerPicker } from "@/features/manage-card-sticker";
 import { Button, ConfirmDialog, Modal } from "@/shared/ui";
 
 type CardListOption = Readonly<{
@@ -41,6 +42,7 @@ function createDraft(card: BoardCard): CardDraft {
     description: card.description,
     dueDate: card.dueDate,
     label: card.label,
+    sticker: card.sticker,
   };
 }
 
@@ -106,6 +108,16 @@ export function CardModal({
     <>
       <Modal title="Редактирование карточки" onClose={onClose}>
         <div className="space-y-5">
+          <CardStickerPicker
+            sticker={draft.sticker}
+            onChange={(sticker) =>
+              setDraft((current) => ({
+                ...current,
+                sticker,
+              }))
+            }
+          />
+
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">
               Список: {listTitle}

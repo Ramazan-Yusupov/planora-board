@@ -198,11 +198,20 @@ export function CalendarView({
                         type="button"
                         onClick={() => onOpenCard(item)}
                       >
-                        <CircleDot
-                          aria-hidden="true"
-                          className="shrink-0 text-accent"
-                          size={12}
-                        />
+                        {item.card.sticker ? (
+                          <span
+                            aria-hidden="true"
+                            className="shrink-0 text-sm leading-none"
+                          >
+                            {item.card.sticker}
+                          </span>
+                        ) : (
+                          <CircleDot
+                            aria-hidden="true"
+                            className="shrink-0 text-accent"
+                            size={12}
+                          />
+                        )}
                         <span className="truncate">{item.card.title}</span>
                       </button>
                     ))}

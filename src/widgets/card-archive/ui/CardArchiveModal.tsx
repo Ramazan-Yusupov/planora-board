@@ -79,9 +79,19 @@ export function CardArchiveModal({
                   >
                     <div className="flex items-start gap-3">
                       <div className="min-w-0 flex-1">
-                        <h3 className="break-words text-sm font-semibold text-text">
-                          {card.title}
-                        </h3>
+                        <div className="flex min-w-0 items-start gap-2">
+                          {card.sticker ? (
+                            <span
+                              aria-hidden="true"
+                              className="mt-0.5 shrink-0 text-base leading-none"
+                            >
+                              {card.sticker}
+                            </span>
+                          ) : null}
+                          <h3 className="break-words text-sm font-semibold text-text">
+                            {card.title}
+                          </h3>
+                        </div>
                         <p className="mt-1 text-xs text-text-muted">
                           {listTitle} · архивирована {formatArchivedAt(card.archivedAt)}
                         </p>

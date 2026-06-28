@@ -5,7 +5,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, GripVertical } from "lucide-react";
 import type { CSSProperties } from "react";
 
-import { LABEL_OPTIONS, type BoardCard, type CardSurface } from "@/entities/board";
+import {
+  LABEL_OPTIONS,
+  type BoardCard,
+  type CardSurface,
+} from "@/entities/board";
 
 type CardItemProps = Readonly<{
   card: BoardCard;
@@ -32,13 +36,38 @@ function createSurfaceStyle(
   };
 }
 
+function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      {card.sticker ? (
+        <span
+          aria-hidden="true"
+          className="grid size-7 shrink-0 place-items-center rounded-lg bg-black/5 text-base leading-none"
+        >
+          {card.sticker}
+        </span>
+      ) : null}
+      <h3 className="wrap-break-word text-sm font-medium leading-5 text-current">
+        {card.title}
+      </h3>
+    </div>
+  );
+}
+
 export function CardItem({
   card,
   cardSurface,
   isDragDisabled = false,
   onOpen,
 }: CardItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     disabled: isDragDisabled,
     id: card.id,
     data: {
@@ -49,7 +78,11 @@ export function CardItem({
   });
 
   const label = getLabel(card);
-  const style = createSurfaceStyle(CSS.Transform.toString(transform), transition, cardSurface);
+  const style = createSurfaceStyle(
+    CSS.Transform.toString(transform),
+    transition,
+    cardSurface,
+  );
 
   return (
     <article
@@ -78,11 +111,16 @@ export function CardItem({
           onClick={() => onOpen(card.id)}
         >
           {label && label.value !== "none" ? (
-            <span className={`mb-2 block h-1.5 w-11 rounded-full ${label.color}`} />
+            <span
+              className={`mb-2 block h-1.5 w-11 rounded-full ${label.color}`}
+            />
           ) : null}
-          <h3 className="break-words text-sm font-medium leading-5 text-current">{card.title}</h3>
+          <CardTitle card={card} />
           {card.description ? (
-            <p className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: cardSurface.mutedTextColor }}>
+            <p
+              className="mt-1 line-clamp-2 text-xs leading-5"
+              style={{ color: cardSurface.mutedTextColor }}
+            >
               {card.description}
             </p>
           ) : null}
@@ -107,7 +145,10 @@ export function CardItem({
   );
 }
 
-export function CardPreview({ card, cardSurface }: Readonly<{ card: BoardCard; cardSurface: CardSurface }>) {
+export function CardPreview({
+  card,
+  cardSurface,
+}: Readonly<{ card: BoardCard; cardSurface: CardSurface }>) {
   const label = getLabel(card);
 
   return (
@@ -122,7 +163,7 @@ export function CardPreview({ card, cardSurface }: Readonly<{ card: BoardCard; c
       {label && label.value !== "none" ? (
         <span className={`mb-2 block h-1.5 w-11 rounded-full ${label.color}`} />
       ) : null}
-      <h3 className="text-sm font-medium leading-5 text-current">{card.title}</h3>
+      <CardTitle card={card} />
     </article>
   );
 }

@@ -72,6 +72,7 @@ export type BoardCard = {
   description: string;
   dueDate?: string;
   label: LabelValue;
+  sticker?: string;
   isArchived: boolean;
   archivedAt?: number;
   createdAt: number;
@@ -102,4 +103,7 @@ export type BoardWorkspace = {
   activeBoardId: string | null;
 };
 
-export type CardDraft = Pick<BoardCard, "title" | "description" | "dueDate" | "label">;
+export type CardDraft = Pick<
+  BoardCard,
+  "title" | "description" | "dueDate" | "label" | "sticker"
+>;

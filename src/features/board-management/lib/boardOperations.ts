@@ -1,4 +1,6 @@
 import {
+  getRandomCardSticker,
+  normalizeCardSticker,
   type Board,
   type BoardAppearance,
   type CardDraft,
@@ -138,6 +140,7 @@ export function addCard(board: Board, listId: string, title: string): Board {
         title: normalizedTitle,
         description: "",
         label: "none",
+        sticker: getRandomCardSticker(),
         isArchived: false,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -162,6 +165,7 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
     description: draft.description.trim(),
     dueDate: draft.dueDate || undefined,
     label: draft.label,
+    sticker: normalizeCardSticker(draft.sticker),
     updatedAt: timestamp,
   };
 

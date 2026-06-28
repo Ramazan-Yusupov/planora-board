@@ -36,6 +36,9 @@ const boardCardSchema = z.object({
   description: z.string(),
   dueDate: z.string().optional(),
   label: z.enum(labelValues),
+  // Стикер добавлен после первой версии доски, поэтому старые записи
+  // продолжают быть валидными без принудительной миграции.
+  sticker: z.string().trim().min(1).max(32).optional(),
   // Старые записи IndexedDB не содержат этого поля. Zod добавит false
   // во время чтения, а следующая запись сохранит уже актуальную форму.
   isArchived: z.boolean().default(false),
