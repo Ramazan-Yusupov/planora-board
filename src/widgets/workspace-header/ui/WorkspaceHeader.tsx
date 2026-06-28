@@ -377,7 +377,7 @@ export function WorkspaceHeader({
           {isActionsMenuOpen ? (
             <div
               aria-label="Инструменты проекта"
-              className="absolute right-0 top-[calc(100%+0.5rem)] z-[60] max-h-[calc(100dvh-5.5rem)] w-[min(92vw,22rem)] overflow-y-auto rounded-2xl border border-white/10 bg-panel/98 p-2 shadow-2xl backdrop-blur-xl scrollbar-none"
+              className="absolute right-0 top-[calc(100%+0.5rem)] z-60 max-h-[calc(100dvh-5.5rem)] w-[min(92vw,22rem)] overflow-y-auto rounded-2xl border border-white/10 bg-panel/98 p-2 shadow-2xl backdrop-blur-xl scrollbar-none"
               role="menu"
             >
               <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
