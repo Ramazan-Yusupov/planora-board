@@ -143,11 +143,11 @@ export function ListColumn({
         ref={setNodeRef}
         style={style}
         className={cn(
-          "flex h-fit max-h-[calc(100dvh-12.25rem)] w-[min(90vw,21rem)] shrink-0 flex-col rounded-2xl border border-white/10 bg-slate-950/45 p-2 shadow-xl backdrop-blur-sm sm:w-80",
+          "flex h-fit max-h-[calc(100dvh-12.25rem)] w-[min(90vw,21rem)] shrink-0 flex-col rounded-2xl border border-white/10 bg-slate-950/52 p-2.5 shadow-[0_16px_38px_rgb(0_0_0_/_24%),inset_0_1px_0_rgb(255_255_255_/_3%)] backdrop-blur-xl sm:w-80",
           isDragging ? "opacity-40" : "opacity-100",
         )}
       >
-        <header className="flex min-w-0 items-center gap-1 px-1 pb-2">
+        <header className="flex min-w-0 items-center gap-1 px-1 pb-2.5">
           <IconButton
             {...attributes}
             {...listeners}
@@ -190,7 +190,7 @@ export function ListColumn({
           )}
 
           <span
-            className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/10 text-xs font-semibold text-slate-200"
+            className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/8 bg-white/8 text-xs font-semibold text-slate-100 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]"
             title={
               list.wipLimit
                 ? `${totalCardCount} из ${list.wipLimit}`
@@ -226,8 +226,8 @@ export function ListColumn({
           <div
             ref={setDropRef}
             className={cn(
-              "scrollbar-none min-h-20 touch-pan-y overscroll-contain space-y-2 overflow-y-auto rounded-xl p-1 transition",
-              isOver ? "bg-white/10 ring-1 ring-white/30" : "",
+              "scrollbar-none min-h-20 touch-pan-y overscroll-contain space-y-2 overflow-y-auto rounded-xl p-1 transition-[background-color,box-shadow] duration-150",
+              isOver ? "bg-white/8 ring-1 ring-accent/45 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_10%)]" : "",
             )}
           >
             {cards.map((card) => (
@@ -254,7 +254,7 @@ export function ListColumn({
 
         {isAddingCard ? (
           <form
-            className="mt-2 rounded-xl border border-white/10 bg-slate-950/60 p-2"
+            className="mt-2 rounded-xl border border-white/10 bg-slate-950/70 p-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]"
             onSubmit={saveCard}
           >
             <label className="sr-only" htmlFor={`new-card-${list.id}`}>
@@ -295,7 +295,7 @@ export function ListColumn({
           </form>
         ) : (
           <button
-            className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-300 transition-[background-color,color,transform] hover:bg-white/10 hover:text-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45"
             disabled={Boolean(list.wipLimit && totalCardCount >= list.wipLimit)}
             title={
               list.wipLimit && totalCardCount >= list.wipLimit

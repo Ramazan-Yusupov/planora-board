@@ -143,7 +143,7 @@ export function WorkspaceHeader({
     ? `Фильтры: активно ${activeFiltersCount}`
     : "Фильтры";
 
-  const desktopIconClass = "text-text-muted hover:bg-control hover:text-text";
+  const desktopIconClass = "rounded-xl text-text-muted hover:bg-control/85 hover:text-text hover:shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]";
 
   useEffect(() => {
     if (!isActionsMenuOpen) {
@@ -197,7 +197,7 @@ export function WorkspaceHeader({
   };
 
   return (
-    <header className="z-50 border-b border-white/10 bg-panel/95 px-2 py-2 backdrop-blur-xl sm:px-5 sm:py-3">
+    <header className="z-50 border-b border-white/10 bg-panel/88 px-2 py-2 shadow-[0_1px_0_rgb(255_255_255_/_2%),0_16px_40px_rgb(0_0_0_/_15%)] backdrop-blur-2xl sm:px-5 sm:py-3">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 sm:gap-3">
         <div className="flex">
           <IconButton
@@ -213,7 +213,7 @@ export function WorkspaceHeader({
           <div className="hidden items-center gap-3 sm:flex">
             <button
               aria-label="Открыть доску"
-              className="grid size-10 place-items-center rounded-xl bg-accent text-accent-foreground shadow-sm shadow-accent/20 transition hover:bg-accent-hover"
+              className="grid size-10 place-items-center rounded-xl border border-accent/25 bg-accent text-accent-foreground shadow-[0_8px_22px_rgb(59_130_246_/_22%)] transition hover:bg-accent-hover"
               type="button"
               onClick={onOpenBoard}
             >

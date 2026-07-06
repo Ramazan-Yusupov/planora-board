@@ -46,12 +46,12 @@ function CardLabels({ card, labels }: CardLabelsProps) {
   }
 
   return (
-    <div className="mb-2 flex items-center gap-1" aria-label="Метки карточки">
+    <div className="mb-2 flex items-center gap-1.5" aria-label="Метки карточки">
       {visibleLabels.map((label) => (
         <span
           key={label.id}
           aria-label={label.name}
-          className="h-1.5 min-w-7 rounded-full"
+          className="h-1.5 min-w-7 rounded-full shadow-[0_1px_2px_rgb(0_0_0_/_20%)]"
           style={{ backgroundColor: label.color }}
           title={label.name}
         />
@@ -86,7 +86,7 @@ function CardChecklistProgress({
 
   return (
     <span
-      className="mt-3 inline-flex items-center gap-1 rounded-md bg-black/10 px-2 py-1 text-[11px] font-medium"
+      className="mt-3 inline-flex items-center gap-1 rounded-md border border-black/5 bg-black/10 px-2 py-1 text-[11px] font-medium"
       style={{ color: mutedTextColor }}
       title={`Чек-лист: ${progress.completed} из ${progress.total}`}
     >
@@ -138,7 +138,7 @@ function AttachmentCardCover({
 
   if (!source) {
     return (
-      <div aria-hidden="true" className="mb-3 h-20 rounded-lg bg-black/10" />
+      <div aria-hidden="true" className="mb-3 h-20 rounded-xl bg-black/10" />
     );
   }
 
@@ -147,7 +147,7 @@ function AttachmentCardCover({
   return (
     <img
       alt=""
-      className="mb-3 h-20 w-full rounded-lg object-cover"
+      className="mb-3 h-20 w-full rounded-xl object-cover ring-1 ring-black/10"
       src={source}
     />
   );
@@ -168,7 +168,7 @@ function CardCover({
     return (
       <div
         aria-hidden="true"
-        className="mb-3 h-10 rounded-lg"
+        className="mb-3 h-10 rounded-xl shadow-[inset_0_1px_0_rgb(255_255_255_/_18%)]"
         style={{ backgroundColor: card.cover.color }}
       />
     );
@@ -185,7 +185,7 @@ function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
       {card.sticker ? (
         <span
           aria-hidden="true"
-          className="grid size-7 shrink-0 place-items-center rounded-lg bg-black/5 text-lg leading-none"
+          className="grid size-7 shrink-0 place-items-center rounded-lg bg-black/5 text-lg leading-none shadow-[inset_0_1px_0_rgb(255_255_255_/_10%)]"
         >
           {card.sticker}
         </span>
@@ -238,7 +238,7 @@ export function CardItem({
     <article
       ref={setNodeRef}
       style={style}
-      className={`group touch-manipulation rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+      className={`group touch-manipulation rounded-xl border p-3 shadow-[0_2px_4px_rgb(0_0_0_/_7%)] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgb(0_0_0_/_14%)] ${
         isDragging ? "opacity-35" : "opacity-100"
       }`}
     >
@@ -256,7 +256,7 @@ export function CardItem({
         </button>
 
         <button
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25"
           type="button"
           onClick={() => onOpen(card.id)}
         >
@@ -274,7 +274,7 @@ export function CardItem({
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {card.dueDate ? (
               <span
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium"
+                className="inline-flex items-center gap-1 rounded-md border border-black/5 px-2 py-1 text-[11px] font-medium"
                 style={{
                   backgroundColor: cardSurface.chipBackgroundColor,
                   color: cardSurface.textColor,
@@ -317,7 +317,7 @@ export function CardPreview({
 }>) {
   return (
     <article
-      className="w-72 rotate-1 rounded-xl border p-3 shadow-xl"
+      className="w-72 rotate-1 rounded-xl border p-3 shadow-float"
       style={{
         backgroundColor: cardSurface.backgroundColor,
         borderColor: cardSurface.borderColor,

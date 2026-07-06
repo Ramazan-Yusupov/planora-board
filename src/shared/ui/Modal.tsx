@@ -118,7 +118,7 @@ export function Modal({
       aria-labelledby={titleId}
       aria-modal="true"
       className={cn(
-        "fixed inset-0 flex items-end bg-black/65 p-0 sm:items-center sm:justify-center sm:p-6",
+        "fixed inset-0 flex items-end bg-slate-950/70 p-0 backdrop-blur-md sm:items-center sm:justify-center sm:p-6",
         zIndexClassName,
       )}
       role={role}
@@ -131,10 +131,10 @@ export function Modal({
     >
       <section
         ref={dialogRef}
-        className="max-h-[92dvh] scrollbar-none w-full overflow-y-auto rounded-t-3xl border border-white/10 bg-panel shadow-2xl sm:max-w-2xl sm:rounded-2xl"
+        className="animate-planora-surface-in max-h-[92dvh] scrollbar-none w-full overflow-y-auto rounded-t-3xl border border-white/10 bg-panel shadow-float sm:max-w-2xl sm:rounded-2xl"
         tabIndex={-1}
       >
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-white/10 bg-panel/95 px-5 py-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-white/10 bg-panel/90 px-5 py-4 backdrop-blur-xl sm:px-6">
           <h2
             id={titleId}
             className="min-w-0 truncate text-base font-semibold text-text"

@@ -27,7 +27,7 @@ export function IconButton({
     <button
       aria-label={label}
       className={cn(
-        "grid shrink-0 place-items-center transition disabled:cursor-not-allowed disabled:opacity-50",
+        "grid shrink-0 place-items-center transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:cursor-not-allowed disabled:opacity-50",
         sizeClasses[size],
         className,
       )}
