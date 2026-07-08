@@ -15,14 +15,19 @@ import type {
   BoardCard,
   BoardChecklist,
   BoardChecklistItem,
+  BoardComment,
   BoardLabel,
   BoardLabelDraft,
   BoardList,
+  BoardMember,
+  BoardMemberDraft,
   CardDraft,
 } from "@/entities/board";
+import { CardMembersEditor } from "@/features/manage-card-members";
 import { CardStickerPicker } from "@/features/manage-card-sticker";
 import { CardAttachmentsEditor } from "@/features/manage-attachments";
 import { CardChecklistsEditor } from "@/features/manage-checklist";
+import { CardCommentsEditor } from "@/features/manage-comments";
 import { CardLabelsEditor } from "@/features/manage-labels";
 import { Button, ConfirmDialog, FieldLabel, Modal, Panel, Select, Textarea, TextField } from "@/shared/ui";
 
@@ -31,20 +36,26 @@ type CardModalProps = Readonly<{
   attachments: readonly BoardAttachment[];
   checklists: readonly BoardChecklist[];
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
+  comments: readonly BoardComment[];
   labels: readonly BoardLabel[];
   lists: readonly BoardList[];
   listTitle: string;
+  members: readonly BoardMember[];
   onAddAttachment: (attachment: BoardAttachment) => void;
+  onCreateComment: (cardId: string, message: string) => void;
   onArchive: (cardId: string) => void;
   onClose: () => void;
   onCreateChecklist: (cardId: string, title: string) => void;
   onCreateChecklistItem: (checklistId: string, title: string) => void;
   onCreateLabel: (draft: BoardLabelDraft) => BoardLabel | null;
+  onCreateMember: (draft: BoardMemberDraft) => BoardMember | null;
   onDelete: (cardId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onDeleteChecklist: (checklistId: string) => void;
   onDeleteChecklistItem: (itemId: string) => void;
+  onDeleteComment: (commentId: string) => void;
   onDeleteLabel: (labelId: string) => void;
+  onDeleteMember: (memberId: string) => void;
   onDuplicate: (cardId: string) => void;
   onMove: (cardId: string, destinationListId: string) => void;
   onMoveChecklistItem: (itemId: string, destinationIndex: number) => void;
@@ -52,7 +63,10 @@ type CardModalProps = Readonly<{
   onRenameChecklistItem: (itemId: string, title: string) => void;
   onSave: (cardId: string, draft: CardDraft) => void;
   onToggleChecklistItem: (itemId: string) => void;
+  onToggleMember: (cardId: string, memberId: string) => void;
+  onUpdateComment: (commentId: string, message: string) => void;
   onUpdateLabel: (labelId: string, draft: BoardLabelDraft) => void;
+  onUpdateMember: (memberId: string, draft: BoardMemberDraft) => void;
 }>;
 
 function createDraft(card: BoardCard): CardDraft {
@@ -71,20 +85,26 @@ export function CardModal({
   attachments,
   checklists,
   checklistItems,
+  comments,
   labels,
   lists,
   listTitle,
+  members,
   onAddAttachment,
+  onCreateComment,
   onArchive,
   onClose,
   onCreateChecklist,
   onCreateChecklistItem,
   onCreateLabel,
+  onCreateMember,
   onDelete,
   onDeleteAttachment,
   onDeleteChecklist,
   onDeleteChecklistItem,
+  onDeleteComment,
   onDeleteLabel,
+  onDeleteMember,
   onDuplicate,
   onMove,
   onMoveChecklistItem,
@@ -92,7 +112,10 @@ export function CardModal({
   onRenameChecklistItem,
   onSave,
   onToggleChecklistItem,
+  onToggleMember,
+  onUpdateComment,
   onUpdateLabel,
+  onUpdateMember,
 }: CardModalProps) {
   const [draft, setDraft] = useState<CardDraft>(() => createDraft(card));
   const [destinationListId, setDestinationListId] = useState(card.listId);
@@ -209,6 +232,15 @@ export function CardModal({
             onUpdateLabel={onUpdateLabel}
           />
 
+          <CardMembersEditor
+            members={members}
+            selectedMemberIds={card.memberIds}
+            onCreateMember={onCreateMember}
+            onDeleteMember={onDeleteMember}
+            onToggleMember={(memberId) => onToggleMember(card.id, memberId)}
+            onUpdateMember={onUpdateMember}
+          />
+
           <CardChecklistsEditor
             checklists={checklists}
             checklistItems={checklistItems}
@@ -229,6 +261,13 @@ export function CardModal({
             onAddAttachment={onAddAttachment}
             onChangeCover={(cover) => setDraft((current) => ({ ...current, cover }))}
             onDeleteAttachment={onDeleteAttachment}
+          />
+
+          <CardCommentsEditor
+            comments={comments}
+            onCreateComment={(message) => onCreateComment(card.id, message)}
+            onDeleteComment={onDeleteComment}
+            onUpdateComment={onUpdateComment}
           />
 
           <Panel>

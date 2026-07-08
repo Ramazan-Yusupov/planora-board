@@ -2,11 +2,10 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, GripVertical, ListChecks } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
 
 import {
-  getCardChecklistProgress,
   getCardLabels,
   loadAttachmentBlob,
   type BoardAttachment,
@@ -14,8 +13,12 @@ import {
   type BoardChecklist,
   type BoardChecklistItem,
   type BoardLabel,
+  type BoardMember,
   type CardSurface,
 } from "@/entities/board";
+import { cn } from "@/shared/lib";
+
+import { CardBadges } from "./CardBadges";
 
 type CardItemProps = Readonly<{
   card: BoardCard;
@@ -23,6 +26,7 @@ type CardItemProps = Readonly<{
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
+  members: Readonly<Record<string, BoardMember>>;
   attachments: Readonly<Record<string, BoardAttachment>>;
   isDragDisabled?: boolean;
   onOpen: (cardId: string) => void;
@@ -51,7 +55,7 @@ function CardLabels({ card, labels }: CardLabelsProps) {
         <span
           key={label.id}
           aria-label={label.name}
-          className="h-1.5 min-w-7 rounded-full shadow-[0_1px_2px_rgb(0_0_0_/_20%)]"
+          className="h-1.5 min-w-7 rounded-full shadow-[0_1px_2px_rgb(0_0_0/20%)]"
           style={{ backgroundColor: label.color }}
           title={label.name}
         />
@@ -62,37 +66,6 @@ function CardLabels({ card, labels }: CardLabelsProps) {
         </span>
       ) : null}
     </div>
-  );
-}
-
-type CardChecklistProgressProps = Readonly<{
-  card: BoardCard;
-  checklistItems: Readonly<Record<string, BoardChecklistItem>>;
-  checklists: Readonly<Record<string, BoardChecklist>>;
-  mutedTextColor: string;
-}>;
-
-function CardChecklistProgress({
-  card,
-  checklistItems,
-  checklists,
-  mutedTextColor,
-}: CardChecklistProgressProps) {
-  const progress = getCardChecklistProgress(card, checklists, checklistItems);
-
-  if (progress.total === 0) {
-    return null;
-  }
-
-  return (
-    <span
-      className="mt-3 inline-flex items-center gap-1 rounded-md border border-black/5 bg-black/10 px-2 py-1 text-[11px] font-medium"
-      style={{ color: mutedTextColor }}
-      title={`Чек-лист: ${progress.completed} из ${progress.total}`}
-    >
-      <ListChecks aria-hidden="true" size={13} />
-      {progress.completed}/{progress.total}
-    </span>
   );
 }
 
@@ -143,8 +116,8 @@ function AttachmentCardCover({
   }
 
   // Blob URLs from IndexedDB are not handled by Next Image optimisation.
-
   return (
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       alt=""
       className="mb-3 h-20 w-full rounded-xl object-cover ring-1 ring-black/10"
@@ -168,7 +141,7 @@ function CardCover({
     return (
       <div
         aria-hidden="true"
-        className="mb-3 h-10 rounded-xl shadow-[inset_0_1px_0_rgb(255_255_255_/_18%)]"
+        className="mb-3 h-10 rounded-xl shadow-[inset_0_1px_0_rgb(255_255_255/18%)]"
         style={{ backgroundColor: card.cover.color }}
       />
     );
@@ -185,7 +158,7 @@ function CardTitle({ card }: Readonly<{ card: BoardCard }>) {
       {card.sticker ? (
         <span
           aria-hidden="true"
-          className="grid size-7 shrink-0 place-items-center rounded-lg bg-black/5 text-lg leading-none shadow-[inset_0_1px_0_rgb(255_255_255_/_10%)]"
+          className="grid size-7 shrink-0 place-items-center rounded-lg bg-black/5 text-lg leading-none shadow-[inset_0_1px_0_rgb(255_255_255/10%)]"
         >
           {card.sticker}
         </span>
@@ -207,6 +180,7 @@ export function CardItem({
   checklistItems,
   checklists,
   labels,
+  members,
   attachments,
   isDragDisabled = false,
   onOpen,
@@ -238,9 +212,10 @@ export function CardItem({
     <article
       ref={setNodeRef}
       style={style}
-      className={`group touch-manipulation rounded-xl border p-3 shadow-[0_2px_4px_rgb(0_0_0_/_7%)] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgb(0_0_0_/_14%)] ${
-        isDragging ? "opacity-35" : "opacity-100"
-      }`}
+      className={cn(
+        "group touch-manipulation rounded-lg border p-3 shadow-[0_2px_4px_rgb(0_0_0/7%)] transition-[border-color,box-shadow,transform,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgb(0_0_0/14%)]",
+        isDragging ? "opacity-35" : "opacity-100",
+      )}
     >
       <div className="flex items-start gap-2">
         <button
@@ -271,29 +246,13 @@ export function CardItem({
               {card.description}
             </p>
           ) : null}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {card.dueDate ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-md border border-black/5 px-2 py-1 text-[11px] font-medium"
-                style={{
-                  backgroundColor: cardSurface.chipBackgroundColor,
-                  color: cardSurface.textColor,
-                }}
-              >
-                <CalendarDays aria-hidden="true" size={13} />
-                {new Intl.DateTimeFormat("ru-RU", {
-                  day: "2-digit",
-                  month: "short",
-                }).format(new Date(`${card.dueDate}T12:00:00`))}
-              </span>
-            ) : null}
-            <CardChecklistProgress
-              card={card}
-              checklistItems={checklistItems}
-              checklists={checklists}
-              mutedTextColor={cardSurface.mutedTextColor}
-            />
-          </div>
+          <CardBadges
+            card={card}
+            cardSurface={cardSurface}
+            checklistItems={checklistItems}
+            checklists={checklists}
+            members={members}
+          />
         </button>
       </div>
     </article>
@@ -306,6 +265,7 @@ export function CardPreview({
   checklistItems,
   checklists,
   labels,
+  members,
   attachments,
 }: Readonly<{
   card: BoardCard;
@@ -313,6 +273,7 @@ export function CardPreview({
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
+  members: Readonly<Record<string, BoardMember>>;
   attachments: Readonly<Record<string, BoardAttachment>>;
 }>) {
   return (
@@ -327,11 +288,12 @@ export function CardPreview({
       <CardCover card={card} attachments={attachments} />
       <CardLabels card={card} labels={labels} />
       <CardTitle card={card} />
-      <CardChecklistProgress
+      <CardBadges
         card={card}
+        cardSurface={cardSurface}
         checklistItems={checklistItems}
         checklists={checklists}
-        mutedTextColor={cardSurface.mutedTextColor}
+        members={members}
       />
     </article>
   );

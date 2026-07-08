@@ -24,6 +24,7 @@ import type {
   BoardChecklistItem,
   BoardLabel,
   BoardList,
+  BoardMember,
   CardSurface,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
@@ -44,6 +45,7 @@ type ListColumnProps = Readonly<{
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   checklists: Readonly<Record<string, BoardChecklist>>;
   labels: Readonly<Record<string, BoardLabel>>;
+  members: Readonly<Record<string, BoardMember>>;
   attachments: Readonly<Record<string, BoardAttachment>>;
   isDragDisabled: boolean;
   totalCardCount: number;
@@ -61,6 +63,7 @@ export function ListColumn({
   checklistItems,
   checklists,
   labels,
+  members,
   attachments,
   isDragDisabled,
   totalCardCount,
@@ -190,7 +193,7 @@ export function ListColumn({
           )}
 
           <span
-            className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/8 bg-white/8 text-xs font-semibold text-slate-100 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]"
+            className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/8 bg-white/8 text-xs font-semibold tabular-nums text-slate-100 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]"
             title={
               list.wipLimit
                 ? `${totalCardCount} из ${list.wipLimit}`
@@ -238,6 +241,7 @@ export function ListColumn({
                 checklistItems={checklistItems}
                 checklists={checklists}
                 labels={labels}
+                members={members}
                 attachments={attachments}
                 isDragDisabled={isDragDisabled}
                 onOpen={onOpenCard}

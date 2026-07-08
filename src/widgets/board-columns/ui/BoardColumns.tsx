@@ -186,13 +186,14 @@ export function BoardColumns({
               const cards = getListCards(board, list, visibleCardIds);
 
               return (
-                <ListColumn
+              <ListColumn
                   key={list.id}
                   cardSurface={appearance.cardSurface}
                   cards={cards}
                   checklistItems={board.checklistItems}
                   checklists={board.checklists}
                   labels={board.labels}
+                  members={board.members}
                   attachments={board.attachments}
                   isDragDisabled={!isDragEnabled}
                   list={visibleList}
@@ -272,6 +273,7 @@ export function BoardColumns({
               checklistItems={board.checklistItems}
               checklists={board.checklists}
               labels={board.labels}
+              members={board.members}
               attachments={board.attachments}
             />
           ) : null}

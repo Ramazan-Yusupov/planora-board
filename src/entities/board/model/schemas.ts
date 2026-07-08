@@ -25,11 +25,15 @@ const boardActivityTypeValues = [
   "card-due-date-changed",
   "card-due-date-removed",
   "card-labels-updated",
+  "card-members-updated",
   "card-sticker-updated",
   "card-moved",
   "card-archived",
   "card-restored",
   "card-duplicated",
+  "comment-created",
+  "comment-updated",
+  "comment-deleted",
   "checklist-created",
   "checklist-renamed",
   "checklist-deleted",
@@ -55,6 +59,23 @@ const boardLabelSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1).max(48),
   color: hexColorSchema,
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const boardMemberSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(48),
+  avatarColor: hexColorSchema,
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const boardCommentSchema = z.object({
+  id: z.string().min(1),
+  cardId: z.string().min(1),
+  authorName: z.string().trim().min(1).max(80),
+  message: z.string().trim().min(1).max(1000),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -114,10 +135,12 @@ const boardCardSchema = z.object({
   description: z.string(),
   dueDate: z.string().optional(),
   labelIds: z.array(z.string().min(1)).default([]),
+  memberIds: z.array(z.string().min(1)).default([]),
   // Чек-листы добавлены после первой версии доски. Для старых записей
   // пустой массив создаётся при чтении и сохраняется при следующей записи.
   checklistIds: z.array(z.string().min(1)).default([]),
   attachmentIds: z.array(z.string().min(1)).default([]),
+  commentIds: z.array(z.string().min(1)).default([]),
   cover: cardCoverSchema.optional(),
   // Стикер добавлен после первой версии доски, поэтому старые записи
   // продолжают быть валидными без принудительной миграции.
@@ -148,11 +171,15 @@ export const boardSchema = z
     appearance: boardAppearanceSchema,
     labelIds: z.array(z.string().min(1)),
     labels: z.record(z.string(), boardLabelSchema),
+    memberIds: z.array(z.string().min(1)).default([]),
+    members: z.record(z.string(), boardMemberSchema).default({}),
     checklistIds: z.array(z.string().min(1)).default([]),
     checklists: z.record(z.string(), boardChecklistSchema).default({}),
     checklistItems: z
       .record(z.string(), boardChecklistItemSchema)
       .default({}),
+    commentIds: z.array(z.string().min(1)).default([]),
+    comments: z.record(z.string(), boardCommentSchema).default({}),
     attachmentIds: z.array(z.string().min(1)).default([]),
     attachments: z.record(z.string(), boardAttachmentSchema).default({}),
     activityIds: z.array(z.string().min(1)).default([]),
@@ -165,12 +192,15 @@ export const boardSchema = z
   })
   .superRefine((board, context) => {
     const boardLabelIds = new Set<string>();
+    const boardMemberIds = new Set<string>();
     const boardChecklistIds = new Set<string>();
+    const boardCommentIds = new Set<string>();
     const boardActivityIds = new Set<string>();
     const boardListIds = new Set<string>();
     const cardOwners = new Map<string, string>();
     const checklistOwners = new Map<string, string>();
     const checklistItemOwners = new Map<string, string>();
+    const commentOwners = new Map<string, string>();
 
     board.labelIds.forEach((labelId, index) => {
       if (boardLabelIds.has(labelId)) {
@@ -206,6 +236,44 @@ export const boardSchema = z
           code: "custom",
           path: ["labels", labelKey],
           message: "Метка отсутствует в порядке проекта.",
+        });
+      }
+    }
+
+    board.memberIds.forEach((memberId, index) => {
+      if (boardMemberIds.has(memberId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["memberIds", index],
+          message: "Участник не должен повторяться в порядке проекта.",
+        });
+      }
+
+      boardMemberIds.add(memberId);
+
+      if (!board.members[memberId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["memberIds", index],
+          message: "Ссылка на участника не найдена.",
+        });
+      }
+    });
+
+    for (const [memberKey, member] of Object.entries(board.members)) {
+      if (member.id !== memberKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["members", memberKey, "id"],
+          message: "Ключ участника должен совпадать с его id.",
+        });
+      }
+
+      if (!boardMemberIds.has(memberKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["members", memberKey],
+          message: "Участник отсутствует в порядке проекта.",
         });
       }
     }
@@ -255,6 +323,52 @@ export const boardSchema = z
           code: "custom",
           path: ["attachments", attachmentKey, "cardId"],
           message: "Родительская карточка вложения не найдена.",
+        });
+      }
+    }
+
+    board.commentIds.forEach((commentId, index) => {
+      if (boardCommentIds.has(commentId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["commentIds", index],
+          message: "Комментарий не должен повторяться в порядке проекта.",
+        });
+      }
+
+      boardCommentIds.add(commentId);
+
+      if (!board.comments[commentId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["commentIds", index],
+          message: "Ссылка на комментарий не найдена.",
+        });
+      }
+    });
+
+    for (const [commentKey, comment] of Object.entries(board.comments)) {
+      if (comment.id !== commentKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["comments", commentKey, "id"],
+          message: "Ключ комментария должен совпадать с его id.",
+        });
+      }
+
+      if (!boardCommentIds.has(commentKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["comments", commentKey],
+          message: "Комментарий отсутствует в порядке проекта.",
+        });
+      }
+
+      if (!board.cards[comment.cardId]) {
+        context.addIssue({
+          code: "custom",
+          path: ["comments", commentKey, "cardId"],
+          message: "Родительская карточка комментария не найдена.",
         });
       }
     }
@@ -413,6 +527,27 @@ export const boardSchema = z
         }
       });
 
+      const seenCardMemberIds = new Set<string>();
+      card.memberIds.forEach((memberId, index) => {
+        if (seenCardMemberIds.has(memberId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "memberIds", index],
+            message: "Участник не должен повторяться на карточке.",
+          });
+        }
+
+        seenCardMemberIds.add(memberId);
+
+        if (!board.members[memberId]) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "memberIds", index],
+            message: "Карточка ссылается на несуществующего участника.",
+          });
+        }
+      });
+
       const seenCardChecklistIds = new Set<string>();
       card.checklistIds.forEach((checklistId, index) => {
         if (seenCardChecklistIds.has(checklistId)) {
@@ -478,6 +613,38 @@ export const boardSchema = z
         }
       });
 
+      const seenCardCommentIds = new Set<string>();
+      card.commentIds.forEach((commentId, index) => {
+        if (seenCardCommentIds.has(commentId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "commentIds", index],
+            message: "Комментарий не должен повторяться на карточке.",
+          });
+        }
+
+        seenCardCommentIds.add(commentId);
+        commentOwners.set(commentId, cardKey);
+        const comment = board.comments[commentId];
+
+        if (!comment) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "commentIds", index],
+            message: "Карточка ссылается на несуществующий комментарий.",
+          });
+          return;
+        }
+
+        if (comment.cardId !== cardKey) {
+          context.addIssue({
+            code: "custom",
+            path: ["comments", commentId, "cardId"],
+            message: "Родительская карточка комментария не совпадает.",
+          });
+        }
+      });
+
       if (card.cover?.type === "attachment") {
         const coverAttachment = board.attachments[card.cover.attachmentId];
 
@@ -527,6 +694,16 @@ export const boardSchema = z
           code: "custom",
           path: ["cards", cardKey, "archivedAt"],
           message: "У активной карточки не должно быть времени архивации.",
+        });
+      }
+    }
+
+    for (const [commentKey, comment] of Object.entries(board.comments)) {
+      if (commentOwners.get(commentKey) !== comment.cardId) {
+        context.addIssue({
+          code: "custom",
+          path: ["comments", commentKey],
+          message: "Комментарий отсутствует в порядке своей карточки.",
         });
       }
     }

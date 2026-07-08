@@ -1,9 +1,13 @@
 export {
   addCard,
+  addCardComment,
   addList,
   archiveList,
   clearList,
+  createBoardMember,
+  deleteBoardMember,
   deleteCard,
+  deleteCardComment,
   deleteList,
   duplicateList,
   getActiveBoardListIds,
@@ -15,6 +19,9 @@ export {
   renameList,
   restoreList,
   setListWipLimit,
+  toggleCardMember,
   updateBoardAppearance,
+  updateBoardMember,
   updateCard,
+  updateCardComment,
 } from "./lib/boardOperations";

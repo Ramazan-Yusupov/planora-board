@@ -76,6 +76,25 @@ export type BoardLabel = {
 
 export type BoardLabelDraft = Pick<BoardLabel, "name" | "color">;
 
+export type BoardMember = {
+  id: string;
+  name: string;
+  avatarColor: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type BoardMemberDraft = Pick<BoardMember, "name" | "avatarColor">;
+
+export type BoardComment = {
+  id: string;
+  cardId: string;
+  authorName: string;
+  message: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type BoardChecklist = {
   id: string;
   cardId: string;
@@ -106,11 +125,15 @@ export type BoardActivityType =
   | "card-due-date-changed"
   | "card-due-date-removed"
   | "card-labels-updated"
+  | "card-members-updated"
   | "card-sticker-updated"
   | "card-moved"
   | "card-archived"
   | "card-restored"
   | "card-duplicated"
+  | "comment-created"
+  | "comment-updated"
+  | "comment-deleted"
   | "checklist-created"
   | "checklist-renamed"
   | "checklist-deleted"
@@ -156,8 +179,10 @@ export type BoardCard = {
   description: string;
   dueDate?: string;
   labelIds: string[];
+  memberIds: string[];
   checklistIds: string[];
   attachmentIds: string[];
+  commentIds: string[];
   sticker?: string;
   cover?: CardCover;
   isArchived: boolean;
@@ -183,9 +208,13 @@ export type Board = {
   appearance: BoardAppearance;
   labelIds: string[];
   labels: Record<string, BoardLabel>;
+  memberIds: string[];
+  members: Record<string, BoardMember>;
   checklistIds: string[];
   checklists: Record<string, BoardChecklist>;
   checklistItems: Record<string, BoardChecklistItem>;
+  commentIds: string[];
+  comments: Record<string, BoardComment>;
   attachmentIds: string[];
   attachments: Record<string, BoardAttachment>;
   activityIds: string[];

@@ -13,7 +13,10 @@ import {
   type BoardCard,
   type BoardChecklist,
   type BoardChecklistItem,
+  type BoardComment,
   type BoardList,
+  type BoardMember,
+  type BoardMemberDraft,
   type CardCover,
   type CardDraft,
 } from "@/entities/board";
@@ -104,6 +107,24 @@ function removeCardAttachments(
   return { attachmentIds, attachments };
 }
 
+function removeCardComments(
+  board: Board,
+  cardIds: ReadonlySet<string>,
+): Pick<Board, "commentIds" | "comments"> {
+  const commentIds = board.commentIds.filter((commentId) => {
+    const comment = board.comments[commentId];
+    return comment ? !cardIds.has(comment.cardId) : false;
+  });
+  const comments = Object.fromEntries(
+    commentIds.flatMap((commentId) => {
+      const comment = board.comments[commentId];
+      return comment ? [[commentId, comment]] : [];
+    }),
+  ) as Record<string, BoardComment>;
+
+  return { commentIds, comments };
+}
+
 function removeCardsFromBoard(board: Board, cardIds: ReadonlySet<string>): Board {
   if (cardIds.size === 0) {
     return board;
@@ -132,6 +153,7 @@ function removeCardsFromBoard(board: Board, cardIds: ReadonlySet<string>): Board
   );
   const relatedActivities = removeCardActivities(board, cardIds);
   const relatedAttachments = removeCardAttachments(board, cardIds);
+  const relatedComments = removeCardComments(board, cardIds);
 
   return {
     ...board,
@@ -143,6 +165,7 @@ function removeCardsFromBoard(board: Board, cardIds: ReadonlySet<string>): Board
     ...relatedChecklists,
     ...relatedActivities,
     ...relatedAttachments,
+    ...relatedComments,
     updatedAt: timestamp,
   };
 }
@@ -379,8 +402,10 @@ export function duplicateList(board: Board, listId: string): Board {
       ...sourceCard,
       id: cardId,
       listId: newListId,
+      memberIds: [...sourceCard.memberIds],
       checklistIds: copiedChecklists.checklistIds,
       attachmentIds: [],
+      commentIds: [],
       cover: sourceCard.cover?.type === "color" ? sourceCard.cover : undefined,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -538,8 +563,10 @@ export function addCard(board: Board, listId: string, title: string): Board {
         title: normalizedTitle,
         description: "",
         labelIds: [],
+        memberIds: [],
         checklistIds: [],
         attachmentIds: [],
+        commentIds: [],
         sticker: getRandomCardSticker(),
         isArchived: false,
         createdAt: timestamp,
@@ -654,6 +681,262 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
     },
     activities,
   );
+}
+
+export function createBoardMember(
+  board: Board,
+  draft: BoardMemberDraft,
+): Readonly<{ board: Board; member: BoardMember | null }> {
+  const normalizedName = draft.name.trim().replace(/\s+/g, " ");
+
+  if (!normalizedName || !/^#[0-9a-fA-F]{6}$/.test(draft.avatarColor)) {
+    return { board, member: null };
+  }
+
+  const timestamp = now();
+  const member: BoardMember = {
+    id: createId("member"),
+    name: normalizedName,
+    avatarColor: draft.avatarColor,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  return {
+    board: {
+      ...board,
+      memberIds: [...board.memberIds, member.id],
+      members: {
+        ...board.members,
+        [member.id]: member,
+      },
+      updatedAt: timestamp,
+    },
+    member,
+  };
+}
+
+export function updateBoardMember(
+  board: Board,
+  memberId: string,
+  draft: BoardMemberDraft,
+): Board {
+  const member = board.members[memberId];
+  const normalizedName = draft.name.trim().replace(/\s+/g, " ");
+
+  if (!member || !normalizedName || !/^#[0-9a-fA-F]{6}$/.test(draft.avatarColor)) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    members: {
+      ...board.members,
+      [memberId]: {
+        ...member,
+        name: normalizedName,
+        avatarColor: draft.avatarColor,
+        updatedAt: timestamp,
+      },
+    },
+    updatedAt: timestamp,
+  };
+}
+
+export function deleteBoardMember(board: Board, memberId: string): Board {
+  if (!board.members[memberId]) {
+    return board;
+  }
+
+  const timestamp = now();
+  const members = { ...board.members };
+  delete members[memberId];
+
+  return {
+    ...board,
+    memberIds: board.memberIds.filter((currentMemberId) => currentMemberId !== memberId),
+    members,
+    cards: Object.fromEntries(
+      Object.entries(board.cards).map(([cardId, card]) => [
+        cardId,
+        card.memberIds.includes(memberId)
+          ? {
+              ...card,
+              memberIds: card.memberIds.filter((currentMemberId) => currentMemberId !== memberId),
+              updatedAt: timestamp,
+            }
+          : card,
+      ]),
+    ) as Record<string, BoardCard>,
+    updatedAt: timestamp,
+  };
+}
+
+export function toggleCardMember(
+  board: Board,
+  cardId: string,
+  memberId: string,
+): Board {
+  const card = board.cards[cardId];
+  const member = board.members[memberId];
+
+  if (!card || !member) {
+    return board;
+  }
+
+  const timestamp = now();
+  const isAssigned = card.memberIds.includes(memberId);
+  const nextMemberIds = isAssigned
+    ? card.memberIds.filter((currentMemberId) => currentMemberId !== memberId)
+    : [...card.memberIds, memberId];
+  const nextBoard: Board = {
+    ...board,
+    cards: {
+      ...board.cards,
+      [cardId]: {
+        ...card,
+        memberIds: nextMemberIds,
+        updatedAt: timestamp,
+      },
+    },
+    updatedAt: timestamp,
+  };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId,
+      type: "card-members-updated",
+      message: isAssigned
+        ? `Участник «${member.name}» снят с карточки.`
+        : `Участник «${member.name}» добавлен на карточку.`,
+      createdAt: timestamp,
+    },
+  ]);
+}
+
+export function addCardComment(
+  board: Board,
+  cardId: string,
+  message: string,
+): Board {
+  const card = board.cards[cardId];
+  const normalizedMessage = message.trim();
+
+  if (!card || !normalizedMessage) {
+    return board;
+  }
+
+  const timestamp = now();
+  const comment: BoardComment = {
+    id: createId("comment"),
+    cardId,
+    authorName: "Вы",
+    message: normalizedMessage,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const nextBoard: Board = {
+    ...board,
+    commentIds: [comment.id, ...board.commentIds],
+    comments: {
+      ...board.comments,
+      [comment.id]: comment,
+    },
+    cards: {
+      ...board.cards,
+      [cardId]: {
+        ...card,
+        commentIds: [comment.id, ...card.commentIds],
+        updatedAt: timestamp,
+      },
+    },
+    updatedAt: timestamp,
+  };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId,
+      type: "comment-created",
+      message: "Добавлен комментарий.",
+      createdAt: timestamp,
+    },
+  ]);
+}
+
+export function updateCardComment(
+  board: Board,
+  commentId: string,
+  message: string,
+): Board {
+  const comment = board.comments[commentId];
+  const normalizedMessage = message.trim();
+
+  if (!comment || !normalizedMessage || comment.message === normalizedMessage) {
+    return board;
+  }
+
+  const timestamp = now();
+  const nextBoard: Board = {
+    ...board,
+    comments: {
+      ...board.comments,
+      [commentId]: {
+        ...comment,
+        message: normalizedMessage,
+        updatedAt: timestamp,
+      },
+    },
+    updatedAt: timestamp,
+  };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: comment.cardId,
+      type: "comment-updated",
+      message: "Комментарий обновлён.",
+      createdAt: timestamp,
+    },
+  ]);
+}
+
+export function deleteCardComment(board: Board, commentId: string): Board {
+  const comment = board.comments[commentId];
+
+  if (!comment) {
+    return board;
+  }
+
+  const card = board.cards[comment.cardId];
+  const timestamp = now();
+  const comments = { ...board.comments };
+  delete comments[commentId];
+  const nextBoard: Board = {
+    ...board,
+    commentIds: board.commentIds.filter((currentCommentId) => currentCommentId !== commentId),
+    comments,
+    cards: card
+      ? {
+          ...board.cards,
+          [card.id]: {
+            ...card,
+            commentIds: card.commentIds.filter((currentCommentId) => currentCommentId !== commentId),
+            updatedAt: timestamp,
+          },
+        }
+      : board.cards,
+    updatedAt: timestamp,
+  };
+
+  return appendBoardActivities(nextBoard, [
+    {
+      cardId: comment.cardId,
+      type: "comment-deleted",
+      message: "Комментарий удалён.",
+      createdAt: timestamp,
+    },
+  ]);
 }
 
 export function deleteCard(board: Board, cardId: string): Board {

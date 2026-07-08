@@ -19,6 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { APP_NAME } from "@/shared/config/app";
 import { cn } from "@/shared/lib";
 import { IconButton } from "@/shared/ui";
+import { AuthStatusButton } from "@/features/auth";
 
 export type WorkspaceView = "board" | "calendar";
 
@@ -231,6 +232,8 @@ export function WorkspaceHeader({
 
         <div className="min-w-0 flex-1 sm:max-w-xl">{children}</div>
 
+        <AuthStatusButton className="hidden shrink-0 sm:inline-flex" />
+
         {/* Desktop: отдельные кнопки инструментов */}
         <div className="hidden shrink-0 items-center gap-1 lg:flex">
           <span
@@ -370,8 +373,8 @@ export function WorkspaceHeader({
             }
             size="lg"
             onClick={() => setIsActionsMenuOpen((current) => !current)}
-          >
-            <MoreHorizontal aria-hidden="true" size={21} />
+            >
+              <MoreHorizontal aria-hidden="true" size={21} />
           </IconButton>
 
           {isActionsMenuOpen ? (
@@ -380,6 +383,10 @@ export function WorkspaceHeader({
               className="absolute right-0 top-[calc(100%+0.5rem)] z-60 max-h-[calc(100dvh-5.5rem)] w-[min(92vw,22rem)] overflow-y-auto rounded-2xl border border-white/10 bg-panel/98 p-2 shadow-2xl backdrop-blur-xl scrollbar-none"
               role="menu"
             >
+              <div className="px-1 pb-2">
+                <AuthStatusButton className="w-full" />
+              </div>
+
               <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
                 Навигация
               </p>

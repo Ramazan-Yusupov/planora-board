@@ -118,7 +118,7 @@ export function Modal({
       aria-labelledby={titleId}
       aria-modal="true"
       className={cn(
-        "fixed inset-0 flex items-end bg-slate-950/70 p-0 backdrop-blur-md sm:items-center sm:justify-center sm:p-6",
+        "fixed inset-0 flex items-end bg-slate-950/70 h-screen p-0 backdrop-blur-md sm:items-center sm:justify-center sm:p-6",
         zIndexClassName,
       )}
       role={role}
