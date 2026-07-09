@@ -126,10 +126,7 @@ export function BoardColumns({
     const listDestination = getListMoveDestination(activeData, overData);
 
     if (listDestination) {
-      onMoveList(
-        listDestination.listId,
-        listDestination.destinationListId,
-      );
+      onMoveList(listDestination.listId, listDestination.destinationListId);
       return;
     }
 
@@ -166,7 +163,7 @@ export function BoardColumns({
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
     >
-      <div className="scrollbar-none h-full touch-pan-x overscroll-x-contain overflow-x-auto overflow-y-hidden px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6">
+      <div className=" h-full touch-pan-x overscroll-x-contain overflow-x-auto overflow-y-hidden px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6">
         <SortableContext
           items={activeListIds}
           strategy={horizontalListSortingStrategy}
@@ -186,7 +183,7 @@ export function BoardColumns({
               const cards = getListCards(board, list, visibleCardIds);
 
               return (
-              <ListColumn
+                <ListColumn
                   key={list.id}
                   cardSurface={appearance.cardSurface}
                   cards={cards}
