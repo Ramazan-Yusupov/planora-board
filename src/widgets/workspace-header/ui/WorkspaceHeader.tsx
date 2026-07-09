@@ -144,7 +144,8 @@ export function WorkspaceHeader({
     ? `Фильтры: активно ${activeFiltersCount}`
     : "Фильтры";
 
-  const desktopIconClass = "rounded-xl text-text-muted hover:bg-control/85 hover:text-text hover:shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]";
+  const desktopIconClass =
+    "rounded-xl text-text-muted hover:bg-control/85 hover:text-text hover:shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]";
 
   useEffect(() => {
     if (!isActionsMenuOpen) {
@@ -232,7 +233,7 @@ export function WorkspaceHeader({
 
         <div className="min-w-0 flex-1 sm:max-w-xl">{children}</div>
 
-        <AuthStatusButton className="hidden shrink-0 sm:inline-flex" />
+        {/* <AuthStatusButton className="hidden shrink-0 sm:inline-flex" /> */}
 
         {/* Desktop: отдельные кнопки инструментов */}
         <div className="hidden shrink-0 items-center gap-1 lg:flex">
@@ -373,8 +374,8 @@ export function WorkspaceHeader({
             }
             size="lg"
             onClick={() => setIsActionsMenuOpen((current) => !current)}
-            >
-              <MoreHorizontal aria-hidden="true" size={21} />
+          >
+            <MoreHorizontal aria-hidden="true" size={21} />
           </IconButton>
 
           {isActionsMenuOpen ? (
