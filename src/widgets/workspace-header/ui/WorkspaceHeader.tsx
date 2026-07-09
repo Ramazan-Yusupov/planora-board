@@ -199,7 +199,7 @@ export function WorkspaceHeader({
   };
 
   return (
-    <header className="z-50 border-b border-white/10 bg-panel/88 px-2 py-2 shadow-[0_1px_0_rgb(255_255_255_/_2%),0_16px_40px_rgb(0_0_0_/_15%)] backdrop-blur-2xl sm:px-5 sm:py-3">
+    <header className="z-50 border-b border-white/10 bg-panel/88 px-2 py-2 shadow-[0_1px_0_rgb(255_255_255/2%),0_16px_40px_rgb(0_0_0/15%)] backdrop-blur-2xl sm:px-5 sm:py-3">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 sm:gap-3">
         <div className="flex">
           <IconButton
@@ -215,7 +215,7 @@ export function WorkspaceHeader({
           <div className="hidden items-center gap-3 sm:flex">
             <button
               aria-label="Открыть доску"
-              className="grid size-10 place-items-center rounded-xl border border-accent/25 bg-accent text-accent-foreground shadow-[0_8px_22px_rgb(59_130_246_/_22%)] transition hover:bg-accent-hover"
+              className="grid size-10 place-items-center rounded-xl border border-accent/25 bg-accent text-accent-foreground shadow-[0_8px_22px_rgb(59_130_246/22%)] transition hover:bg-accent-hover"
               type="button"
               onClick={onOpenBoard}
             >
