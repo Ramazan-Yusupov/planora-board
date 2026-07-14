@@ -11,7 +11,7 @@ import { cn } from "@/shared/lib";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
-type ChartMode = "bars" | "line";
+type ChartMode = "bars" | "line" | "area" | "donut";
 
 function AnalyticsLoadingState() {
   return (
@@ -59,6 +59,89 @@ function MetricCard({
   );
 }
 
+type ChartPoint = AnalyticsSegment & Readonly<{ x: number; y: number }>;
+type ChartTooltipState = Readonly<{
+  segment: AnalyticsSegment;
+  x: number;
+  y: number;
+}>;
+
+function getSegmentPercent(value: number, total: number): number {
+  return total ? Math.round((value / total) * 100) : 0;
+}
+
+function getPolarPoint(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  angle: number,
+) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+
+  return {
+    x: centerX + radius * Math.cos(radians),
+    y: centerY + radius * Math.sin(radians),
+  };
+}
+
+function getDonutArcPath(
+  startAngle: number,
+  endAngle: number,
+  outerRadius = 42,
+  innerRadius = 26,
+) {
+  const startOuter = getPolarPoint(50, 50, outerRadius, endAngle);
+  const endOuter = getPolarPoint(50, 50, outerRadius, startAngle);
+  const startInner = getPolarPoint(50, 50, innerRadius, startAngle);
+  const endInner = getPolarPoint(50, 50, innerRadius, endAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
+
+  return [
+    `M ${startOuter.x} ${startOuter.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 0 ${endOuter.x} ${endOuter.y}`,
+    `L ${startInner.x} ${startInner.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 1 ${endInner.x} ${endInner.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function ChartTooltip({
+  state,
+  total,
+}: Readonly<{
+  state: ChartTooltipState | null;
+  total: number;
+}>) {
+  if (!state) {
+    return null;
+  }
+
+  return (
+    <div
+      className="pointer-events-none absolute z-10 min-w-36 max-w-56 rounded-lg border border-white/12 bg-slate-950/95 px-3 py-2 text-xs shadow-2xl"
+      style={{
+        left: `${state.x}%`,
+        top: `${state.y}%`,
+        transform: "translate(-50%, calc(-100% - 0.75rem))",
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: state.segment.color }}
+        />
+        <p className="min-w-0 truncate font-semibold text-text">
+          {state.segment.label}
+        </p>
+      </div>
+      <p className="mt-1 text-text-muted">
+        {state.segment.value} задач · {getSegmentPercent(state.segment.value, total)}%
+      </p>
+    </div>
+  );
+}
+
 function SegmentChart({
   mode,
   title,
@@ -68,8 +151,10 @@ function SegmentChart({
   title: string;
   segments: readonly AnalyticsSegment[];
 }>) {
+  const [tooltip, setTooltip] = useState<ChartTooltipState | null>(null);
   const max = Math.max(1, ...segments.map((segment) => segment.value));
-  const chartPoints = segments.map((segment, index) => {
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
+  const chartPoints: ChartPoint[] = segments.map((segment, index) => {
     const x = segments.length <= 1 ? 50 : (index / (segments.length - 1)) * 100;
     const y = 92 - (segment.value / max) * 76;
 
@@ -78,93 +163,248 @@ function SegmentChart({
   const polylinePoints = chartPoints
     .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
     .join(" ");
+  const areaPoints = `0,96 ${polylinePoints} 100,96`;
+  const donutSlices = segments.reduce<{
+    angle: number;
+    slices: Array<
+      Readonly<{
+        endAngle: number;
+        segment: AnalyticsSegment;
+        startAngle: number;
+        tooltipPoint: { x: number; y: number };
+      }>
+    >;
+  }>(
+    (accumulator, segment) => {
+      if (!total || segment.value === 0) {
+        return accumulator;
+      }
+
+      const startAngle = accumulator.angle;
+      const sliceAngle = (segment.value / total) * 360;
+      const rawEndAngle = startAngle + sliceAngle;
+      const endAngle = sliceAngle >= 360 ? startAngle + 359.99 : rawEndAngle;
+      const midpoint = startAngle + sliceAngle / 2;
+
+      return {
+        angle: rawEndAngle,
+        slices: [
+          ...accumulator.slices,
+          {
+            endAngle,
+            segment,
+            startAngle,
+            tooltipPoint: getPolarPoint(50, 50, 38, midpoint),
+          },
+        ],
+      };
+    },
+    { angle: 0, slices: [] },
+  ).slices;
 
   return (
     <section className="rounded-lg border border-white/10 bg-panel/72 p-4 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]">
       <h2 className="text-sm font-semibold text-text">{title}</h2>
 
-      {mode === "line" ? (
-        <div className="mt-4 rounded-lg border border-white/8 bg-control/25 p-3">
-          <svg
-            aria-label={`${title}: линейный график`}
-            className="h-44 w-full overflow-visible"
-            preserveAspectRatio="none"
-            role="img"
-            viewBox="0 0 100 100"
-          >
-            {[16, 35, 54, 73, 92].map((y) => (
-              <line
-                key={y}
-                stroke="rgba(255,255,255,0.08)"
-                strokeWidth="0.6"
+      {mode === "line" || mode === "area" ? (
+        <div
+          className="relative mt-4 rounded-lg border border-white/8 bg-control/25 p-3"
+          onMouseLeave={() => setTooltip(null)}
+        >
+          <div className="relative h-44">
+            <svg
+              aria-label={`${title}: ${mode === "line" ? "линейный график" : "график площади"}`}
+              className="absolute inset-0 size-full"
+              preserveAspectRatio="none"
+              role="img"
+              viewBox="0 0 100 100"
+            >
+              {[16, 35, 54, 73, 92].map((y) => (
+                <line
+                  key={y}
+                  stroke="rgba(255,255,255,0.08)"
+                  strokeWidth="0.6"
+                  vectorEffect="non-scaling-stroke"
+                  x1="0"
+                  x2="100"
+                  y1={y}
+                  y2={y}
+                />
+              ))}
+              {mode === "area" ? (
+                <polygon
+                  fill="rgba(56, 189, 248, 0.14)"
+                  points={areaPoints}
+                  stroke="none"
+                />
+              ) : null}
+              <polyline
+                fill="none"
+                points={polylinePoints}
+                stroke="rgb(56, 189, 248)"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="3"
                 vectorEffect="non-scaling-stroke"
-                x1="0"
-                x2="100"
-                y1={y}
-                y2={y}
               />
-            ))}
-            <polyline
-              fill="none"
-              points={polylinePoints}
-              stroke="rgb(56, 189, 248)"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="3"
-              vectorEffect="non-scaling-stroke"
-            />
-            {chartPoints.map((point) => (
-              <circle
-                key={point.id}
-                cx={point.x}
-                cy={point.y}
-                fill={point.color}
-                r="2.8"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-          </svg>
+            </svg>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {segments.map((segment) => (
-              <div key={segment.id} className="flex items-center gap-2 text-xs">
-                <span
-                  aria-hidden="true"
-                  className="size-2.5 rounded-full"
-                  style={{ backgroundColor: segment.color }}
-                />
-                <span className="min-w-0 flex-1 truncate text-text-muted">
-                  {segment.label}
-                </span>
-                <span className="font-semibold tabular-nums text-text">
-                  {segment.value}
-                </span>
-              </div>
+            {chartPoints.map((point) => (
+              <button
+                key={point.id}
+                aria-label={`${point.label}: ${point.value}`}
+                className="absolute z-10 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-panel shadow-[0_0_0_3px_rgb(255_255_255/_6%)] transition hover:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                style={{
+                  backgroundColor: point.color,
+                  left: `${point.x}%`,
+                  top: `${point.y}%`,
+                }}
+                type="button"
+                onFocus={() => setTooltip({ segment: point, x: point.x, y: point.y })}
+                onMouseEnter={() => setTooltip({ segment: point, x: point.x, y: point.y })}
+              />
             ))}
+
+            <ChartTooltip state={tooltip} total={total} />
           </div>
+
+          <ChartLegend segments={segments} />
         </div>
-      ) : (
-        <div className="mt-4 space-y-3">
-          {segments.map((segment) => (
-            <div key={segment.id}>
-              <div className="flex items-center justify-between gap-3 text-xs">
-                <span className="min-w-0 truncate text-text-muted">{segment.label}</span>
-                <span className="font-semibold tabular-nums text-text">{segment.value}</span>
-              </div>
-              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-control">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${Math.max(4, (segment.value / max) * 100)}%`,
-                    backgroundColor: segment.color,
-                  }}
-                />
+      ) : mode === "donut" ? (
+        <div
+          className="relative mt-4 grid gap-4 rounded-lg border border-white/8 bg-control/25 p-3 md:grid-cols-[13rem_minmax(0,1fr)]"
+          onMouseLeave={() => setTooltip(null)}
+        >
+          <div className="relative mx-auto size-52">
+            <svg
+              aria-label={`${title}: пончиковый график`}
+              className="size-full"
+              role="img"
+              viewBox="0 0 100 100"
+            >
+              <circle
+                cx="50"
+                cy="50"
+                fill="none"
+                r="34"
+                stroke="rgba(255,255,255,0.08)"
+                strokeWidth="16"
+              />
+              {donutSlices.map(({ endAngle, segment, startAngle, tooltipPoint }) => {
+                return (
+                  <path
+                    key={segment.id}
+                    aria-label={`${segment.label}: ${segment.value}`}
+                    className="cursor-pointer opacity-90 outline-none transition hover:opacity-100 focus-visible:opacity-100"
+                    d={getDonutArcPath(startAngle, endAngle)}
+                    fill={segment.color}
+                    role="button"
+                    tabIndex={0}
+                    onFocus={() =>
+                      setTooltip({
+                        segment,
+                        x: tooltipPoint.x,
+                        y: tooltipPoint.y,
+                      })
+                    }
+                    onMouseEnter={() =>
+                      setTooltip({
+                        segment,
+                        x: tooltipPoint.x,
+                        y: tooltipPoint.y,
+                      })
+                    }
+                  />
+                );
+              })}
+            </svg>
+            <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+              <div>
+                <p className="text-2xl font-semibold tabular-nums text-text">
+                  {total}
+                </p>
+                <p className="text-xs text-text-muted">всего</p>
               </div>
             </div>
-          ))}
+            <ChartTooltip state={tooltip} total={total} />
+          </div>
+
+          <ChartLegend segments={segments} />
+        </div>
+      ) : (
+        <div
+          className="relative mt-4 space-y-3"
+          onMouseLeave={() => setTooltip(null)}
+        >
+          {segments.map((segment, index) => {
+            const width = total
+              ? Math.max(segment.value > 0 ? 4 : 0, (segment.value / max) * 100)
+              : 0;
+
+            return (
+              <button
+                key={segment.id}
+                className="block w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                type="button"
+                onFocus={() =>
+                  setTooltip({
+                    segment,
+                    x: 72,
+                    y: ((index + 0.5) / Math.max(1, segments.length)) * 100,
+                  })
+                }
+                onMouseEnter={() =>
+                  setTooltip({
+                    segment,
+                    x: 72,
+                    y: ((index + 0.5) / Math.max(1, segments.length)) * 100,
+                  })
+                }
+              >
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="min-w-0 truncate text-text-muted">{segment.label}</span>
+                  <span className="font-semibold tabular-nums text-text">{segment.value}</span>
+                </div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-control">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${width}%`,
+                      backgroundColor: segment.color,
+                    }}
+                  />
+                </div>
+              </button>
+            );
+          })}
+          <ChartTooltip state={tooltip} total={total} />
         </div>
       )}
     </section>
+  );
+}
+
+function ChartLegend({
+  segments,
+}: Readonly<{ segments: readonly AnalyticsSegment[] }>) {
+  return (
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {segments.map((segment) => (
+        <div key={segment.id} className="flex items-center gap-2 text-xs">
+          <span
+            aria-hidden="true"
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: segment.color }}
+          />
+          <span className="min-w-0 flex-1 truncate text-text-muted">
+            {segment.label}
+          </span>
+          <span className="font-semibold tabular-nums text-text">
+            {segment.value}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -323,7 +563,7 @@ export function AnalyticsPage() {
                   <BarChart3 aria-hidden="true" size={17} />
                   {analytics.activeCards} активных карточек
                 </div>
-                <div className="inline-grid grid-cols-2 rounded-lg border border-white/10 bg-control/35 p-1">
+                <div className="inline-grid grid-cols-2 rounded-lg border border-white/10 bg-control/35 p-1 sm:grid-cols-4">
                   <button
                     aria-pressed={chartMode === "bars"}
                     className={cn(
@@ -349,6 +589,32 @@ export function AnalyticsPage() {
                     onClick={() => setChartMode("line")}
                   >
                     Линия
+                  </button>
+                  <button
+                    aria-pressed={chartMode === "area"}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm font-medium transition",
+                      chartMode === "area"
+                        ? "bg-accent text-accent-foreground"
+                        : "text-text-muted hover:bg-control hover:text-text",
+                    )}
+                    type="button"
+                    onClick={() => setChartMode("area")}
+                  >
+                    Площадь
+                  </button>
+                  <button
+                    aria-pressed={chartMode === "donut"}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm font-medium transition",
+                      chartMode === "donut"
+                        ? "bg-accent text-accent-foreground"
+                        : "text-text-muted hover:bg-control hover:text-text",
+                    )}
+                    type="button"
+                    onClick={() => setChartMode("donut")}
+                  >
+                    Пончик
                   </button>
                 </div>
               </div>

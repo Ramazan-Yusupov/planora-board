@@ -31,7 +31,7 @@ import { getCardMoveDestination } from "@/features/move-card";
 import { getListMoveDestination } from "@/features/move-list";
 import { getActiveBoardListIds } from "@/features/board-management";
 import { cn, readDndItemData, type DndItemData } from "@/shared/lib";
-import { Button, ConfirmDialog, IconButton, TextField } from "@/shared/ui";
+import { Button, ConfirmDialog, FormHint, IconButton, TextField } from "@/shared/ui";
 
 import { CardContextMenu } from "./CardContextMenu";
 import { CardPreview } from "./CardItem";
@@ -97,6 +97,8 @@ export function BoardColumns({
   const [deleteCardId, setDeleteCardId] = useState<string | null>(null);
   const [isAddingList, setIsAddingList] = useState(false);
   const [listTitle, setListTitle] = useState("");
+  const [didAttemptEmptyListTitle, setDidAttemptEmptyListTitle] =
+    useState(false);
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: { distance: 6 },
@@ -166,11 +168,13 @@ export function BoardColumns({
     const normalizedTitle = listTitle.trim();
 
     if (!normalizedTitle) {
+      setDidAttemptEmptyListTitle(true);
       return;
     }
 
     onAddList(normalizedTitle);
     setListTitle("");
+    setDidAttemptEmptyListTitle(false);
     setIsAddingList(false);
   };
 
@@ -245,15 +249,26 @@ export function BoardColumns({
                   className="bg-white/5 text-white placeholder:text-slate-400"
                   placeholder="Например, На проверке"
                   value={listTitle}
-                  onChange={(event) => setListTitle(event.target.value)}
+                  onChange={(event) => {
+                    setListTitle(event.target.value);
+                    if (event.target.value.trim()) {
+                      setDidAttemptEmptyListTitle(false);
+                    }
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Escape") {
                       event.preventDefault();
                       setListTitle("");
+                      setDidAttemptEmptyListTitle(false);
                       setIsAddingList(false);
                     }
                   }}
                 />
+                {didAttemptEmptyListTitle ? (
+                  <FormHint className="mt-2" tone="warning">
+                    Список нельзя создать из одних пробелов. Напишите название.
+                  </FormHint>
+                ) : null}
                 <div className="mt-2 flex items-center gap-2">
                   <Button size="sm" type="submit">
                     Создать список
@@ -264,6 +279,7 @@ export function BoardColumns({
                     size="sm"
                     onClick={() => {
                       setListTitle("");
+                      setDidAttemptEmptyListTitle(false);
                       setIsAddingList(false);
                     }}
                   >

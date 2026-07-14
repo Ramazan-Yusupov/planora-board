@@ -2,7 +2,11 @@ import { createId } from "@/shared/lib";
 
 import { DEFAULT_BOARD_APPEARANCE } from "./appearance";
 import { createDefaultBoardLabelCollection } from "./labels";
-import type { Board, BoardAppearance } from "../model/types";
+import {
+  CARD_COVER_COLOR_OPTIONS,
+  type Board,
+  type BoardAppearance,
+} from "../model/types";
 
 type StarterBoardOptions = {
   id?: string;
@@ -32,7 +36,7 @@ export function createStarterBoard(options: StarterBoardOptions = {}): Board {
     cardPriorityLabels: {},
     cardStatuses: [],
     cardPriorities: [],
-    coverColors: [],
+    coverColors: [...CARD_COVER_COLOR_OPTIONS],
     customFieldTemplates: [],
     checklistTemplates: [],
     ...labels,
@@ -179,7 +183,7 @@ export function createEmptyBoard(title: string): Board {
     cardPriorityLabels: {},
     cardStatuses: [],
     cardPriorities: [],
-    coverColors: [],
+    coverColors: [...CARD_COVER_COLOR_OPTIONS],
     customFieldTemplates: [],
     checklistTemplates: [],
     ...labels,

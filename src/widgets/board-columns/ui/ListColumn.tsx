@@ -36,6 +36,7 @@ import { cn } from "@/shared/lib";
 import {
   Button,
   ConfirmDialog,
+  FormHint,
   IconButton,
   Textarea,
   TextField,
@@ -90,6 +91,8 @@ export function ListColumn({
 }: ListColumnProps) {
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
+  const [didAttemptEmptyCardTitle, setDidAttemptEmptyCardTitle] =
+    useState(false);
   const [listTitle, setListTitle] = useState(list.title);
   const [isEditingListTitle, setIsEditingListTitle] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -129,11 +132,13 @@ export function ListColumn({
     const normalizedTitle = cardTitle.trim();
 
     if (!normalizedTitle) {
+      setDidAttemptEmptyCardTitle(true);
       return;
     }
 
     onAddCard(list.id, normalizedTitle);
     setCardTitle("");
+    setDidAttemptEmptyCardTitle(false);
     setIsAddingCard(false);
   };
 
@@ -346,15 +351,26 @@ export function ListColumn({
               className="min-h-20 resize-none rounded-lg bg-white/5 text-white placeholder:text-slate-400"
               placeholder="Например, подготовить макеты"
               value={cardTitle}
-              onChange={(event) => setCardTitle(event.target.value)}
+              onChange={(event) => {
+                setCardTitle(event.target.value);
+                if (event.target.value.trim()) {
+                  setDidAttemptEmptyCardTitle(false);
+                }
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
                   setCardTitle("");
+                  setDidAttemptEmptyCardTitle(false);
                   setIsAddingCard(false);
                 }
               }}
             />
+            {didAttemptEmptyCardTitle ? (
+              <FormHint className="mt-2" tone="warning">
+                Карточку нельзя создать из одних пробелов. Напишите название.
+              </FormHint>
+            ) : null}
             <div className="mt-2 flex items-center gap-2">
               <Button size="sm" type="submit">
                 <Check aria-hidden="true" size={16} />
@@ -366,6 +382,7 @@ export function ListColumn({
                 size="sm"
                 onClick={() => {
                   setCardTitle("");
+                  setDidAttemptEmptyCardTitle(false);
                   setIsAddingCard(false);
                 }}
               >

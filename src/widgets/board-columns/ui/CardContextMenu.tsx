@@ -14,7 +14,6 @@ import {
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import {
-  CARD_COVER_COLOR_OPTIONS,
   CARD_PRIORITY_OPTIONS,
   CARD_STATUS_OPTIONS,
   type BoardCard,
@@ -238,7 +237,7 @@ export function CardContextMenu({
 
     save({ customFields: nextFields });
   };
-  const menuCoverColors = coverColors.length > 0 ? coverColors : [...CARD_COVER_COLOR_OPTIONS];
+  const menuCoverColors = coverColors;
 
   return (
     <div

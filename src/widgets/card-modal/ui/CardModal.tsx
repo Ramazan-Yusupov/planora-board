@@ -23,6 +23,7 @@ import { CardStickerPicker } from "@/features/manage-card-sticker";
 import { CardAttachmentsEditor } from "@/features/manage-attachments";
 import { CardChecklistsEditor } from "@/features/manage-checklist";
 import { CardCommentsEditor } from "@/features/manage-comments";
+import { CardCustomFieldsEditor } from "@/features/manage-custom-fields";
 import { Button, ConfirmDialog, FieldLabel, Modal, Panel, Select, Textarea, TextField } from "@/shared/ui";
 
 type CardModalProps = Readonly<{
@@ -213,6 +214,13 @@ export function CardModal({
               />
             </div>
           </div>
+
+          <CardCustomFieldsEditor
+            fields={draft.customFields}
+            onChange={(customFields) =>
+              setDraft((current) => ({ ...current, customFields }))
+            }
+          />
 
           <CardChecklistsEditor
             checklists={checklists}

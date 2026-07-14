@@ -287,10 +287,7 @@ export function BoardToolsSidebar({
   const labelToDelete = labelIdToDelete
     ? board.labels[labelIdToDelete]
     : undefined;
-  const coverColors =
-    board.coverColors.length > 0
-      ? board.coverColors
-      : [...CARD_COVER_COLOR_OPTIONS];
+  const coverColors = board.coverColors;
   const statusOptionsCount = CARD_STATUS_OPTIONS.length + board.cardStatuses.length;
   const priorityOptionsCount =
     CARD_PRIORITY_OPTIONS.length + board.cardPriorities.length;
