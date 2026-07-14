@@ -1,5 +1,7 @@
 import {
   appendBoardActivities,
+  CARD_PRIORITY_OPTIONS,
+  CARD_STATUS_OPTIONS,
   formatActivityDueDate,
   getRandomCardSticker,
   normalizeCardLabelIds,
@@ -11,14 +13,17 @@ import {
   type BoardAppearance,
   type BoardAttachment,
   type BoardCard,
+  type BoardCardOption,
   type BoardChecklist,
+  type BoardChecklistTemplate,
   type BoardChecklistItem,
+  type BoardCustomFieldTemplate,
   type BoardComment,
   type BoardList,
-  type BoardMember,
-  type BoardMemberDraft,
+  type CardPriority,
   type CardCover,
   type CardDraft,
+  type CardStatus,
 } from "@/entities/board";
 import { createId } from "@/shared/lib";
 
@@ -67,6 +72,42 @@ function describeLabels(board: Board, labelIds: readonly string[]): string {
   const suffix = names.length > visibleNames.length ? ` и ещё ${names.length - visibleNames.length}` : "";
 
   return `Обновлены метки: ${visibleNames.join(", ")}${suffix}.`;
+}
+
+function describeStatus(status: BoardCard["status"]): string {
+  return CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
+}
+
+function describePriority(priority: BoardCard["priority"]): string {
+  return CARD_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? priority;
+}
+
+function normalizeDateKey(value: string | undefined): string | undefined {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+}
+
+function normalizeCustomFields(
+  fields: CardDraft["customFields"],
+  timestamp: number,
+): CardDraft["customFields"] {
+  return fields.flatMap((field) => {
+    const name = field.name.trim().replace(/\s+/g, " ");
+    const value = field.value.trim();
+
+    if (!name && !value) {
+      return [];
+    }
+
+    return [
+      {
+        id: field.id || createId("card-field"),
+        name: name || "Поле",
+        value,
+        createdAt: field.createdAt || timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+  });
 }
 
 function normalizeCardCover(
@@ -252,6 +293,350 @@ export function updateBoardAppearance(board: Board, appearance: BoardAppearance)
   };
 }
 
+export function updateCardStatusLabel(
+  board: Board,
+  status: CardStatus,
+  label: string,
+): Board {
+  const normalizedLabel = label.trim().replace(/\s+/g, " ");
+
+  if (!normalizedLabel) {
+    return board;
+  }
+
+  return {
+    ...board,
+    cardStatusLabels: {
+      ...board.cardStatusLabels,
+      [status]: normalizedLabel.slice(0, 48),
+    },
+    updatedAt: now(),
+  };
+}
+
+export function updateCardPriorityLabel(
+  board: Board,
+  priority: CardPriority,
+  label: string,
+): Board {
+  const normalizedLabel = label.trim().replace(/\s+/g, " ");
+
+  if (!normalizedLabel) {
+    return board;
+  }
+
+  return {
+    ...board,
+    cardPriorityLabels: {
+      ...board.cardPriorityLabels,
+      [priority]: normalizedLabel.slice(0, 48),
+    },
+    updatedAt: now(),
+  };
+}
+
+function normalizeOptionName(value: string): string {
+  return value.trim().replace(/\s+/g, " ").slice(0, 48);
+}
+
+function normalizeOptionColor(value: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : "#64748B";
+}
+
+function createBoardOption(name: string, color: string, prefix: string): BoardCardOption | null {
+  const normalizedName = normalizeOptionName(name);
+
+  if (!normalizedName) {
+    return null;
+  }
+
+  const timestamp = now();
+
+  return {
+    id: createId(prefix),
+    name: normalizedName,
+    color: normalizeOptionColor(color),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export function createCardStatusOption(board: Board, name: string, color: string): Board {
+  if (CARD_STATUS_OPTIONS.length + board.cardStatuses.length >= 10) {
+    return board;
+  }
+
+  const option = createBoardOption(name, color, "status");
+
+  if (!option) {
+    return board;
+  }
+
+  return {
+    ...board,
+    cardStatuses: [...board.cardStatuses, option],
+    updatedAt: option.createdAt,
+  };
+}
+
+export function updateCardStatusOption(
+  board: Board,
+  optionId: string,
+  name: string,
+  color: string,
+): Board {
+  const normalizedName = normalizeOptionName(name);
+
+  if (!normalizedName) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    cardStatuses: board.cardStatuses.map((option) =>
+      option.id === optionId
+        ? {
+            ...option,
+            name: normalizedName,
+            color: normalizeOptionColor(color),
+            updatedAt: timestamp,
+          }
+        : option,
+    ),
+    updatedAt: timestamp,
+  };
+}
+
+export function deleteCardStatusOption(board: Board, optionId: string): Board {
+  if (!board.cardStatuses.some((option) => option.id === optionId)) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    cardStatuses: board.cardStatuses.filter((option) => option.id !== optionId),
+    cards: Object.fromEntries(
+      Object.entries(board.cards).map(([cardId, card]) => [
+        cardId,
+        card.status === optionId
+          ? { ...card, status: "none", completedAt: undefined, updatedAt: timestamp }
+          : card,
+      ]),
+    ) as Record<string, BoardCard>,
+    updatedAt: timestamp,
+  };
+}
+
+export function createCardPriorityOption(board: Board, name: string, color: string): Board {
+  if (CARD_PRIORITY_OPTIONS.length + board.cardPriorities.length >= 10) {
+    return board;
+  }
+
+  const option = createBoardOption(name, color, "priority");
+
+  if (!option) {
+    return board;
+  }
+
+  return {
+    ...board,
+    cardPriorities: [...board.cardPriorities, option],
+    updatedAt: option.createdAt,
+  };
+}
+
+export function updateCardPriorityOption(
+  board: Board,
+  optionId: string,
+  name: string,
+  color: string,
+): Board {
+  const normalizedName = normalizeOptionName(name);
+
+  if (!normalizedName) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    cardPriorities: board.cardPriorities.map((option) =>
+      option.id === optionId
+        ? {
+            ...option,
+            name: normalizedName,
+            color: normalizeOptionColor(color),
+            updatedAt: timestamp,
+          }
+        : option,
+    ),
+    updatedAt: timestamp,
+  };
+}
+
+export function deleteCardPriorityOption(board: Board, optionId: string): Board {
+  if (!board.cardPriorities.some((option) => option.id === optionId)) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    cardPriorities: board.cardPriorities.filter((option) => option.id !== optionId),
+    cards: Object.fromEntries(
+      Object.entries(board.cards).map(([cardId, card]) => [
+        cardId,
+        card.priority === optionId ? { ...card, priority: "none", updatedAt: timestamp } : card,
+      ]),
+    ) as Record<string, BoardCard>,
+    updatedAt: timestamp,
+  };
+}
+
+export function createCustomFieldTemplate(
+  board: Board,
+  name: string,
+): Board {
+  if (board.customFieldTemplates.length >= 10) {
+    return board;
+  }
+
+  const normalizedName = name.trim().replace(/\s+/g, " ");
+
+  if (!normalizedName) {
+    return board;
+  }
+
+  const timestamp = now();
+  const template: BoardCustomFieldTemplate = {
+    id: createId("field-template"),
+    name: normalizedName.slice(0, 64),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  return {
+    ...board,
+    customFieldTemplates: [...board.customFieldTemplates, template],
+    updatedAt: timestamp,
+  };
+}
+
+export function updateCustomFieldTemplate(
+  board: Board,
+  templateId: string,
+  name: string,
+): Board {
+  const normalizedName = name.trim().replace(/\s+/g, " ");
+
+  if (!normalizedName) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    customFieldTemplates: board.customFieldTemplates.map((template) =>
+      template.id === templateId
+        ? { ...template, name: normalizedName.slice(0, 64), updatedAt: timestamp }
+        : template,
+    ),
+    updatedAt: timestamp,
+  };
+}
+
+export function deleteCustomFieldTemplate(board: Board, templateId: string): Board {
+  return {
+    ...board,
+    customFieldTemplates: board.customFieldTemplates.filter(
+      (template) => template.id !== templateId,
+    ),
+    updatedAt: now(),
+  };
+}
+
+export function createChecklistTemplate(board: Board, title: string): Board {
+  if (board.checklistTemplates.length >= 10) {
+    return board;
+  }
+
+  const normalizedTitle = title.trim().replace(/\s+/g, " ");
+
+  if (!normalizedTitle) {
+    return board;
+  }
+
+  const timestamp = now();
+  const template: BoardChecklistTemplate = {
+    id: createId("checklist-template"),
+    title: normalizedTitle.slice(0, 120),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  return {
+    ...board,
+    checklistTemplates: [...board.checklistTemplates, template],
+    updatedAt: timestamp,
+  };
+}
+
+export function updateChecklistTemplate(
+  board: Board,
+  templateId: string,
+  title: string,
+): Board {
+  const normalizedTitle = title.trim().replace(/\s+/g, " ");
+
+  if (!normalizedTitle) {
+    return board;
+  }
+
+  const timestamp = now();
+
+  return {
+    ...board,
+    checklistTemplates: board.checklistTemplates.map((template) =>
+      template.id === templateId
+        ? { ...template, title: normalizedTitle.slice(0, 120), updatedAt: timestamp }
+        : template,
+    ),
+    updatedAt: timestamp,
+  };
+}
+
+export function deleteChecklistTemplate(board: Board, templateId: string): Board {
+  return {
+    ...board,
+    checklistTemplates: board.checklistTemplates.filter(
+      (template) => template.id !== templateId,
+    ),
+    updatedAt: now(),
+  };
+}
+
+export function updateBoardCoverColors(board: Board, coverColors: readonly string[]): Board {
+  const nextCoverColors = coverColors
+    .map((color) => color.trim())
+    .filter((color) => /^#[0-9a-fA-F]{6}$/.test(color))
+    .map((color) => color.toUpperCase())
+    .filter((color, index, colors) => colors.indexOf(color) === index)
+    .slice(0, 10);
+
+  return {
+    ...board,
+    coverColors: nextCoverColors,
+    updatedAt: now(),
+  };
+}
+
 export function addList(board: Board, title: string): Board {
   const normalizedTitle = title.trim();
   if (!normalizedTitle) {
@@ -398,11 +783,17 @@ export function duplicateList(board: Board, listId: string): Board {
     const copiedChecklists = copyCardChecklists(board, sourceCard, cardId, timestamp);
     duplicateCardIds.push(cardId);
     duplicatedChecklistIds.push(...copiedChecklists.checklistIds);
-    nextCards[cardId] = {
+      nextCards[cardId] = {
       ...sourceCard,
       id: cardId,
       listId: newListId,
       memberIds: [...sourceCard.memberIds],
+      customFields: sourceCard.customFields.map((field) => ({
+        ...field,
+        id: createId("card-field"),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })),
       checklistIds: copiedChecklists.checklistIds,
       attachmentIds: [],
       commentIds: [],
@@ -562,6 +953,9 @@ export function addCard(board: Board, listId: string, title: string): Board {
         listId,
         title: normalizedTitle,
         description: "",
+        status: "none",
+        priority: "none",
+        customFields: [],
         labelIds: [],
         memberIds: [],
         checklistIds: [],
@@ -595,12 +989,23 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
   }
 
   const timestamp = now();
+  const nextStatus = draft.status;
   const nextCard: BoardCard = {
     ...card,
     title: normalizedTitle,
     description: draft.description.trim(),
-    dueDate: draft.dueDate || undefined,
+    status: nextStatus,
+    priority: draft.priority,
+    startDate: normalizeDateKey(draft.startDate),
+    dueDate: normalizeDateKey(draft.dueDate),
+    completedAt:
+      nextStatus === "done"
+        ? card.status === "done"
+          ? card.completedAt
+          : timestamp
+        : undefined,
     labelIds: normalizeCardLabelIds(draft.labelIds, board.labels),
+    customFields: normalizeCustomFields(draft.customFields, timestamp),
     sticker: normalizeCardSticker(draft.sticker),
     cover: normalizeCardCover(board, cardId, draft.cover),
     updatedAt: timestamp,
@@ -650,11 +1055,47 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
     }
   }
 
+  if (card.startDate !== nextCard.startDate) {
+    activities.push({
+      cardId,
+      type: "card-start-date-updated",
+      message: nextCard.startDate ? "Обновлена дата старта." : "Удалена дата старта.",
+      createdAt: timestamp,
+    });
+  }
+
+  if (card.status !== nextCard.status) {
+    activities.push({
+      cardId,
+      type: "card-status-updated",
+      message: `Статус изменён: ${describeStatus(card.status)} → ${describeStatus(nextCard.status)}.`,
+      createdAt: timestamp,
+    });
+  }
+
+  if (card.priority !== nextCard.priority) {
+    activities.push({
+      cardId,
+      type: "card-priority-updated",
+      message: `Приоритет изменён: ${describePriority(card.priority)} → ${describePriority(nextCard.priority)}.`,
+      createdAt: timestamp,
+    });
+  }
+
   if (!areStringArraysEqual(card.labelIds, nextCard.labelIds)) {
     activities.push({
       cardId,
       type: "card-labels-updated",
       message: describeLabels(board, nextCard.labelIds),
+      createdAt: timestamp,
+    });
+  }
+
+  if (JSON.stringify(card.customFields) !== JSON.stringify(nextCard.customFields)) {
+    activities.push({
+      cardId,
+      type: "card-custom-fields-updated",
+      message: "Обновлены дополнительные поля карточки.",
       createdAt: timestamp,
     });
   }
@@ -681,262 +1122,6 @@ export function updateCard(board: Board, cardId: string, draft: CardDraft): Boar
     },
     activities,
   );
-}
-
-export function createBoardMember(
-  board: Board,
-  draft: BoardMemberDraft,
-): Readonly<{ board: Board; member: BoardMember | null }> {
-  const normalizedName = draft.name.trim().replace(/\s+/g, " ");
-
-  if (!normalizedName || !/^#[0-9a-fA-F]{6}$/.test(draft.avatarColor)) {
-    return { board, member: null };
-  }
-
-  const timestamp = now();
-  const member: BoardMember = {
-    id: createId("member"),
-    name: normalizedName,
-    avatarColor: draft.avatarColor,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-
-  return {
-    board: {
-      ...board,
-      memberIds: [...board.memberIds, member.id],
-      members: {
-        ...board.members,
-        [member.id]: member,
-      },
-      updatedAt: timestamp,
-    },
-    member,
-  };
-}
-
-export function updateBoardMember(
-  board: Board,
-  memberId: string,
-  draft: BoardMemberDraft,
-): Board {
-  const member = board.members[memberId];
-  const normalizedName = draft.name.trim().replace(/\s+/g, " ");
-
-  if (!member || !normalizedName || !/^#[0-9a-fA-F]{6}$/.test(draft.avatarColor)) {
-    return board;
-  }
-
-  const timestamp = now();
-
-  return {
-    ...board,
-    members: {
-      ...board.members,
-      [memberId]: {
-        ...member,
-        name: normalizedName,
-        avatarColor: draft.avatarColor,
-        updatedAt: timestamp,
-      },
-    },
-    updatedAt: timestamp,
-  };
-}
-
-export function deleteBoardMember(board: Board, memberId: string): Board {
-  if (!board.members[memberId]) {
-    return board;
-  }
-
-  const timestamp = now();
-  const members = { ...board.members };
-  delete members[memberId];
-
-  return {
-    ...board,
-    memberIds: board.memberIds.filter((currentMemberId) => currentMemberId !== memberId),
-    members,
-    cards: Object.fromEntries(
-      Object.entries(board.cards).map(([cardId, card]) => [
-        cardId,
-        card.memberIds.includes(memberId)
-          ? {
-              ...card,
-              memberIds: card.memberIds.filter((currentMemberId) => currentMemberId !== memberId),
-              updatedAt: timestamp,
-            }
-          : card,
-      ]),
-    ) as Record<string, BoardCard>,
-    updatedAt: timestamp,
-  };
-}
-
-export function toggleCardMember(
-  board: Board,
-  cardId: string,
-  memberId: string,
-): Board {
-  const card = board.cards[cardId];
-  const member = board.members[memberId];
-
-  if (!card || !member) {
-    return board;
-  }
-
-  const timestamp = now();
-  const isAssigned = card.memberIds.includes(memberId);
-  const nextMemberIds = isAssigned
-    ? card.memberIds.filter((currentMemberId) => currentMemberId !== memberId)
-    : [...card.memberIds, memberId];
-  const nextBoard: Board = {
-    ...board,
-    cards: {
-      ...board.cards,
-      [cardId]: {
-        ...card,
-        memberIds: nextMemberIds,
-        updatedAt: timestamp,
-      },
-    },
-    updatedAt: timestamp,
-  };
-
-  return appendBoardActivities(nextBoard, [
-    {
-      cardId,
-      type: "card-members-updated",
-      message: isAssigned
-        ? `Участник «${member.name}» снят с карточки.`
-        : `Участник «${member.name}» добавлен на карточку.`,
-      createdAt: timestamp,
-    },
-  ]);
-}
-
-export function addCardComment(
-  board: Board,
-  cardId: string,
-  message: string,
-): Board {
-  const card = board.cards[cardId];
-  const normalizedMessage = message.trim();
-
-  if (!card || !normalizedMessage) {
-    return board;
-  }
-
-  const timestamp = now();
-  const comment: BoardComment = {
-    id: createId("comment"),
-    cardId,
-    authorName: "Вы",
-    message: normalizedMessage,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-  const nextBoard: Board = {
-    ...board,
-    commentIds: [comment.id, ...board.commentIds],
-    comments: {
-      ...board.comments,
-      [comment.id]: comment,
-    },
-    cards: {
-      ...board.cards,
-      [cardId]: {
-        ...card,
-        commentIds: [comment.id, ...card.commentIds],
-        updatedAt: timestamp,
-      },
-    },
-    updatedAt: timestamp,
-  };
-
-  return appendBoardActivities(nextBoard, [
-    {
-      cardId,
-      type: "comment-created",
-      message: "Добавлен комментарий.",
-      createdAt: timestamp,
-    },
-  ]);
-}
-
-export function updateCardComment(
-  board: Board,
-  commentId: string,
-  message: string,
-): Board {
-  const comment = board.comments[commentId];
-  const normalizedMessage = message.trim();
-
-  if (!comment || !normalizedMessage || comment.message === normalizedMessage) {
-    return board;
-  }
-
-  const timestamp = now();
-  const nextBoard: Board = {
-    ...board,
-    comments: {
-      ...board.comments,
-      [commentId]: {
-        ...comment,
-        message: normalizedMessage,
-        updatedAt: timestamp,
-      },
-    },
-    updatedAt: timestamp,
-  };
-
-  return appendBoardActivities(nextBoard, [
-    {
-      cardId: comment.cardId,
-      type: "comment-updated",
-      message: "Комментарий обновлён.",
-      createdAt: timestamp,
-    },
-  ]);
-}
-
-export function deleteCardComment(board: Board, commentId: string): Board {
-  const comment = board.comments[commentId];
-
-  if (!comment) {
-    return board;
-  }
-
-  const card = board.cards[comment.cardId];
-  const timestamp = now();
-  const comments = { ...board.comments };
-  delete comments[commentId];
-  const nextBoard: Board = {
-    ...board,
-    commentIds: board.commentIds.filter((currentCommentId) => currentCommentId !== commentId),
-    comments,
-    cards: card
-      ? {
-          ...board.cards,
-          [card.id]: {
-            ...card,
-            commentIds: card.commentIds.filter((currentCommentId) => currentCommentId !== commentId),
-            updatedAt: timestamp,
-          },
-        }
-      : board.cards,
-    updatedAt: timestamp,
-  };
-
-  return appendBoardActivities(nextBoard, [
-    {
-      cardId: comment.cardId,
-      type: "comment-deleted",
-      message: "Комментарий удалён.",
-      createdAt: timestamp,
-    },
-  ]);
 }
 
 export function deleteCard(board: Board, cardId: string): Board {

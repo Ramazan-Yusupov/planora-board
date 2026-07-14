@@ -1,5 +1,6 @@
 export const CALENDAR_ROUTE = "/calendar";
-export const ADMIN_ROUTE = "/admin";
+export const ANALYTICS_ROUTE = "/analytics";
+export const NOTES_ROUTE = "/notes";
 
 export function getBoardRoute(boardId: string, cardId?: string): string {
   const route = `/boards/${encodeURIComponent(boardId)}`;

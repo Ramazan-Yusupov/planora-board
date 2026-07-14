@@ -85,10 +85,18 @@ function matchesDueDate(
 
 export function isCardMatchingFilters(
   card: BoardCard,
-  filters: Pick<CardFilters, "query" | "labelIds" | "dueDate">,
+  filters: Pick<CardFilters, "query" | "labelIds" | "dueDate" | "status" | "priority">,
   referenceDate = new Date(),
 ): boolean {
   if (card.isArchived) {
+    return false;
+  }
+
+  if (filters.status !== "all" && card.status !== filters.status) {
+    return false;
+  }
+
+  if (filters.priority !== "all" && card.priority !== filters.priority) {
     return false;
   }
 
@@ -153,6 +161,14 @@ export function getActiveCardFiltersCount(filters: CardFilters): number {
     count += 1;
   }
 
+  if (filters.status !== DEFAULT_CARD_FILTERS.status) {
+    count += 1;
+  }
+
+  if (filters.priority !== DEFAULT_CARD_FILTERS.priority) {
+    count += 1;
+  }
+
   if (filters.listId !== DEFAULT_CARD_FILTERS.listId) {
     count += 1;
   }
@@ -166,10 +182,12 @@ export function hasActiveCardFilters(filters: CardFilters): boolean {
 
 export function toCardFilters(
   filters: CalendarCardFilters,
-): Pick<CardFilters, "query" | "labelIds" | "dueDate"> {
+): Pick<CardFilters, "query" | "labelIds" | "dueDate" | "status" | "priority"> {
   return {
     query: filters.query,
     labelIds: filters.labelIds,
     dueDate: "all",
+    status: "all",
+    priority: "all",
   };
 }

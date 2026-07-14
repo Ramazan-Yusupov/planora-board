@@ -3,24 +3,35 @@
 import {
   AlignLeft,
   CalendarDays,
+  Flag,
   ListChecks,
   MessageSquare,
   Paperclip,
+  Rows3,
 } from "lucide-react";
 
 import {
+  CARD_PRIORITY_OPTIONS,
+  CARD_STATUS_OPTIONS,
   getCardChecklistProgress,
+  type BoardCardOption,
   type BoardCard,
   type BoardChecklist,
   type BoardChecklistItem,
   type BoardMember,
+  type CardPriority,
   type CardSurface,
+  type CardStatus,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
 
 type CardBadgesProps = Readonly<{
   card: BoardCard;
   cardSurface: CardSurface;
+  priorityOptions?: readonly BoardCardOption[];
+  priorityLabels?: Partial<Record<CardPriority, string>>;
+  statusOptions?: readonly BoardCardOption[];
+  statusLabels?: Partial<Record<CardStatus, string>>;
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   checklists: Readonly<Record<string, BoardChecklist>>;
   members: Readonly<Record<string, BoardMember>>;
@@ -59,6 +70,25 @@ function formatCardDueDate(dueDate: string): string {
   }).format(new Date(`${dueDate}T12:00:00`));
 }
 
+type BadgeOption = Readonly<{
+  value: string;
+  label: string;
+  color: string;
+}>;
+
+function getOptionMeta(
+  options: readonly BadgeOption[],
+  value: string,
+): BadgeOption {
+  return (
+    options.find((option) => option.value === value) ?? {
+      value,
+      label: value,
+      color: "#64748b",
+    }
+  );
+}
+
 function CardChecklistProgress({
   card,
   checklistItems,
@@ -86,6 +116,10 @@ function CardChecklistProgress({
 export function CardBadges({
   card,
   cardSurface,
+  priorityOptions = [],
+  priorityLabels = {},
+  statusOptions = [],
+  statusLabels = {},
   checklistItems,
   checklists,
   members,
@@ -94,6 +128,35 @@ export function CardBadges({
   const hasAttachments = card.attachmentIds.length > 0;
   const hasChecklist = card.checklistIds.length > 0;
   const hasComments = card.commentIds.length > 0;
+  const hasCustomFields = card.customFields.length > 0;
+  const allStatusOptions: BadgeOption[] = [
+    ...CARD_STATUS_OPTIONS.map((option) => ({
+      value: option.value,
+      label: statusLabels[option.value] ?? option.label,
+      color: option.color,
+    })),
+    ...statusOptions.map((option) => ({
+      value: option.id,
+      label: option.name,
+      color: option.color,
+    })),
+  ];
+  const allPriorityOptions: BadgeOption[] = [
+    ...CARD_PRIORITY_OPTIONS.map((option) => ({
+      value: option.value,
+      label: priorityLabels[option.value] ?? option.label,
+      color: option.color,
+    })),
+    ...priorityOptions.map((option) => ({
+      value: option.id,
+      label: option.name,
+      color: option.color,
+    })),
+  ];
+  const status = getOptionMeta(allStatusOptions, card.status);
+  const priority = getOptionMeta(allPriorityOptions, card.priority);
+  const statusLabel = status.label;
+  const priorityLabel = priority.label;
   const cardMembers = card.memberIds.flatMap((memberId) => {
     const member = members[memberId];
     return member ? [member] : [];
@@ -104,10 +167,14 @@ export function CardBadges({
 
   if (
     !card.dueDate &&
+    !card.startDate &&
     !hasDescription &&
     !hasAttachments &&
     !hasChecklist &&
     !hasComments &&
+    !hasCustomFields &&
+    card.status === "none" &&
+    card.priority === "none" &&
     cardMembers.length === 0
   ) {
     return null;
@@ -115,6 +182,39 @@ export function CardBadges({
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      {card.status !== "none" ? (
+        <span
+          className="inline-flex min-h-7 max-w-full min-w-0 items-center gap-1 rounded-md border border-black/5 bg-black/10 px-2 py-1 text-[11px] font-semibold"
+          style={{ color: status.color }}
+          title={`Статус: ${statusLabel}`}
+        >
+          <Rows3 aria-hidden="true" className="shrink-0" size={13} />
+          <span className="min-w-0 max-w-32 truncate">{statusLabel}</span>
+        </span>
+      ) : null}
+
+      {card.priority !== "none" ? (
+        <span
+          className="inline-flex min-h-7 max-w-full min-w-0 items-center gap-1 rounded-md border border-black/5 bg-black/10 px-2 py-1 text-[11px] font-semibold"
+          style={{ color: priority.color }}
+          title={`Приоритет: ${priorityLabel}`}
+        >
+          <Flag aria-hidden="true" className="shrink-0" size={13} />
+          <span className="min-w-0 max-w-32 truncate">{priorityLabel}</span>
+        </span>
+      ) : null}
+
+      {card.startDate ? (
+        <span
+          className="inline-flex min-h-7 items-center gap-1 rounded-md border border-black/5 bg-black/10 px-2 py-1 text-[11px] font-medium tabular-nums"
+          style={{ color: cardSurface.mutedTextColor }}
+          title={`Старт: ${formatCardDueDate(card.startDate)}`}
+        >
+          <CalendarDays aria-hidden="true" size={13} />
+          {formatCardDueDate(card.startDate)}
+        </span>
+      ) : null}
+
       {card.dueDate ? (
         <span
           className={cn(
@@ -175,6 +275,17 @@ export function CardBadges({
         >
           <MessageSquare aria-hidden="true" size={13} />
           {card.commentIds.length}
+        </span>
+      ) : null}
+
+      {hasCustomFields ? (
+        <span
+          className="inline-flex min-h-7 items-center gap-1 rounded-md border border-black/5 bg-black/10 px-2 py-1 text-[11px] font-medium tabular-nums"
+          style={{ color: cardSurface.mutedTextColor }}
+          title={`Дополнительных полей: ${card.customFields.length}`}
+        >
+          <Rows3 aria-hidden="true" size={13} />
+          {card.customFields.length}
         </span>
       ) : null}
 

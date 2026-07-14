@@ -24,14 +24,16 @@ import type {
   Board,
   BoardCard,
   BoardList,
+  CardDraft,
   ResolvedBoardAppearance,
 } from "@/entities/board";
 import { getCardMoveDestination } from "@/features/move-card";
 import { getListMoveDestination } from "@/features/move-list";
 import { getActiveBoardListIds } from "@/features/board-management";
 import { cn, readDndItemData, type DndItemData } from "@/shared/lib";
-import { Button, IconButton, TextField } from "@/shared/ui";
+import { Button, ConfirmDialog, IconButton, TextField } from "@/shared/ui";
 
+import { CardContextMenu } from "./CardContextMenu";
 import { CardPreview } from "./CardItem";
 import { ListColumn, ListPreview } from "./ListColumn";
 
@@ -46,6 +48,11 @@ type BoardColumnsProps = Readonly<{
   onDeleteList: (listId: string) => void;
   onOpenListActions: (listId: string) => void;
   onOpenCard: (cardId: string) => void;
+  onArchiveCard: (cardId: string) => void;
+  onDeleteCard: (cardId: string) => void;
+  onDuplicateCard: (cardId: string) => void;
+  onCreateChecklist: (cardId: string, title: string) => void;
+  onSaveCard: (cardId: string, draft: CardDraft) => void;
   onMoveCard: (cardId: string, listId: string, index: number) => void;
   onMoveList: (listId: string, destinationListId: string) => void;
 }>;
@@ -73,10 +80,21 @@ export function BoardColumns({
   onDeleteList,
   onOpenListActions,
   onOpenCard,
+  onArchiveCard,
+  onDeleteCard,
+  onDuplicateCard,
+  onCreateChecklist,
+  onSaveCard,
   onMoveCard,
   onMoveList,
 }: BoardColumnsProps) {
   const [activeItem, setActiveItem] = useState<DndItemData | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    cardId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [deleteCardId, setDeleteCardId] = useState<string | null>(null);
   const [isAddingList, setIsAddingList] = useState(false);
   const [listTitle, setListTitle] = useState("");
   const sensors = useSensors(
@@ -99,6 +117,8 @@ export function BoardColumns({
   const activeList = activeItem?.listId
     ? board.lists[activeItem.listId]
     : undefined;
+  const contextCard = contextMenu ? board.cards[contextMenu.cardId] : undefined;
+  const deleteCardTitle = deleteCardId ? board.cards[deleteCardId]?.title : undefined;
 
   const handleDragStart = (event: DragStartEvent) => {
     if (!isDragEnabled) {
@@ -192,11 +212,18 @@ export function BoardColumns({
                   labels={board.labels}
                   members={board.members}
                   attachments={board.attachments}
+                  priorityOptions={board.cardPriorities}
+                  priorityLabels={board.cardPriorityLabels}
+                  statusOptions={board.cardStatuses}
+                  statusLabels={board.cardStatusLabels}
                   isDragDisabled={!isDragEnabled}
                   list={visibleList}
                   totalCardCount={list.cardIds.length}
                   onAddCard={onAddCard}
                   onDeleteList={onDeleteList}
+                  onOpenCardContextMenu={(cardId, x, y) =>
+                    setContextMenu({ cardId, x, y })
+                  }
                   onOpenListActions={onOpenListActions}
                   onOpenCard={onOpenCard}
                   onRenameList={onRenameList}
@@ -272,6 +299,10 @@ export function BoardColumns({
               labels={board.labels}
               members={board.members}
               attachments={board.attachments}
+              priorityOptions={board.cardPriorities}
+              priorityLabels={board.cardPriorityLabels}
+              statusOptions={board.cardStatuses}
+              statusLabels={board.cardStatusLabels}
             />
           ) : null}
           {activeList && activeItem?.type === "list" ? (
@@ -279,6 +310,59 @@ export function BoardColumns({
           ) : null}
         </DragOverlay>
       ) : null}
+
+      {contextMenu && contextCard ? (
+        <CardContextMenu
+          card={contextCard}
+          checklistTemplates={board.checklistTemplates}
+          coverColors={board.coverColors}
+          customFieldTemplates={board.customFieldTemplates}
+          labels={board.labels}
+          priorityOptions={board.cardPriorities}
+          priorityLabels={board.cardPriorityLabels}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          statusOptions={board.cardStatuses}
+          statusLabels={board.cardStatusLabels}
+          onArchive={(cardId) => {
+            setContextMenu(null);
+            onArchiveCard(cardId);
+          }}
+          onClose={() => setContextMenu(null)}
+          onCreateChecklist={onCreateChecklist}
+          onDelete={(cardId) => {
+            setContextMenu(null);
+            setDeleteCardId(cardId);
+          }}
+          onDuplicate={(cardId) => {
+            setContextMenu(null);
+            onDuplicateCard(cardId);
+          }}
+          onOpen={(cardId) => {
+            setContextMenu(null);
+            onOpenCard(cardId);
+          }}
+          onSave={onSaveCard}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        confirmLabel="Удалить карточку"
+        description={
+          deleteCardTitle
+            ? `Карточка «${deleteCardTitle}» будет удалена без возможности восстановления.`
+            : "Карточка будет удалена без возможности восстановления."
+        }
+        destructive
+        isOpen={Boolean(deleteCardId)}
+        title="Удалить карточку?"
+        onCancel={() => setDeleteCardId(null)}
+        onConfirm={() => {
+          if (deleteCardId) {
+            onDeleteCard(deleteCardId);
+          }
+          setDeleteCardId(null);
+        }}
+      />
     </DndContext>
   );
 }

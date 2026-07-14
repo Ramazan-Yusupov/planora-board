@@ -8,6 +8,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ChevronDown,
+  ChevronRight,
   Check,
   GripVertical,
   MoreHorizontal,
@@ -20,12 +22,15 @@ import { Fragment, type FormEvent, useState } from "react";
 import type {
   BoardAttachment,
   BoardCard,
+  BoardCardOption,
   BoardChecklist,
   BoardChecklistItem,
   BoardLabel,
   BoardList,
   BoardMember,
+  CardPriority,
   CardSurface,
+  CardStatus,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
 import {
@@ -47,9 +52,14 @@ type ListColumnProps = Readonly<{
   labels: Readonly<Record<string, BoardLabel>>;
   members: Readonly<Record<string, BoardMember>>;
   attachments: Readonly<Record<string, BoardAttachment>>;
+  priorityOptions: readonly BoardCardOption[];
+  priorityLabels: Partial<Record<CardPriority, string>>;
+  statusOptions: readonly BoardCardOption[];
+  statusLabels: Partial<Record<CardStatus, string>>;
   isDragDisabled: boolean;
   totalCardCount: number;
   onOpenCard: (cardId: string) => void;
+  onOpenCardContextMenu: (cardId: string, x: number, y: number) => void;
   onAddCard: (listId: string, title: string) => void;
   onRenameList: (listId: string, title: string) => void;
   onDeleteList: (listId: string) => void;
@@ -65,9 +75,14 @@ export function ListColumn({
   labels,
   members,
   attachments,
+  priorityOptions,
+  priorityLabels,
+  statusOptions,
+  statusLabels,
   isDragDisabled,
   totalCardCount,
   onOpenCard,
+  onOpenCardContextMenu,
   onAddCard,
   onRenameList,
   onDeleteList,
@@ -77,6 +92,7 @@ export function ListColumn({
   const [cardTitle, setCardTitle] = useState("");
   const [listTitle, setListTitle] = useState(list.title);
   const [isEditingListTitle, setIsEditingListTitle] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
     useState(false);
   const {
@@ -139,6 +155,13 @@ export function ListColumn({
   const emptyMessage = isDragDisabled
     ? "Нет карточек по текущему фильтру."
     : "Перетащите сюда карточку или создайте новую.";
+  const completedCardCount = cards.filter((card) => card.status === "done").length;
+  const completionPercent = totalCardCount
+    ? Math.round((completedCardCount / totalCardCount) * 100)
+    : 0;
+  const wipPercent = list.wipLimit
+    ? Math.min(100, Math.round((totalCardCount / list.wipLimit) * 100))
+    : 0;
 
   return (
     <Fragment>
@@ -160,6 +183,20 @@ export function ListColumn({
             size="sm"
           >
             <GripVertical aria-hidden="true" size={18} />
+          </IconButton>
+
+          <IconButton
+            aria-pressed={isCollapsed}
+            className="size-10 text-slate-300 hover:bg-white/10 hover:text-white sm:size-8"
+            label={isCollapsed ? `Развернуть список ${list.title}` : `Свернуть список ${list.title}`}
+            size="sm"
+            onClick={() => setIsCollapsed((current) => !current)}
+          >
+            {isCollapsed ? (
+              <ChevronRight aria-hidden="true" size={17} />
+            ) : (
+              <ChevronDown aria-hidden="true" size={17} />
+            )}
           </IconButton>
 
           {isEditingListTitle ? (
@@ -222,41 +259,80 @@ export function ListColumn({
           </IconButton>
         </header>
 
-        <SortableContext
-          items={list.cardIds}
-          strategy={verticalListSortingStrategy}
-        >
-          <div
-            ref={setDropRef}
-            className={cn(
-              "scrollbar-none min-h-20 touch-pan-y overscroll-contain space-y-2 overflow-y-auto rounded-xl p-1 transition-[background-color,box-shadow] duration-150",
-              isOver ? "bg-white/8 ring-1 ring-accent/45 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_10%)]" : "",
-            )}
-          >
-            {cards.map((card) => (
-              <CardItem
-                key={card.id}
-                card={card}
-                cardSurface={cardSurface}
-                checklistItems={checklistItems}
-                checklists={checklists}
-                labels={labels}
-                members={members}
-                attachments={attachments}
-                isDragDisabled={isDragDisabled}
-                onOpen={onOpenCard}
-              />
-            ))}
-
-            {cards.length === 0 ? (
-              <p className="grid min-h-20 place-items-center rounded-xl border border-dashed border-white/20 bg-black/10 px-3 text-center text-xs leading-5 text-slate-300">
-                {emptyMessage}
-              </p>
-            ) : null}
+        <div className="mb-2 grid gap-1.5 rounded-xl border border-white/8 bg-white/6 px-2.5 py-2">
+          <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-300">
+            <span>Готово: {completedCardCount}/{totalCardCount}</span>
+            <span>{completionPercent}%</span>
           </div>
-        </SortableContext>
+          <div className="h-1.5 overflow-hidden rounded-full bg-black/20">
+            <div
+              className="h-full rounded-full bg-emerald-400"
+              style={{ width: `${completionPercent}%` }}
+            />
+          </div>
+          {list.wipLimit ? (
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-black/20">
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  totalCardCount >= list.wipLimit ? "bg-amber-300" : "bg-sky-400",
+                )}
+                style={{ width: `${wipPercent}%` }}
+              />
+            </div>
+          ) : null}
+        </div>
 
-        {isAddingCard ? (
+        {isCollapsed ? (
+          <button
+            className="grid min-h-20 place-items-center rounded-xl border border-dashed border-white/16 bg-black/10 px-3 text-center text-xs font-medium leading-5 text-slate-300 transition hover:bg-white/8 hover:text-white"
+            type="button"
+            onClick={() => setIsCollapsed(false)}
+          >
+            {totalCardCount} карточек скрыто
+          </button>
+        ) : (
+          <SortableContext
+            items={list.cardIds}
+            strategy={verticalListSortingStrategy}
+          >
+            <div
+              ref={setDropRef}
+              className={cn(
+                "scrollbar-none min-h-20 touch-pan-y overscroll-contain space-y-2 overflow-y-auto rounded-xl p-1 transition-[background-color,box-shadow] duration-150",
+                isOver ? "bg-white/8 ring-1 ring-accent/45 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_10%)]" : "",
+              )}
+            >
+              {cards.map((card) => (
+                <CardItem
+                  key={card.id}
+                  card={card}
+                  cardSurface={cardSurface}
+                  checklistItems={checklistItems}
+                  checklists={checklists}
+                  labels={labels}
+                  members={members}
+                  attachments={attachments}
+                  priorityOptions={priorityOptions}
+                  priorityLabels={priorityLabels}
+                  statusOptions={statusOptions}
+                  statusLabels={statusLabels}
+                  isDragDisabled={isDragDisabled}
+                  onContextMenu={onOpenCardContextMenu}
+                  onOpen={onOpenCard}
+                />
+              ))}
+
+              {cards.length === 0 ? (
+                <p className="grid min-h-20 place-items-center rounded-xl border border-dashed border-white/20 bg-black/10 px-3 text-center text-xs leading-5 text-slate-300">
+                  {emptyMessage}
+                </p>
+              ) : null}
+            </div>
+          </SortableContext>
+        )}
+
+        {!isCollapsed && isAddingCard ? (
           <form
             className="mt-2 rounded-xl border border-white/10 bg-slate-950/70 p-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]"
             onSubmit={saveCard}
@@ -297,7 +373,7 @@ export function ListColumn({
               </IconButton>
             </div>
           </form>
-        ) : (
+        ) : !isCollapsed ? (
           <button
             className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-300 transition-[background-color,color,transform] hover:bg-white/10 hover:text-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45"
             disabled={Boolean(list.wipLimit && totalCardCount >= list.wipLimit)}
@@ -312,7 +388,7 @@ export function ListColumn({
             <Plus aria-hidden="true" size={17} />
             Добавить карточку
           </button>
-        )}
+        ) : null}
       </section>
 
       <ConfirmDialog

@@ -84,6 +84,8 @@ export {
 export { boardSchema } from "./model/schemas";
 export {
   BOARD_BACKGROUND_OPTIONS,
+  CARD_PRIORITY_OPTIONS,
+  CARD_STATUS_OPTIONS,
   CARD_COLOR_OPTIONS,
   CARD_COVER_COLOR_OPTIONS,
 } from "./model/types";
@@ -95,7 +97,10 @@ export type {
   BoardAttachment,
   BoardBackgroundValue,
   BoardCard,
+  BoardCardOption,
+  BoardCardCustomField,
   BoardChecklist,
+  BoardChecklistTemplate,
   BoardChecklistItem,
   BoardComment,
   BoardLabel,
@@ -103,9 +108,12 @@ export type {
   BoardList,
   BoardMember,
   BoardMemberDraft,
+  BoardCustomFieldTemplate,
   BoardWorkspace,
   CardColorValue,
   CardCover,
   CardDraft,
+  CardPriority,
+  CardStatus,
 } from "./model/types";
 export { BoardLabelSelector } from "./ui";

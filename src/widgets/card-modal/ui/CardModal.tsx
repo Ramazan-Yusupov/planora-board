@@ -16,19 +16,13 @@ import type {
   BoardChecklist,
   BoardChecklistItem,
   BoardComment,
-  BoardLabel,
-  BoardLabelDraft,
   BoardList,
-  BoardMember,
-  BoardMemberDraft,
   CardDraft,
 } from "@/entities/board";
-import { CardMembersEditor } from "@/features/manage-card-members";
 import { CardStickerPicker } from "@/features/manage-card-sticker";
 import { CardAttachmentsEditor } from "@/features/manage-attachments";
 import { CardChecklistsEditor } from "@/features/manage-checklist";
 import { CardCommentsEditor } from "@/features/manage-comments";
-import { CardLabelsEditor } from "@/features/manage-labels";
 import { Button, ConfirmDialog, FieldLabel, Modal, Panel, Select, Textarea, TextField } from "@/shared/ui";
 
 type CardModalProps = Readonly<{
@@ -37,25 +31,19 @@ type CardModalProps = Readonly<{
   checklists: readonly BoardChecklist[];
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   comments: readonly BoardComment[];
-  labels: readonly BoardLabel[];
   lists: readonly BoardList[];
   listTitle: string;
-  members: readonly BoardMember[];
   onAddAttachment: (attachment: BoardAttachment) => void;
   onCreateComment: (cardId: string, message: string) => void;
   onArchive: (cardId: string) => void;
   onClose: () => void;
   onCreateChecklist: (cardId: string, title: string) => void;
   onCreateChecklistItem: (checklistId: string, title: string) => void;
-  onCreateLabel: (draft: BoardLabelDraft) => BoardLabel | null;
-  onCreateMember: (draft: BoardMemberDraft) => BoardMember | null;
   onDelete: (cardId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onDeleteChecklist: (checklistId: string) => void;
   onDeleteChecklistItem: (itemId: string) => void;
   onDeleteComment: (commentId: string) => void;
-  onDeleteLabel: (labelId: string) => void;
-  onDeleteMember: (memberId: string) => void;
   onDuplicate: (cardId: string) => void;
   onMove: (cardId: string, destinationListId: string) => void;
   onMoveChecklistItem: (itemId: string, destinationIndex: number) => void;
@@ -63,18 +51,19 @@ type CardModalProps = Readonly<{
   onRenameChecklistItem: (itemId: string, title: string) => void;
   onSave: (cardId: string, draft: CardDraft) => void;
   onToggleChecklistItem: (itemId: string) => void;
-  onToggleMember: (cardId: string, memberId: string) => void;
   onUpdateComment: (commentId: string, message: string) => void;
-  onUpdateLabel: (labelId: string, draft: BoardLabelDraft) => void;
-  onUpdateMember: (memberId: string, draft: BoardMemberDraft) => void;
 }>;
 
 function createDraft(card: BoardCard): CardDraft {
   return {
     title: card.title,
     description: card.description,
+    status: card.status,
+    priority: card.priority,
+    startDate: card.startDate,
     dueDate: card.dueDate,
     labelIds: [...card.labelIds],
+    customFields: card.customFields.map((field) => ({ ...field })),
     sticker: card.sticker,
     cover: card.cover,
   };
@@ -86,25 +75,19 @@ export function CardModal({
   checklists,
   checklistItems,
   comments,
-  labels,
   lists,
   listTitle,
-  members,
   onAddAttachment,
   onCreateComment,
   onArchive,
   onClose,
   onCreateChecklist,
   onCreateChecklistItem,
-  onCreateLabel,
-  onCreateMember,
   onDelete,
   onDeleteAttachment,
   onDeleteChecklist,
   onDeleteChecklistItem,
   onDeleteComment,
-  onDeleteLabel,
-  onDeleteMember,
   onDuplicate,
   onMove,
   onMoveChecklistItem,
@@ -112,16 +95,14 @@ export function CardModal({
   onRenameChecklistItem,
   onSave,
   onToggleChecklistItem,
-  onToggleMember,
   onUpdateComment,
-  onUpdateLabel,
-  onUpdateMember,
 }: CardModalProps) {
   const [draft, setDraft] = useState<CardDraft>(() => createDraft(card));
   const [destinationListId, setDestinationListId] = useState(card.listId);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
+  const startDateId = useId();
   const dueDateId = useId();
   const destinationListIdInput = useId();
 
@@ -203,43 +184,35 @@ export function CardModal({
             />
           </div>
 
-          <div>
-            <FieldLabel htmlFor={dueDateId}>
-              <CalendarDays aria-hidden="true" size={17} />
-              Срок
-            </FieldLabel>
-            <TextField
-              id={dueDateId}
-              className="mt-2"
-              type="date"
-              value={draft.dueDate ?? ""}
-              onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value || undefined }))}
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <FieldLabel htmlFor={startDateId}>
+                <CalendarDays aria-hidden="true" size={17} />
+                Старт
+              </FieldLabel>
+              <TextField
+                id={startDateId}
+                className="mt-2"
+                type="date"
+                value={draft.startDate ?? ""}
+                onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value || undefined }))}
+              />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor={dueDateId}>
+                <CalendarDays aria-hidden="true" size={17} />
+                Срок
+              </FieldLabel>
+              <TextField
+                id={dueDateId}
+                className="mt-2"
+                type="date"
+                value={draft.dueDate ?? ""}
+                onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value || undefined }))}
+              />
+            </div>
           </div>
-
-          <CardLabelsEditor
-            labels={labels}
-            selectedLabelIds={draft.labelIds}
-            onChange={(labelIds) => setDraft((current) => ({ ...current, labelIds }))}
-            onCreateLabel={onCreateLabel}
-            onDeleteLabel={(labelId) => {
-              onDeleteLabel(labelId);
-              setDraft((current) => ({
-                ...current,
-                labelIds: current.labelIds.filter((currentLabelId) => currentLabelId !== labelId),
-              }));
-            }}
-            onUpdateLabel={onUpdateLabel}
-          />
-
-          <CardMembersEditor
-            members={members}
-            selectedMemberIds={card.memberIds}
-            onCreateMember={onCreateMember}
-            onDeleteMember={onDeleteMember}
-            onToggleMember={(memberId) => onToggleMember(card.id, memberId)}
-            onUpdateMember={onUpdateMember}
-          />
 
           <CardChecklistsEditor
             checklists={checklists}

@@ -113,6 +113,55 @@ export type BoardChecklistItem = {
   updatedAt: number;
 };
 
+export const CARD_STATUS_OPTIONS = [
+  { value: "none", label: "Без статуса", color: "#64748b" },
+  { value: "todo", label: "К выполнению", color: "#94a3b8" },
+  { value: "doing", label: "В работе", color: "#38bdf8" },
+  { value: "blocked", label: "Заблокировано", color: "#f97316" },
+  { value: "done", label: "Готово", color: "#22c55e" },
+] as const;
+
+export const CARD_PRIORITY_OPTIONS = [
+  { value: "none", label: "Без приоритета", color: "#64748b" },
+  { value: "low", label: "Низкий", color: "#64748b" },
+  { value: "medium", label: "Средний", color: "#0ea5e9" },
+  { value: "high", label: "Высокий", color: "#f59e0b" },
+  { value: "urgent", label: "Срочно", color: "#ef4444" },
+] as const;
+
+export type CardStatus = string;
+export type CardPriority = string;
+
+export type BoardCardOption = {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type BoardCardCustomField = {
+  id: string;
+  name: string;
+  value: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type BoardCustomFieldTemplate = {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type BoardChecklistTemplate = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 /**
  * Журнал хранится в доменной модели, но не показывается в обычной карточке.
  * Админский интерфейс появится после серверной авторизации.
@@ -126,6 +175,10 @@ export type BoardActivityType =
   | "card-due-date-removed"
   | "card-labels-updated"
   | "card-members-updated"
+  | "card-priority-updated"
+  | "card-status-updated"
+  | "card-start-date-updated"
+  | "card-custom-fields-updated"
   | "card-sticker-updated"
   | "card-moved"
   | "card-archived"
@@ -177,9 +230,14 @@ export type BoardCard = {
   listId: string;
   title: string;
   description: string;
+  status: CardStatus;
+  priority: CardPriority;
+  startDate?: string;
   dueDate?: string;
+  completedAt?: number;
   labelIds: string[];
   memberIds: string[];
+  customFields: BoardCardCustomField[];
   checklistIds: string[];
   attachmentIds: string[];
   commentIds: string[];
@@ -206,6 +264,13 @@ export type Board = {
   id: string;
   title: string;
   appearance: BoardAppearance;
+  cardStatusLabels: Partial<Record<CardStatus, string>>;
+  cardPriorityLabels: Partial<Record<CardPriority, string>>;
+  cardStatuses: BoardCardOption[];
+  cardPriorities: BoardCardOption[];
+  coverColors: string[];
+  customFieldTemplates: BoardCustomFieldTemplate[];
+  checklistTemplates: BoardChecklistTemplate[];
   labelIds: string[];
   labels: Record<string, BoardLabel>;
   memberIds: string[];
@@ -233,5 +298,14 @@ export type BoardWorkspace = {
 
 export type CardDraft = Pick<
   BoardCard,
-  "title" | "description" | "dueDate" | "labelIds" | "sticker" | "cover"
+  | "title"
+  | "description"
+  | "status"
+  | "priority"
+  | "startDate"
+  | "dueDate"
+  | "labelIds"
+  | "customFields"
+  | "sticker"
+  | "cover"
 >;

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, ListFilter, RotateCcw, Search, Tag, X } from "lucide-react";
+import { CalendarDays, Flag, ListFilter, RotateCcw, Rows3, Search, Tag, X } from "lucide-react";
 import { useEffect, useId } from "react";
 
 import {
@@ -10,6 +10,8 @@ import {
 } from "@/entities/board";
 import {
   CARD_DUE_FILTER_OPTIONS,
+  CARD_PRIORITY_FILTER_OPTIONS,
+  CARD_STATUS_FILTER_OPTIONS,
   DEFAULT_CARD_FILTERS,
   type CardFilters,
 } from "@/features/filter-cards";
@@ -34,6 +36,8 @@ export function CardFiltersSidebar({
 }: CardFiltersSidebarProps) {
   const searchId = useId();
   const dueDateId = useId();
+  const statusId = useId();
+  const priorityId = useId();
   const listId = useId();
 
   useEffect(() => {
@@ -122,6 +126,60 @@ export function CardFiltersSidebar({
               onChange={(labelIds) => patchFilters({ labelIds })}
               emptyMessage="В этом проекте нет меток для фильтрации."
             />
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+          <div>
+            <label
+              className="flex items-center gap-2 text-sm font-medium text-text"
+              htmlFor={statusId}
+            >
+              <Rows3 aria-hidden="true" size={17} />
+              Статус
+            </label>
+            <select
+              id={statusId}
+              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              value={filters.status}
+              onChange={(event) =>
+                patchFilters({
+                  status: event.target.value as CardFilters["status"],
+                })
+              }
+            >
+              {CARD_STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label
+              className="flex items-center gap-2 text-sm font-medium text-text"
+              htmlFor={priorityId}
+            >
+              <Flag aria-hidden="true" size={17} />
+              Приоритет
+            </label>
+            <select
+              id={priorityId}
+              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              value={filters.priority}
+              onChange={(event) =>
+                patchFilters({
+                  priority: event.target.value as CardFilters["priority"],
+                })
+              }
+            >
+              {CARD_PRIORITY_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

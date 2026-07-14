@@ -10,11 +10,14 @@ import {
   loadAttachmentBlob,
   type BoardAttachment,
   type BoardCard,
+  type BoardCardOption,
   type BoardChecklist,
   type BoardChecklistItem,
   type BoardLabel,
   type BoardMember,
+  type CardPriority,
   type CardSurface,
+  type CardStatus,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
 
@@ -28,7 +31,12 @@ type CardItemProps = Readonly<{
   labels: Readonly<Record<string, BoardLabel>>;
   members: Readonly<Record<string, BoardMember>>;
   attachments: Readonly<Record<string, BoardAttachment>>;
+  priorityOptions?: readonly BoardCardOption[];
+  priorityLabels?: Partial<Record<CardPriority, string>>;
+  statusOptions?: readonly BoardCardOption[];
+  statusLabels?: Partial<Record<CardStatus, string>>;
   isDragDisabled?: boolean;
+  onContextMenu?: (cardId: string, x: number, y: number) => void;
   onOpen: (cardId: string) => void;
 }>;
 
@@ -182,7 +190,12 @@ export function CardItem({
   labels,
   members,
   attachments,
+  priorityOptions,
+  priorityLabels,
+  statusOptions,
+  statusLabels,
   isDragDisabled = false,
+  onContextMenu,
   onOpen,
 }: CardItemProps) {
   const {
@@ -216,6 +229,14 @@ export function CardItem({
         "group touch-manipulation rounded-lg border p-3 shadow-[0_2px_4px_rgb(0_0_0/7%)] transition-[border-color,box-shadow,transform,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgb(0_0_0/14%)]",
         isDragging ? "opacity-35" : "opacity-100",
       )}
+      onContextMenu={(event) => {
+        if (!onContextMenu) {
+          return;
+        }
+
+        event.preventDefault();
+        onContextMenu(card.id, event.clientX, event.clientY);
+      }}
     >
       <div className="flex items-start gap-2">
         <button
@@ -249,6 +270,10 @@ export function CardItem({
           <CardBadges
             card={card}
             cardSurface={cardSurface}
+            priorityOptions={priorityOptions}
+            priorityLabels={priorityLabels}
+            statusOptions={statusOptions}
+            statusLabels={statusLabels}
             checklistItems={checklistItems}
             checklists={checklists}
             members={members}
@@ -267,6 +292,10 @@ export function CardPreview({
   labels,
   members,
   attachments,
+  priorityOptions,
+  priorityLabels,
+  statusOptions,
+  statusLabels,
 }: Readonly<{
   card: BoardCard;
   cardSurface: CardSurface;
@@ -275,6 +304,10 @@ export function CardPreview({
   labels: Readonly<Record<string, BoardLabel>>;
   members: Readonly<Record<string, BoardMember>>;
   attachments: Readonly<Record<string, BoardAttachment>>;
+  priorityOptions?: readonly BoardCardOption[];
+  priorityLabels?: Partial<Record<CardPriority, string>>;
+  statusOptions?: readonly BoardCardOption[];
+  statusLabels?: Partial<Record<CardStatus, string>>;
 }>) {
   return (
     <article
@@ -291,6 +324,10 @@ export function CardPreview({
       <CardBadges
         card={card}
         cardSurface={cardSurface}
+        priorityOptions={priorityOptions}
+        priorityLabels={priorityLabels}
+        statusOptions={statusOptions}
+        statusLabels={statusLabels}
         checklistItems={checklistItems}
         checklists={checklists}
         members={members}

@@ -14,7 +14,7 @@ import {
   shiftMonth,
   type CalendarItem,
 } from "@/features/view-calendar";
-import { CALENDAR_ROUTE, getBoardRoute } from "@/shared/config/routes";
+import { ANALYTICS_ROUTE, CALENDAR_ROUTE, NOTES_ROUTE, getBoardRoute } from "@/shared/config/routes";
 import { CalendarView } from "@/widgets/calendar-view";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
@@ -104,8 +104,10 @@ export function CalendarPage() {
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
         persistenceLabel={statusLabel}
+        onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenNotes={() => router.push(NOTES_ROUTE)}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
         <div className="px-2 py-2 sm:px-3 flex flex-col items-center">

@@ -2,13 +2,14 @@
 
 import {
   Archive,
+  BarChart3,
   CalendarDays,
+  FileText,
   Filter,
   LayoutDashboard,
   ListPlus,
   Palette,
   Plus,
-  ShieldCheck,
 } from "lucide-react";
 
 import type { CommandPaletteAction } from "@/widgets/command-palette";
@@ -16,9 +17,10 @@ import type { CommandPaletteAction } from "@/widgets/command-palette";
 type GetBoardCommandActionsOptions = Readonly<{
   activeListsCount: number;
   onOpenArchive: () => void;
+  onOpenAnalytics: () => void;
   onOpenAppearance: () => void;
-  onOpenAdmin: () => void;
   onOpenCalendar: () => void;
+  onOpenNotes: () => void;
   onOpenFilters: () => void;
   onOpenProjects: () => void;
   onOpenQuickCreateCard: () => void;
@@ -28,9 +30,10 @@ type GetBoardCommandActionsOptions = Readonly<{
 export function getBoardCommandActions({
   activeListsCount,
   onOpenArchive,
+  onOpenAnalytics,
   onOpenAppearance,
-  onOpenAdmin,
   onOpenCalendar,
+  onOpenNotes,
   onOpenFilters,
   onOpenProjects,
   onOpenQuickCreateCard,
@@ -70,6 +73,20 @@ export function getBoardCommandActions({
       onSelect: onOpenCalendar,
     },
     {
+      id: "analytics",
+      label: "Аналитика",
+      description: "Открыть сводку по задачам и прогрессу",
+      icon: <BarChart3 aria-hidden="true" size={18} />,
+      onSelect: onOpenAnalytics,
+    },
+    {
+      id: "notes",
+      label: "Заметки",
+      description: "Открыть локальные markdown-заметки",
+      icon: <FileText aria-hidden="true" size={18} />,
+      onSelect: onOpenNotes,
+    },
+    {
       id: "filters",
       label: "Фильтры",
       description: "Открыть поиск и фильтры карточек",
@@ -89,13 +106,6 @@ export function getBoardCommandActions({
       description: "Изменить фон и цвет карточек",
       icon: <Palette aria-hidden="true" size={18} />,
       onSelect: onOpenAppearance,
-    },
-    {
-      id: "admin",
-      label: "Админка",
-      description: "Открыть Supabase и настройки аккаунтов",
-      icon: <ShieldCheck aria-hidden="true" size={18} />,
-      onSelect: onOpenAdmin,
     },
   ];
 }

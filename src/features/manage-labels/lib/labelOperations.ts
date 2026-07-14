@@ -43,7 +43,7 @@ export function createBoardLabel(
   const name = normalizeBoardLabelName(draft.name);
   const color = normalizeBoardLabelColor(draft.color);
 
-  if (!name || !color || isDuplicateName(board, name)) {
+  if (board.labelIds.length >= 10 || !name || !color || isDuplicateName(board, name)) {
     return { board, label: null };
   }
 

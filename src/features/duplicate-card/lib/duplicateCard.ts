@@ -125,6 +125,12 @@ export function duplicateCard(board: Board, cardId: string): Board {
     id: duplicateId,
     title: duplicateTitle,
     memberIds: [...sourceCard.memberIds],
+    customFields: sourceCard.customFields.map((field) => ({
+      ...field,
+      id: createId("card-field"),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })),
     checklistIds: copiedChecklists.checklistIds,
     attachmentIds: [],
     commentIds: [],

@@ -16,7 +16,6 @@ const cardColorValues = [
   "frost",
   "custom",
 ] as const;
-
 const boardActivityTypeValues = [
   "card-created",
   "card-title-updated",
@@ -26,6 +25,10 @@ const boardActivityTypeValues = [
   "card-due-date-removed",
   "card-labels-updated",
   "card-members-updated",
+  "card-priority-updated",
+  "card-status-updated",
+  "card-start-date-updated",
+  "card-custom-fields-updated",
   "card-sticker-updated",
   "card-moved",
   "card-archived",
@@ -128,14 +131,49 @@ const boardAttachmentSchema = z.object({
   updatedAt: z.number(),
 });
 
+const boardCardCustomFieldSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(64),
+  value: z.string().trim().max(240),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const boardCustomFieldTemplateSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(64),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const boardChecklistTemplateSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1).max(120),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const boardCardOptionSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().trim().min(1).max(48),
+  color: hexColorSchema,
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
 const boardCardSchema = z.object({
   id: z.string().min(1),
   listId: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
+  status: z.string().min(1).max(64).default("none"),
+  priority: z.string().min(1).max(64).default("none"),
+  startDate: z.string().optional(),
   dueDate: z.string().optional(),
+  completedAt: z.number().optional(),
   labelIds: z.array(z.string().min(1)).default([]),
   memberIds: z.array(z.string().min(1)).default([]),
+  customFields: z.array(boardCardCustomFieldSchema).default([]),
   // Чек-листы добавлены после первой версии доски. Для старых записей
   // пустой массив создаётся при чтении и сохраняется при следующей записи.
   checklistIds: z.array(z.string().min(1)).default([]),
@@ -169,6 +207,13 @@ export const boardSchema = z
     id: z.string().min(1),
     title: z.string().min(1),
     appearance: boardAppearanceSchema,
+    cardStatusLabels: z.record(z.string(), z.string().trim().min(1).max(48)).default({}),
+    cardPriorityLabels: z.record(z.string(), z.string().trim().min(1).max(48)).default({}),
+    cardStatuses: z.array(boardCardOptionSchema).max(10).default([]),
+    cardPriorities: z.array(boardCardOptionSchema).max(10).default([]),
+    coverColors: z.array(hexColorSchema).default([]),
+    customFieldTemplates: z.array(boardCustomFieldTemplateSchema).default([]),
+    checklistTemplates: z.array(boardChecklistTemplateSchema).default([]),
     labelIds: z.array(z.string().min(1)),
     labels: z.record(z.string(), boardLabelSchema),
     memberIds: z.array(z.string().min(1)).default([]),
@@ -547,6 +592,27 @@ export const boardSchema = z
           });
         }
       });
+
+      const seenCustomFieldIds = new Set<string>();
+      card.customFields.forEach((field, index) => {
+        if (seenCustomFieldIds.has(field.id)) {
+          context.addIssue({
+            code: "custom",
+            path: ["cards", cardKey, "customFields", index, "id"],
+            message: "Пользовательское поле не должно повторяться на карточке.",
+          });
+        }
+
+        seenCustomFieldIds.add(field.id);
+      });
+
+      if (card.status !== "done" && card.completedAt !== undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["cards", cardKey, "completedAt"],
+          message: "Дата завершения хранится только у готовых карточек.",
+        });
+      }
 
       const seenCardChecklistIds = new Set<string>();
       card.checklistIds.forEach((checklistId, index) => {
