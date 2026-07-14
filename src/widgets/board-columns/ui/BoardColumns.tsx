@@ -121,6 +121,10 @@ export function BoardColumns({
     : undefined;
   const contextCard = contextMenu ? board.cards[contextMenu.cardId] : undefined;
   const deleteCardTitle = deleteCardId ? board.cards[deleteCardId]?.title : undefined;
+  const normalizedListTitle = listTitle.trim();
+  const isListTitleWhitespaceOnly =
+    listTitle.length > 0 && normalizedListTitle.length === 0;
+  const canCreateList = normalizedListTitle.length > 0;
 
   const handleDragStart = (event: DragStartEvent) => {
     if (!isDragEnabled) {
@@ -165,14 +169,12 @@ export function BoardColumns({
 
   const createList = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const normalizedTitle = listTitle.trim();
-
-    if (!normalizedTitle) {
+    if (!normalizedListTitle) {
       setDidAttemptEmptyListTitle(true);
       return;
     }
 
-    onAddList(normalizedTitle);
+    onAddList(normalizedListTitle);
     setListTitle("");
     setDidAttemptEmptyListTitle(false);
     setIsAddingList(false);
@@ -264,13 +266,13 @@ export function BoardColumns({
                     }
                   }}
                 />
-                {didAttemptEmptyListTitle ? (
+                {didAttemptEmptyListTitle || isListTitleWhitespaceOnly ? (
                   <FormHint className="mt-2" tone="warning">
                     Список нельзя создать из одних пробелов. Напишите название.
                   </FormHint>
                 ) : null}
                 <div className="mt-2 flex items-center gap-2">
-                  <Button size="sm" type="submit">
+                  <Button disabled={!canCreateList} size="sm" type="submit">
                     Создать список
                   </Button>
                   <IconButton

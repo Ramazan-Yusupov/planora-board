@@ -37,6 +37,7 @@ export function ProjectSidebar({
   const [title, setTitle] = useState("");
   const [boardPendingDeletion, setBoardPendingDeletion] =
     useState<Board | null>(null);
+  const canCreateProject = title.trim().length > 0;
 
   const createProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -175,7 +176,7 @@ export function ProjectSidebar({
                   }}
                 />
                 <div className="mt-2 flex gap-2">
-                  <Button size="sm" type="submit">
+                  <Button disabled={!canCreateProject} size="sm" type="submit">
                     Создать
                   </Button>
                   <Button

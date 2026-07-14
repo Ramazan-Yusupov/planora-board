@@ -338,6 +338,11 @@ export function NotesPage() {
                     onChange={(event) =>
                       patchActiveNote({ title: event.currentTarget.value })
                     }
+                    onBlur={(event) =>
+                      patchActiveNote({
+                        title: event.currentTarget.value.trim() || "Без названия",
+                      })
+                    }
                   />
                   <IconButton
                     className="text-red-300 hover:bg-red-500/10 hover:text-red-100"

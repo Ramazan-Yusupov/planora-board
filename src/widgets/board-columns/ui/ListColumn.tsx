@@ -160,13 +160,19 @@ export function ListColumn({
   const emptyMessage = isDragDisabled
     ? "Нет карточек по текущему фильтру."
     : "Перетащите сюда карточку или создайте новую.";
-  const completedCardCount = cards.filter((card) => card.status === "done").length;
+  const completedCardCount = cards.filter(
+    (card) => card.status === "done",
+  ).length;
   const completionPercent = totalCardCount
     ? Math.round((completedCardCount / totalCardCount) * 100)
     : 0;
   const wipPercent = list.wipLimit
     ? Math.min(100, Math.round((totalCardCount / list.wipLimit) * 100))
     : 0;
+  const normalizedCardTitle = cardTitle.trim();
+  const isCardTitleWhitespaceOnly =
+    cardTitle.length > 0 && normalizedCardTitle.length === 0;
+  const canCreateCard = normalizedCardTitle.length > 0;
 
   return (
     <Fragment>
@@ -193,7 +199,11 @@ export function ListColumn({
           <IconButton
             aria-pressed={isCollapsed}
             className="size-10 text-slate-300 hover:bg-white/10 hover:text-white sm:size-8"
-            label={isCollapsed ? `Развернуть список ${list.title}` : `Свернуть список ${list.title}`}
+            label={
+              isCollapsed
+                ? `Развернуть список ${list.title}`
+                : `Свернуть список ${list.title}`
+            }
             size="sm"
             onClick={() => setIsCollapsed((current) => !current)}
           >
@@ -266,7 +276,9 @@ export function ListColumn({
 
         <div className="mb-2 grid gap-1.5 rounded-xl border border-white/8 bg-white/6 px-2.5 py-2">
           <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-300">
-            <span>Готово: {completedCardCount}/{totalCardCount}</span>
+            <span>
+              Готово: {completedCardCount}/{totalCardCount}
+            </span>
             <span>{completionPercent}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-black/20">
@@ -280,7 +292,9 @@ export function ListColumn({
               <div
                 className={cn(
                   "h-full rounded-full",
-                  totalCardCount >= list.wipLimit ? "bg-amber-300" : "bg-sky-400",
+                  totalCardCount >= list.wipLimit
+                    ? "bg-amber-300"
+                    : "bg-sky-400",
                 )}
                 style={{ width: `${wipPercent}%` }}
               />
@@ -305,7 +319,9 @@ export function ListColumn({
               ref={setDropRef}
               className={cn(
                 "scrollbar-none min-h-20 touch-pan-y overscroll-contain space-y-2 overflow-y-auto rounded-xl p-1 transition-[background-color,box-shadow] duration-150",
-                isOver ? "bg-white/8 ring-1 ring-accent/45 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_10%)]" : "",
+                isOver
+                  ? "bg-white/8 ring-1 ring-accent/45 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_10%)]"
+                  : "",
               )}
             >
               {cards.map((card) => (
@@ -366,13 +382,8 @@ export function ListColumn({
                 }
               }}
             />
-            {didAttemptEmptyCardTitle ? (
-              <FormHint className="mt-2" tone="warning">
-                Карточку нельзя создать из одних пробелов. Напишите название.
-              </FormHint>
-            ) : null}
             <div className="mt-2 flex items-center gap-2">
-              <Button size="sm" type="submit">
+              <Button disabled={!canCreateCard} size="sm" type="submit">
                 <Check aria-hidden="true" size={16} />
                 Создать
               </Button>

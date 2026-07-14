@@ -158,7 +158,9 @@ function OptionNameRows<T extends string>({
             aria-label={option.label}
             className="h-9"
             defaultValue={labels[option.value] ?? option.label}
-            onBlur={(event) => onSave(option.value, event.currentTarget.value)}
+            onBlur={(event) =>
+              onSave(option.value, event.currentTarget.value.trim())
+            }
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.currentTarget.blur();
@@ -192,14 +194,18 @@ function OptionEditorRow({
         value={color}
         onChange={(event) => {
           setColor(event.currentTarget.value.toUpperCase());
-          onSave(name, event.currentTarget.value.toUpperCase());
+          onSave(name.trim(), event.currentTarget.value.toUpperCase());
         }}
       />
       <TextField
         aria-label={`Название ${option.name}`}
         className="h-9"
         value={name}
-        onBlur={(event) => onSave(event.currentTarget.value, color)}
+        onBlur={(event) => {
+          const normalizedName = event.currentTarget.value.trim();
+          setName(normalizedName || option.name);
+          onSave(normalizedName, color);
+        }}
         onChange={(event) => setName(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -317,11 +323,13 @@ export function BoardToolsSidebar({
   }, [isOpen, onClose]);
 
   const createLabel = () => {
-    if (!canCreateLabel) {
+    const normalizedName = labelName.trim();
+
+    if (!canCreateLabel || !normalizedName) {
       return;
     }
 
-    const createdLabel = onCreateLabel({ name: labelName, color: labelColor });
+    const createdLabel = onCreateLabel({ name: normalizedName, color: labelColor });
 
     if (!createdLabel) {
       return;
@@ -332,12 +340,14 @@ export function BoardToolsSidebar({
   };
 
   const createMember = () => {
-    if (!canCreateMember) {
+    const normalizedName = memberName.trim();
+
+    if (!canCreateMember || !normalizedName) {
       return;
     }
 
     const createdMember = onCreateMember({
-      name: memberName,
+      name: normalizedName,
       avatarColor: memberColor,
     });
 
@@ -350,20 +360,24 @@ export function BoardToolsSidebar({
   };
 
   const createFieldTemplate = () => {
-    if (!canCreateFieldTemplate) {
+    const normalizedName = fieldTemplateName.trim();
+
+    if (!canCreateFieldTemplate || !normalizedName) {
       return;
     }
 
-    onCreateCustomFieldTemplate(fieldTemplateName);
+    onCreateCustomFieldTemplate(normalizedName);
     setFieldTemplateName("");
   };
 
   const createChecklistTemplate = () => {
-    if (!canCreateChecklistTemplate) {
+    const normalizedTitle = checklistTemplateTitle.trim();
+
+    if (!canCreateChecklistTemplate || !normalizedTitle) {
       return;
     }
 
-    onCreateChecklistTemplate(checklistTemplateTitle);
+    onCreateChecklistTemplate(normalizedTitle);
     setChecklistTemplateTitle("");
   };
 
@@ -375,19 +389,23 @@ export function BoardToolsSidebar({
     onUpdateCoverColors([...coverColors, coverColor]);
   };
   const createStatusOption = () => {
-    if (!canCreateStatus) {
+    const normalizedName = statusName.trim();
+
+    if (!canCreateStatus || !normalizedName) {
       return;
     }
 
-    onCreateStatusOption(statusName, statusColor);
+    onCreateStatusOption(normalizedName, statusColor);
     setStatusName("");
   };
   const createPriorityOption = () => {
-    if (!canCreatePriority) {
+    const normalizedName = priorityName.trim();
+
+    if (!canCreatePriority || !normalizedName) {
       return;
     }
 
-    onCreatePriorityOption(priorityName, priorityColor);
+    onCreatePriorityOption(normalizedName, priorityColor);
     setPriorityName("");
   };
 
@@ -591,12 +609,14 @@ export function BoardToolsSidebar({
                   aria-label={`Название метки ${label.name}`}
                   className="h-9"
                   defaultValue={label.name}
-                  onBlur={(event) =>
+                  onBlur={(event) => {
+                    const normalizedName = event.currentTarget.value.trim();
+
                     onUpdateLabel(label.id, {
-                      name: event.currentTarget.value,
+                      name: normalizedName || label.name,
                       color: label.color,
-                    })
-                  }
+                    });
+                  }}
                 />
                 <IconButton
                   className="text-text-muted hover:bg-red-500/10 hover:text-red-300"
@@ -669,12 +689,14 @@ export function BoardToolsSidebar({
                   aria-label={`Имя участника ${member.name}`}
                   className="h-9"
                   defaultValue={member.name}
-                  onBlur={(event) =>
+                  onBlur={(event) => {
+                    const normalizedName = event.currentTarget.value.trim();
+
                     onUpdateMember(member.id, {
-                      name: event.currentTarget.value,
+                      name: normalizedName || member.name,
                       avatarColor: member.avatarColor,
-                    })
-                  }
+                    });
+                  }}
                 />
                 <IconButton
                   className="text-text-muted hover:bg-red-500/10 hover:text-red-300"
@@ -731,7 +753,7 @@ export function BoardToolsSidebar({
                   onBlur={(event) =>
                     onUpdateCustomFieldTemplate(
                       template.id,
-                      event.currentTarget.value,
+                      event.currentTarget.value.trim() || template.name,
                     )
                   }
                 />
@@ -790,7 +812,7 @@ export function BoardToolsSidebar({
                   onBlur={(event) =>
                     onUpdateChecklistTemplate(
                       template.id,
-                      event.currentTarget.value,
+                      event.currentTarget.value.trim() || template.title,
                     )
                   }
                 />

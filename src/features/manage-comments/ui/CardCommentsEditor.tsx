@@ -34,12 +34,13 @@ export function CardCommentsEditor({
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const normalizedDraft = draft.trim();
 
-    if (!draft.trim()) {
+    if (!normalizedDraft) {
       return;
     }
 
-    onCreateComment(draft);
+    onCreateComment(normalizedDraft);
     setDraft("");
   };
 
@@ -68,7 +69,13 @@ export function CardCommentsEditor({
           onKeyDown={(event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
               event.preventDefault();
-              onCreateComment(draft);
+              const normalizedDraft = draft.trim();
+
+              if (!normalizedDraft) {
+                return;
+              }
+
+              onCreateComment(normalizedDraft);
               setDraft("");
             }
           }}
@@ -150,7 +157,7 @@ export function CardCommentsEditor({
                         disabled={!editingDraft.trim()}
                         size="sm"
                         onClick={() => {
-                          onUpdateComment(comment.id, editingDraft);
+                          onUpdateComment(comment.id, editingDraft.trim());
                           setEditingCommentId(null);
                           setEditingDraft("");
                         }}

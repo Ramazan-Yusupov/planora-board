@@ -182,6 +182,7 @@ function ChecklistItemComposer({
 }: ChecklistItemComposerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState("");
+  const canCreateItem = draft.trim().length > 0;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -229,7 +230,7 @@ function ChecklistItemComposer({
           }
         }}
       />
-      <Button size="sm" type="submit">
+      <Button disabled={!canCreateItem} size="sm" type="submit">
         Добавить
       </Button>
       <IconButton
@@ -354,12 +355,17 @@ export function CardChecklistsEditor({
   const checklistToDelete = checklistIdToDelete
     ? checklists.find((checklist) => checklist.id === checklistIdToDelete) ?? null
     : null;
+  const canCreateChecklist = checklistTitle.trim().length > 0;
 
   const createChecklist = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedTitle = checklistTitle.trim();
 
-    onCreateChecklist(normalizedTitle || "Новый чек-лист");
+    if (!normalizedTitle) {
+      return;
+    }
+
+    onCreateChecklist(normalizedTitle);
     setChecklistTitle("");
     setIsAddingChecklist(false);
   };
@@ -435,7 +441,7 @@ export function CardChecklistsEditor({
             }}
           />
           <div className="mt-2 flex items-center gap-2">
-            <Button size="sm" type="submit">
+            <Button disabled={!canCreateChecklist} size="sm" type="submit">
               Создать чек-лист
             </Button>
             <IconButton
