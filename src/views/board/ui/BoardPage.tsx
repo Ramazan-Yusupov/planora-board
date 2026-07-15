@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -50,6 +50,9 @@ import {
 } from "@/features/board-management";
 import { duplicateCard } from "@/features/duplicate-card";
 import {
+  CARD_DUE_FILTER_OPTIONS,
+  CARD_PRIORITY_FILTER_OPTIONS,
+  CARD_STATUS_FILTER_OPTIONS,
   DEFAULT_CARD_FILTERS,
   getActiveCardFiltersCount,
   getVisibleCardIdsByList,
@@ -57,6 +60,7 @@ import {
   type CardFilters,
 } from "@/features/filter-cards";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import { replaceStoredNotes } from "@/features/manage-notes";
 import {
   addAttachmentToCard,
   removeAttachmentFromCard,
@@ -89,10 +93,17 @@ import {
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
+  MY_WORK_ROUTE,
   NOTES_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
-import { IconButton, TextField } from "@/shared/ui";
+import {
+  IconButton,
+  TextField,
+  ToastViewport,
+  type ToastMessage,
+  type ToastTone,
+} from "@/shared/ui";
 import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
 import { BoardToolsSidebar } from "@/widgets/board-tools";
@@ -118,6 +129,40 @@ type BoardPageProps = Readonly<{
   boardId: string;
   initialCardId?: string;
 }>;
+
+type ActiveFilterChipProps = Readonly<{
+  label: string;
+  onClear: () => void;
+}>;
+
+type ToastDraft = Readonly<{
+  title: string;
+  description?: string;
+  tone?: ToastTone;
+}>;
+
+function ActiveFilterChip({ label, onClear }: ActiveFilterChipProps) {
+  return (
+    <span className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-white/15 bg-slate-950/30 px-2.5 text-xs font-medium text-white/85 backdrop-blur-sm">
+      <span className="min-w-0 truncate">{label}</span>
+      <button
+        className="-mr-1 grid size-6 shrink-0 place-items-center rounded-md text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+        type="button"
+        aria-label={`Убрать фильтр: ${label}`}
+        onClick={onClear}
+      >
+        <X aria-hidden="true" size={14} />
+      </button>
+    </span>
+  );
+}
+
+function getOptionLabel<T extends string>(
+  options: readonly Readonly<{ value: T; label: string }>[],
+  value: T,
+): string {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
 
 function isMobileViewport(): boolean {
   return (
@@ -166,7 +211,38 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const [cardFilters, setCardFilters] = useState<CardFilters>({
     ...DEFAULT_CARD_FILTERS,
   });
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const toastIdRef = useRef(0);
+  const toastTimersRef = useRef<Map<string, number>>(new Map());
+
+  const dismissToast = useCallback((toastId: string) => {
+    const timerId = toastTimersRef.current.get(toastId);
+
+    if (timerId !== undefined) {
+      window.clearTimeout(timerId);
+      toastTimersRef.current.delete(toastId);
+    }
+
+    setToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }, []);
+
+  const showToast = useCallback(
+    ({ title, description, tone = "info" }: ToastDraft) => {
+      toastIdRef.current += 1;
+      const id = `toast-${Date.now()}-${toastIdRef.current}`;
+      const nextToast: ToastMessage = { id, title, description, tone };
+
+      setToasts((current) => [...current, nextToast].slice(-4));
+
+      const timerId = window.setTimeout(() => {
+        dismissToast(id);
+      }, 4500);
+
+      toastTimersRef.current.set(id, timerId);
+    },
+    [dismissToast],
+  );
 
   useEffect(() => {
     if (!isReady || !workspace || !activeBoard) {
@@ -186,6 +262,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       selectProject(boardId);
     }
   }, [activeBoard, boardId, isReady, router, selectProject, workspace]);
+
+  useEffect(() => {
+    const timers = toastTimersRef.current;
+
+    return () => {
+      for (const timerId of timers.values()) {
+        window.clearTimeout(timerId);
+      }
+
+      timers.clear();
+    };
+  }, []);
 
   useBoardKeyboardShortcuts({
     searchInputRef,
@@ -246,6 +334,12 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const selectedListForActions = listActionsListId
     ? (activeBoard.lists[listActionsListId] ?? null)
     : null;
+  const selectedFilterLabels = cardFilters.labelIds.flatMap((labelId) => {
+    const label = activeBoard.labels[labelId];
+    return label ? [label] : [];
+  });
+  const selectedFilterList =
+    cardFilters.listId === "all" ? null : activeBoard.lists[cardFilters.listId];
   const statusLabel =
     persistenceState === "saving"
       ? "Сохраняем…"
@@ -254,7 +348,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
           ? `Сохранено в папку: ${workspaceStorage.name}`
           : workspaceStorage.kind === "folder"
-            ? "Папка требует доступа"
+            ? "Требуется доступ к папке"
             : "Сохранено в браузере";
 
   const closePanels = () => {
@@ -294,12 +388,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     router.push(NOTES_ROUTE);
   };
 
+  const openMyWork = () => {
+    closePanels();
+    router.push(MY_WORK_ROUTE);
+  };
+
   const commandActions = getBoardCommandActions({
     activeListsCount: activeLists.length,
     onOpenArchive: () => setIsArchiveOpen(true),
     onOpenAnalytics: openAnalytics,
     onOpenAppearance: () => setIsAppearanceOpen(true),
     onOpenCalendar: openCalendar,
+    onOpenMyWork: openMyWork,
     onOpenNotes: openNotes,
     onOpenFilters: () => setIsFiltersOpen(true),
     onOpenProjects: () => setIsProjectsOpen(true),
@@ -324,6 +424,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onOpenAnalytics={openAnalytics}
         onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
         onOpenCalendar={openCalendar}
+        onOpenMyWork={openMyWork}
         onOpenNotes={openNotes}
         onOpenCommands={() => setIsCommandPaletteOpen(true)}
         onOpenWorkspaceData={() => setIsWorkspaceDataOpen(true)}
@@ -376,7 +477,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       </WorkspaceHeader>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {isProjectsOpen || isBoardToolsOpen || isAppearanceOpen || isFiltersOpen ? (
+        {isProjectsOpen ||
+        isBoardToolsOpen ||
+        isAppearanceOpen ||
+        isFiltersOpen ? (
           <button
             aria-label="Закрыть боковую панель"
             className="absolute inset-0 z-30 bg-black/55 lg:hidden"
@@ -390,17 +494,25 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           boards={workspace.boards}
           isOpen={isProjectsOpen}
           onClose={() => setIsProjectsOpen(false)}
-          onCreateBoard={(title) => {
-            const createdBoardId = createProject(title);
+          onCreateBoard={(title, templateId) => {
+            const createdBoardId = createProject(title, templateId);
             if (createdBoardId) {
               setSelectedCardId(null);
               setIsInitialCardDismissed(true);
               closePanels();
               setIsArchiveOpen(false);
               router.push(getBoardRoute(createdBoardId));
+              showToast({
+                title: "Проект создан",
+                description: title,
+                tone: "success",
+              });
             }
           }}
           onDeleteBoard={(deletedBoardId) => {
+            const deletedBoardTitle =
+              workspace.boards.find((board) => board.id === deletedBoardId)
+                ?.title ?? "Проект";
             const nextActiveBoardId = deleteProject(deletedBoardId);
             setSelectedCardId(null);
             setIsInitialCardDismissed(true);
@@ -409,6 +521,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             if (deletedBoardId === boardId && nextActiveBoardId) {
               router.replace(getBoardRoute(nextActiveBoardId));
             }
+            showToast({
+              title: "Проект удалён",
+              description: deletedBoardTitle,
+              tone: "warning",
+            });
           }}
           onSelectBoard={selectProjectFromSidebar}
         />
@@ -634,10 +751,99 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
 
             {isFiltering ? (
               <div className="px-4 pb-3 sm:px-6">
-                <p className="rounded-xl border border-white/15 bg-slate-950/25 px-3 py-2 text-xs leading-5 text-white/75 backdrop-blur-sm">
-                  Во время поиска и фильтрации перенос карточек и списков
-                  временно выключен. Очистите фильтры, чтобы изменить порядок.
-                </p>
+                <div className="rounded-xl border border-white/15 bg-slate-950/25 p-2.5 backdrop-blur-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {cardFilters.query.trim() ? (
+                      <ActiveFilterChip
+                        label={`Поиск: ${cardFilters.query.trim()}`}
+                        onClear={() =>
+                          setCardFilters((current) => ({
+                            ...current,
+                            query: "",
+                          }))
+                        }
+                      />
+                    ) : null}
+
+                    {selectedFilterLabels.map((label) => (
+                      <ActiveFilterChip
+                        key={label.id}
+                        label={`Метка: ${label.name}`}
+                        onClear={() =>
+                          setCardFilters((current) => ({
+                            ...current,
+                            labelIds: current.labelIds.filter(
+                              (labelId) => labelId !== label.id,
+                            ),
+                          }))
+                        }
+                      />
+                    ))}
+
+                    {cardFilters.status !== DEFAULT_CARD_FILTERS.status ? (
+                      <ActiveFilterChip
+                        label={`Статус: ${getOptionLabel(CARD_STATUS_FILTER_OPTIONS, cardFilters.status)}`}
+                        onClear={() =>
+                          setCardFilters((current) => ({
+                            ...current,
+                            status: DEFAULT_CARD_FILTERS.status,
+                          }))
+                        }
+                      />
+                    ) : null}
+
+                    {cardFilters.priority !== DEFAULT_CARD_FILTERS.priority ? (
+                      <ActiveFilterChip
+                        label={`Приоритет: ${getOptionLabel(CARD_PRIORITY_FILTER_OPTIONS, cardFilters.priority)}`}
+                        onClear={() =>
+                          setCardFilters((current) => ({
+                            ...current,
+                            priority: DEFAULT_CARD_FILTERS.priority,
+                          }))
+                        }
+                      />
+                    ) : null}
+
+                    {cardFilters.dueDate !== DEFAULT_CARD_FILTERS.dueDate ? (
+                      <ActiveFilterChip
+                        label={`Срок: ${getOptionLabel(CARD_DUE_FILTER_OPTIONS, cardFilters.dueDate)}`}
+                        onClear={() =>
+                          setCardFilters((current) => ({
+                            ...current,
+                            dueDate: DEFAULT_CARD_FILTERS.dueDate,
+                          }))
+                        }
+                      />
+                    ) : null}
+
+                    {selectedFilterList ? (
+                      <ActiveFilterChip
+                        label={`Список: ${selectedFilterList.title}`}
+                        onClear={() =>
+                          setCardFilters((current) => ({
+                            ...current,
+                            listId: DEFAULT_CARD_FILTERS.listId,
+                          }))
+                        }
+                      />
+                    ) : null}
+
+                    <button
+                      className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-white/75 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                      type="button"
+                      onClick={() =>
+                        setCardFilters({ ...DEFAULT_CARD_FILTERS })
+                      }
+                    >
+                      <X aria-hidden="true" size={14} />
+                      Сбросить всё
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-white/65">
+                    Перенос карточек и списков временно выключен, пока активны
+                    фильтры.
+                  </p>
+                </div>
               </div>
             ) : null}
 
@@ -647,13 +853,26 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                 board={activeBoard}
                 isFiltering={isFiltering}
                 visibleCardIdsByList={visibleCardIdsByList}
-                onAddCard={(listId, title) =>
-                  updateActiveBoard((board) => addCard(board, listId, title))
-                }
-                onAddList={(title) =>
-                  updateActiveBoard((board) => addList(board, title))
-                }
+                onAddCard={(listId, title) => {
+                  updateActiveBoard((board) => addCard(board, listId, title));
+                  showToast({
+                    title: "Карточка создана",
+                    description:
+                      activeBoard.lists[listId]?.title ?? "Новая карточка",
+                    tone: "success",
+                  });
+                }}
+                onAddList={(title) => {
+                  updateActiveBoard((board) => addList(board, title));
+                  showToast({
+                    title: "Список создан",
+                    description: title,
+                    tone: "success",
+                  });
+                }}
                 onDeleteList={(listId) => {
+                  const deletedListTitle =
+                    activeBoard.lists[listId]?.title ?? "Список";
                   if (cardFilters.listId === listId) {
                     setCardFilters((current) => ({
                       ...current,
@@ -664,25 +883,51 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                     (board) => deleteList(board, listId),
                     "immediate",
                   );
+                  showToast({
+                    title: "Список удалён",
+                    description: deletedListTitle,
+                    tone: "warning",
+                  });
                 }}
-                onArchiveCard={(cardId) =>
+                onArchiveCard={(cardId) => {
+                  const archivedCardTitle =
+                    activeBoard.cards[cardId]?.title ?? "Карточка";
                   updateActiveBoard(
                     (board) => archiveCard(board, cardId),
                     "immediate",
-                  )
-                }
-                onDeleteCard={(cardId) =>
+                  );
+                  showToast({
+                    title: "Карточка архивирована",
+                    description: archivedCardTitle,
+                    tone: "info",
+                  });
+                }}
+                onDeleteCard={(cardId) => {
+                  const deletedCardTitle =
+                    activeBoard.cards[cardId]?.title ?? "Карточка";
                   updateActiveBoard(
                     (board) => deleteCard(board, cardId),
                     "immediate",
-                  )
-                }
-                onDuplicateCard={(cardId) =>
+                  );
+                  showToast({
+                    title: "Карточка удалена",
+                    description: deletedCardTitle,
+                    tone: "warning",
+                  });
+                }}
+                onDuplicateCard={(cardId) => {
+                  const duplicatedCardTitle =
+                    activeBoard.cards[cardId]?.title ?? "Карточка";
                   updateActiveBoard(
                     (board) => duplicateCard(board, cardId),
                     "immediate",
-                  )
-                }
+                  );
+                  showToast({
+                    title: "Карточка дублирована",
+                    description: duplicatedCardTitle,
+                    tone: "success",
+                  });
+                }}
                 onCreateChecklist={(cardId, title) =>
                   updateActiveBoard(
                     (board) => createChecklist(board, cardId, title),
@@ -748,21 +993,45 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           labels={activeBoard.labels}
           lists={activeBoard.lists}
           onClose={() => setIsArchiveOpen(false)}
-          onDelete={(cardId) =>
-            updateActiveBoard((board) => deleteCard(board, cardId), "immediate")
-          }
-          onRestore={(cardId) =>
+          onDelete={(cardId) => {
+            const deletedCardTitle =
+              activeBoard.cards[cardId]?.title ?? "Карточка";
+            updateActiveBoard(
+              (board) => deleteCard(board, cardId),
+              "immediate",
+            );
+            showToast({
+              title: "Карточка удалена",
+              description: deletedCardTitle,
+              tone: "warning",
+            });
+          }}
+          onRestore={(cardId) => {
+            const restoredCardTitle =
+              activeBoard.cards[cardId]?.title ?? "Карточка";
             updateActiveBoard(
               (board) => restoreCard(board, cardId),
               "immediate",
-            )
-          }
-          onRestoreList={(listId) =>
+            );
+            showToast({
+              title: "Карточка восстановлена",
+              description: restoredCardTitle,
+              tone: "success",
+            });
+          }}
+          onRestoreList={(listId) => {
+            const restoredListTitle =
+              activeBoard.lists[listId]?.title ?? "Список";
             updateActiveBoard(
               (board) => restoreList(board, listId),
               "immediate",
-            )
-          }
+            );
+            showToast({
+              title: "Список восстановлен",
+              description: restoredListTitle,
+              tone: "success",
+            });
+          }}
         />
       ) : null}
 
@@ -770,27 +1039,56 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         availableLists={activeLists}
         list={selectedListForActions}
         onArchive={(listId) => {
+          const archivedListTitle =
+            activeBoard.lists[listId]?.title ?? "Список";
           if (cardFilters.listId === listId) {
             setCardFilters((current) => ({ ...current, listId: "all" }));
           }
           updateActiveBoard((board) => archiveList(board, listId), "immediate");
+          showToast({
+            title: "Список архивирован",
+            description: archivedListTitle,
+            tone: "info",
+          });
         }}
-        onClear={(listId) =>
-          updateActiveBoard((board) => clearList(board, listId), "immediate")
-        }
+        onClear={(listId) => {
+          const clearedListTitle = activeBoard.lists[listId]?.title ?? "Список";
+          updateActiveBoard((board) => clearList(board, listId), "immediate");
+          showToast({
+            title: "Список очищен",
+            description: clearedListTitle,
+            tone: "warning",
+          });
+        }}
         onClose={() => setListActionsListId(null)}
-        onDuplicate={(listId) =>
+        onDuplicate={(listId) => {
+          const duplicatedListTitle =
+            activeBoard.lists[listId]?.title ?? "Список";
           updateActiveBoard(
             (board) => duplicateList(board, listId),
             "immediate",
-          )
-        }
-        onMoveAll={(sourceListId, destinationListId) =>
+          );
+          showToast({
+            title: "Список дублирован",
+            description: duplicatedListTitle,
+            tone: "success",
+          });
+        }}
+        onMoveAll={(sourceListId, destinationListId) => {
+          const sourceTitle =
+            activeBoard.lists[sourceListId]?.title ?? "Список";
+          const destinationTitle =
+            activeBoard.lists[destinationListId]?.title ?? "другой список";
           updateActiveBoard(
             (board) => moveAllCards(board, sourceListId, destinationListId),
             "immediate",
-          )
-        }
+          );
+          showToast({
+            title: "Карточки перенесены",
+            description: `${sourceTitle} -> ${destinationTitle}`,
+            tone: "success",
+          });
+        }}
         onSetWipLimit={(listId, limit) =>
           updateActiveBoard(
             (board) => setListWipLimit(board, listId, limit),
@@ -815,12 +1113,19 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               "immediate",
             )
           }
-          onArchive={(cardId) =>
+          onArchive={(cardId) => {
+            const archivedCardTitle =
+              activeBoard.cards[cardId]?.title ?? "Карточка";
             updateActiveBoard(
               (board) => archiveCard(board, cardId),
               "immediate",
-            )
-          }
+            );
+            showToast({
+              title: "Карточка архивирована",
+              description: archivedCardTitle,
+              tone: "info",
+            });
+          }}
           onClose={() => {
             setIsInitialCardDismissed(true);
             setSelectedCardId(null);
@@ -843,9 +1148,19 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               "immediate",
             )
           }
-          onDelete={(cardId) =>
-            updateActiveBoard((board) => deleteCard(board, cardId), "immediate")
-          }
+          onDelete={(cardId) => {
+            const deletedCardTitle =
+              activeBoard.cards[cardId]?.title ?? "Карточка";
+            updateActiveBoard(
+              (board) => deleteCard(board, cardId),
+              "immediate",
+            );
+            showToast({
+              title: "Карточка удалена",
+              description: deletedCardTitle,
+              tone: "warning",
+            });
+          }}
           onDeleteAttachment={(attachmentId) =>
             updateActiveBoard(
               (board) => removeAttachmentFromCard(board, attachmentId),
@@ -870,12 +1185,19 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               "immediate",
             )
           }
-          onDuplicate={(cardId) =>
+          onDuplicate={(cardId) => {
+            const duplicatedCardTitle =
+              activeBoard.cards[cardId]?.title ?? "Карточка";
             updateActiveBoard(
               (board) => duplicateCard(board, cardId),
               "immediate",
-            )
-          }
+            );
+            showToast({
+              title: "Карточка дублирована",
+              description: duplicatedCardTitle,
+              tone: "success",
+            });
+          }}
           onMove={(cardId, destinationListId) =>
             updateActiveBoard((board) => {
               const destinationList = board.lists[destinationListId];
@@ -929,20 +1251,30 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         isOpen={isQuickCreateOpen}
         lists={activeLists}
         onClose={() => setIsQuickCreateOpen(false)}
-        onCreate={(listId, title) =>
+        onCreate={(listId, title) => {
           updateActiveBoard(
             (board) => addCard(board, listId, title),
             "immediate",
-          )
-        }
+          );
+          showToast({
+            title: "Карточка создана",
+            description: activeBoard.lists[listId]?.title ?? title,
+            tone: "success",
+          });
+        }}
       />
 
       <QuickCreateListDialog
         isOpen={isQuickCreateListOpen}
         onClose={() => setIsQuickCreateListOpen(false)}
-        onCreate={(title) =>
-          updateActiveBoard((board) => addList(board, title), "immediate")
-        }
+        onCreate={(title) => {
+          updateActiveBoard((board) => addList(board, title), "immediate");
+          showToast({
+            title: "Список создан",
+            description: title,
+            tone: "success",
+          });
+        }}
       />
 
       <CommandPalette
@@ -961,15 +1293,23 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onConnectFolder={connectWorkspaceFolder}
         onCreateFolderBackup={createFolderBackup}
         onDisconnectFolder={disconnectWorkspaceFolder}
-        onImport={(nextWorkspace) => {
+        onImport={({ workspace: nextWorkspace, notes }) => {
+          replaceStoredNotes(notes);
           replaceWorkspace(nextWorkspace);
           const nextBoardId =
             nextWorkspace.activeBoardId ?? nextWorkspace.boards[0]?.id;
           if (nextBoardId) {
             router.replace(getBoardRoute(nextBoardId));
           }
+          showToast({
+            title: "Workspace импортирован",
+            description: `${nextWorkspace.boards.length} проектов`,
+            tone: "success",
+          });
         }}
       />
+
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
     </main>
   );
 }

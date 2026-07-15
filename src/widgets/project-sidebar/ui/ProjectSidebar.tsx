@@ -10,7 +10,11 @@ import {
 } from "lucide-react";
 import { Fragment, type FormEvent, useState } from "react";
 
-import type { Board } from "@/entities/board";
+import {
+  BOARD_PROJECT_TEMPLATES,
+  type Board,
+  type BoardProjectTemplateId,
+} from "@/entities/board";
 import { cn } from "@/shared/lib";
 import { Button, ConfirmDialog, IconButton } from "@/shared/ui";
 
@@ -19,7 +23,7 @@ type ProjectSidebarProps = Readonly<{
   activeBoardId: string | null;
   isOpen: boolean;
   onClose: () => void;
-  onCreateBoard: (title: string) => void;
+  onCreateBoard: (title: string, templateId?: BoardProjectTemplateId) => void;
   onDeleteBoard: (boardId: string) => void;
   onSelectBoard: (boardId: string) => void;
 }>;
@@ -35,6 +39,8 @@ export function ProjectSidebar({
 }: ProjectSidebarProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [title, setTitle] = useState("");
+  const [templateId, setTemplateId] =
+    useState<BoardProjectTemplateId>("blank");
   const [boardPendingDeletion, setBoardPendingDeletion] =
     useState<Board | null>(null);
   const canCreateProject = title.trim().length > 0;
@@ -47,8 +53,9 @@ export function ProjectSidebar({
       return;
     }
 
-    onCreateBoard(normalizedTitle);
+    onCreateBoard(normalizedTitle, templateId);
     setTitle("");
+    setTemplateId("blank");
     setIsCreating(false);
   };
 
@@ -175,6 +182,28 @@ export function ProjectSidebar({
                     }
                   }}
                 />
+                <label
+                  className="mt-3 block text-xs font-medium text-text-muted"
+                  htmlFor="new-project-template"
+                >
+                  Шаблон доски
+                </label>
+                <select
+                  id="new-project-template"
+                  className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-panel px-3 text-sm text-text"
+                  value={templateId}
+                  onChange={(event) =>
+                    setTemplateId(
+                      event.target.value as BoardProjectTemplateId,
+                    )
+                  }
+                >
+                  {BOARD_PROJECT_TEMPLATES.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
                 <div className="mt-2 flex gap-2">
                   <Button disabled={!canCreateProject} size="sm" type="submit">
                     Создать
@@ -184,6 +213,7 @@ export function ProjectSidebar({
                     variant="ghost"
                     onClick={() => {
                       setTitle("");
+                      setTemplateId("blank");
                       setIsCreating(false);
                     }}
                   >

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/shared/ui";
 
@@ -10,6 +11,8 @@ type AppErrorProps = Readonly<{
 }>;
 
 export default function AppError({ error, reset }: AppErrorProps) {
+  const router = useRouter();
+
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -21,9 +24,12 @@ export default function AppError({ error, reset }: AppErrorProps) {
         <p className="mt-2 text-sm leading-6 text-text-muted">
           Попробуйте открыть страницу снова. Ваши локальные данные не будут удалены.
         </p>
-        <Button className="mt-5" onClick={reset}>
-          Повторить
-        </Button>
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <Button onClick={reset}>Повторить</Button>
+          <Button variant="secondary" onClick={() => router.back()}>
+            Назад
+          </Button>
+        </div>
       </section>
     </main>
   );

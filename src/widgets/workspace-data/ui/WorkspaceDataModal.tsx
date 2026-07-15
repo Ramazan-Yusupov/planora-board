@@ -18,6 +18,7 @@ import type {
 import {
   downloadWorkspaceExport,
   parseWorkspaceImport,
+  type WorkspaceImportResult,
 } from "@/features/import-export";
 import { Button, ConfirmDialog, Modal, Panel } from "@/shared/ui";
 
@@ -29,7 +30,7 @@ type WorkspaceDataModalProps = Readonly<{
   onConnectFolder: () => Promise<void>;
   onCreateFolderBackup: () => Promise<void>;
   onDisconnectFolder: () => Promise<void>;
-  onImport: (workspace: BoardWorkspace) => void;
+  onImport: (result: WorkspaceImportResult) => void;
   workspace: BoardWorkspace;
   workspaceStorage: WorkspaceFolderStorageInfo;
 }>;
@@ -149,7 +150,7 @@ export function WorkspaceDataModal({
 }: WorkspaceDataModalProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [pendingWorkspace, setPendingWorkspace] =
-    useState<BoardWorkspace | null>(null);
+    useState<WorkspaceImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isReading, setIsReading] = useState(false);
 
@@ -254,7 +255,7 @@ export function WorkspaceDataModal({
         confirmLabel="Заменить проекты"
         description={
           pendingWorkspace
-            ? `Будут заменены все текущие проекты. В файле: ${pendingWorkspace.boards.length} проект(а).`
+            ? `Будут заменены все текущие проекты. В файле: ${pendingWorkspace.workspace.boards.length} проект(а).`
             : ""
         }
         destructive

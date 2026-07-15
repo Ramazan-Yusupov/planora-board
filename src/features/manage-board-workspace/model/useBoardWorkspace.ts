@@ -7,7 +7,7 @@ import {
   clearActiveFolderWorkspace,
   clearPersistedWorkspaceFolderHandle,
   createActiveFolderBackup,
-  createEmptyBoard,
+  createBoardFromTemplate,
   createInitialBoardWorkspace,
   deleteAttachmentBlobs,
   deleteBoardFromWorkspace,
@@ -30,6 +30,7 @@ import {
   selectBoardInWorkspace,
   toWorkspaceStorageInfo,
   type Board,
+  type BoardProjectTemplateId,
   type BoardWorkspace,
   type BoardWorkspacePersistenceChange,
   type WorkspaceFolderStorageInfo,
@@ -69,7 +70,10 @@ type UseBoardWorkspaceResult = {
   canRedo: boolean;
   connectWorkspaceFolder: () => Promise<void>;
   createFolderBackup: () => Promise<void>;
-  createProject: (title: string) => string | null;
+  createProject: (
+    title: string,
+    templateId?: BoardProjectTemplateId,
+  ) => string | null;
   deleteProject: (boardId: string) => string | null;
   disconnectWorkspaceFolder: () => Promise<void>;
   redo: () => void;
@@ -77,6 +81,11 @@ type UseBoardWorkspaceResult = {
   selectProject: (boardId: string) => void;
   undo: () => void;
   updateActiveBoard: (
+    updater: (currentBoard: Board) => Board,
+    saveMode?: BoardSaveMode,
+  ) => void;
+  updateBoard: (
+    boardId: string,
     updater: (currentBoard: Board) => Board,
     saveMode?: BoardSaveMode,
   ) => void;
@@ -527,15 +536,59 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
     [commitWorkspace],
   );
 
+  const updateBoard = useCallback(
+    (
+      boardId: string,
+      updater: (currentBoard: Board) => Board,
+      saveMode: BoardSaveMode = "debounced",
+    ) => {
+      const currentWorkspace = workspaceRef.current;
+
+      if (!currentWorkspace) {
+        return;
+      }
+
+      const currentBoard = currentWorkspace.boards.find(
+        (board) => board.id === boardId,
+      );
+
+      if (!currentBoard) {
+        return;
+      }
+
+      const nextBoard = updater(currentBoard);
+
+      if (nextBoard === currentBoard) {
+        return;
+      }
+
+      const nextWorkspace = replaceBoardInWorkspace(currentWorkspace, nextBoard);
+
+      commitWorkspace(
+        nextWorkspace,
+        {
+          boardsToSave: [nextBoard],
+          boardIdsToDelete: [],
+          activeBoardId: nextWorkspace.activeBoardId,
+        },
+        saveMode,
+      );
+    },
+    [commitWorkspace],
+  );
+
   const createProject = useCallback(
-    (title: string): string | null => {
+    (
+      title: string,
+      templateId: BoardProjectTemplateId = "blank",
+    ): string | null => {
       const currentWorkspace = workspaceRef.current;
 
       if (!currentWorkspace) {
         return null;
       }
 
-      const nextBoard = createEmptyBoard(title);
+      const nextBoard = createBoardFromTemplate(title, templateId);
       const nextWorkspace: BoardWorkspace = {
         boards: [...currentWorkspace.boards, nextBoard],
         activeBoardId: nextBoard.id,
@@ -694,5 +747,6 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
     selectProject,
     undo,
     updateActiveBoard,
+    updateBoard,
   };
 }

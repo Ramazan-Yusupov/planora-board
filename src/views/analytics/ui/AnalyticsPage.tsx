@@ -1,12 +1,28 @@
 "use client";
 
-import { AlertTriangle, BarChart3, CalendarClock, CircleCheckBig, TimerReset } from "lucide-react";
+import {
+  AlertTriangle,
+  BarChart3,
+  CalendarClock,
+  CircleCheckBig,
+  TimerReset,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { buildBoardAnalytics, type AnalyticsSegment, type ListAnalyticsSegment } from "@/features/view-analytics";
+import {
+  buildBoardAnalytics,
+  type AnalyticsSegment,
+  type ListAnalyticsSegment,
+} from "@/features/view-analytics";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
-import { ANALYTICS_ROUTE, CALENDAR_ROUTE, NOTES_ROUTE, getBoardRoute } from "@/shared/config/routes";
+import {
+  ANALYTICS_ROUTE,
+  CALENDAR_ROUTE,
+  MY_WORK_ROUTE,
+  NOTES_ROUTE,
+  getBoardRoute,
+} from "@/shared/config/routes";
 import { cn } from "@/shared/lib";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
@@ -136,7 +152,8 @@ function ChartTooltip({
         </p>
       </div>
       <p className="mt-1 text-text-muted">
-        {state.segment.value} задач · {getSegmentPercent(state.segment.value, total)}%
+        {state.segment.value} задач ·{" "}
+        {getSegmentPercent(state.segment.value, total)}%
       </p>
     </div>
   );
@@ -260,8 +277,12 @@ function SegmentChart({
                   top: `${point.y}%`,
                 }}
                 type="button"
-                onFocus={() => setTooltip({ segment: point, x: point.x, y: point.y })}
-                onMouseEnter={() => setTooltip({ segment: point, x: point.x, y: point.y })}
+                onFocus={() =>
+                  setTooltip({ segment: point, x: point.x, y: point.y })
+                }
+                onMouseEnter={() =>
+                  setTooltip({ segment: point, x: point.x, y: point.y })
+                }
               />
             ))}
 
@@ -290,33 +311,35 @@ function SegmentChart({
                 stroke="rgba(255,255,255,0.08)"
                 strokeWidth="16"
               />
-              {donutSlices.map(({ endAngle, segment, startAngle, tooltipPoint }) => {
-                return (
-                  <path
-                    key={segment.id}
-                    aria-label={`${segment.label}: ${segment.value}`}
-                    className="cursor-pointer opacity-90 outline-none transition hover:opacity-100 focus-visible:opacity-100"
-                    d={getDonutArcPath(startAngle, endAngle)}
-                    fill={segment.color}
-                    role="button"
-                    tabIndex={0}
-                    onFocus={() =>
-                      setTooltip({
-                        segment,
-                        x: tooltipPoint.x,
-                        y: tooltipPoint.y,
-                      })
-                    }
-                    onMouseEnter={() =>
-                      setTooltip({
-                        segment,
-                        x: tooltipPoint.x,
-                        y: tooltipPoint.y,
-                      })
-                    }
-                  />
-                );
-              })}
+              {donutSlices.map(
+                ({ endAngle, segment, startAngle, tooltipPoint }) => {
+                  return (
+                    <path
+                      key={segment.id}
+                      aria-label={`${segment.label}: ${segment.value}`}
+                      className="cursor-pointer opacity-90 outline-none transition hover:opacity-100 focus-visible:opacity-100"
+                      d={getDonutArcPath(startAngle, endAngle)}
+                      fill={segment.color}
+                      role="button"
+                      tabIndex={0}
+                      onFocus={() =>
+                        setTooltip({
+                          segment,
+                          x: tooltipPoint.x,
+                          y: tooltipPoint.y,
+                        })
+                      }
+                      onMouseEnter={() =>
+                        setTooltip({
+                          segment,
+                          x: tooltipPoint.x,
+                          y: tooltipPoint.y,
+                        })
+                      }
+                    />
+                  );
+                },
+              )}
             </svg>
             <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
               <div>
@@ -362,8 +385,12 @@ function SegmentChart({
                 }
               >
                 <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="min-w-0 truncate text-text-muted">{segment.label}</span>
-                  <span className="font-semibold tabular-nums text-text">{segment.value}</span>
+                  <span className="min-w-0 truncate text-text-muted">
+                    {segment.label}
+                  </span>
+                  <span className="font-semibold tabular-nums text-text">
+                    {segment.value}
+                  </span>
                 </div>
                 <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-control">
                   <div
@@ -421,7 +448,10 @@ function ListProgress({
             : 0;
 
           return (
-            <div key={segment.id} className="rounded-lg border border-white/8 bg-control/30 p-3">
+            <div
+              key={segment.id}
+              className="rounded-lg border border-white/8 bg-control/30 p-3"
+            >
               <div className="flex items-center justify-between gap-3">
                 <p className="min-w-0 truncate text-sm font-medium text-text">
                   {segment.label}
@@ -476,7 +506,7 @@ export function AnalyticsPage() {
         : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
           ? `Сохранено в папку: ${workspaceStorage.name}`
           : workspaceStorage.kind === "folder"
-            ? "Папка требует доступа"
+            ? "Требуется доступ к папке"
             : "Сохранено в браузере";
 
   const openBoard = (boardId: string) => {
@@ -495,6 +525,7 @@ export function AnalyticsPage() {
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
@@ -674,7 +705,9 @@ export function AnalyticsPage() {
                       <p className="text-sm font-semibold text-text">
                         {analytics.overdueCards} просрочено
                       </p>
-                      <p className="text-xs text-text-muted">Не готово и срок уже прошёл</p>
+                      <p className="text-xs text-text-muted">
+                        Не готово и срок уже прошёл
+                      </p>
                     </div>
                   </div>
 
@@ -686,7 +719,9 @@ export function AnalyticsPage() {
                       <p className="text-sm font-semibold text-text">
                         {analytics.dueSoonCards} на ближайшие 7 дней
                       </p>
-                      <p className="text-xs text-text-muted">Можно планировать загрузку</p>
+                      <p className="text-xs text-text-muted">
+                        Можно планировать загрузку
+                      </p>
                     </div>
                   </div>
 
@@ -698,7 +733,9 @@ export function AnalyticsPage() {
                       <p className="text-sm font-semibold text-text">
                         {analytics.completedCards} завершено
                       </p>
-                      <p className="text-xs text-text-muted">По статусу карточки</p>
+                      <p className="text-xs text-text-muted">
+                        По статусу карточки
+                      </p>
                     </div>
                   </div>
                 </div>

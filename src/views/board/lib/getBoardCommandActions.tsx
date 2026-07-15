@@ -4,6 +4,7 @@ import {
   Archive,
   BarChart3,
   CalendarDays,
+  ClipboardList,
   FileText,
   Filter,
   LayoutDashboard,
@@ -20,6 +21,7 @@ type GetBoardCommandActionsOptions = Readonly<{
   onOpenAnalytics: () => void;
   onOpenAppearance: () => void;
   onOpenCalendar: () => void;
+  onOpenMyWork: () => void;
   onOpenNotes: () => void;
   onOpenFilters: () => void;
   onOpenProjects: () => void;
@@ -33,6 +35,7 @@ export function getBoardCommandActions({
   onOpenAnalytics,
   onOpenAppearance,
   onOpenCalendar,
+  onOpenMyWork,
   onOpenNotes,
   onOpenFilters,
   onOpenProjects,
@@ -71,6 +74,13 @@ export function getBoardCommandActions({
       description: "Открыть задачи по срокам",
       icon: <CalendarDays aria-hidden="true" size={18} />,
       onSelect: onOpenCalendar,
+    },
+    {
+      id: "my-work",
+      label: "Мои задачи",
+      description: "Открыть просроченные и ближайшие задачи",
+      icon: <ClipboardList aria-hidden="true" size={18} />,
+      onSelect: onOpenMyWork,
     },
     {
       id: "analytics",

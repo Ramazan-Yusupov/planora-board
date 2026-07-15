@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import { parseBoardData, type Board, type BoardWorkspace } from "@/entities/board";
+import {
+  exportStoredNotes,
+  parseNotes,
+  type Note,
+} from "@/features/manage-notes";
 
 export const WORKSPACE_EXPORT_VERSION = 1;
 
@@ -14,6 +19,12 @@ type WorkspaceExportPayload = Readonly<{
   activeBoardId: string | null;
   boards: Board[];
   attachmentsIncluded: false;
+  notes?: Note[];
+}>;
+
+export type WorkspaceImportResult = Readonly<{
+  notes?: Note[];
+  workspace: BoardWorkspace;
 }>;
 
 const payloadSchema = z.object({
@@ -24,6 +35,7 @@ const payloadSchema = z.object({
   activeBoardId: z.string().min(1).nullable(),
   boards: z.array(z.unknown()).min(1),
   attachmentsIncluded: z.literal(false).optional(),
+  notes: z.array(z.unknown()).optional(),
 });
 
 function withoutAttachmentData(board: Board): Board {
@@ -68,6 +80,7 @@ export function createWorkspaceExport(
       : boards[0].id,
     boards: boards.map(withoutAttachmentData),
     attachmentsIncluded: false,
+    notes: scope === "workspace" ? exportStoredNotes() : undefined,
   };
 }
 
@@ -94,7 +107,9 @@ export function downloadWorkspaceExport(
   URL.revokeObjectURL(url);
 }
 
-export async function parseWorkspaceImport(file: File): Promise<BoardWorkspace> {
+export async function parseWorkspaceImport(
+  file: File,
+): Promise<WorkspaceImportResult> {
   const source = await file.text();
   let rawValue: unknown;
 
@@ -124,5 +139,8 @@ export async function parseWorkspaceImport(file: File): Promise<BoardWorkspace> 
     ? payload.data.activeBoardId
     : boards[0]?.id ?? null;
 
-  return { boards, activeBoardId };
+  return {
+    workspace: { boards, activeBoardId },
+    notes: payload.data.notes ? parseNotes(payload.data.notes) : undefined,
+  };
 }

@@ -1,137 +1,441 @@
 "use client";
 
-import { AlertTriangle, FileText, Plus, Trash2 } from "lucide-react";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  AlertTriangle,
+  Bold,
+  ChevronRight,
+  Check,
+  Code2,
+  FileText,
+  GripVertical,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  List,
+  ListOrdered,
+  MessageSquare,
+  Minus,
+  MoreHorizontal,
+  Plus,
+  Quote,
+  SquareCheck,
+  Strikethrough,
+  Table2,
+  Text,
+  ToggleRight,
+  Underline,
+  Trash2,
+  Italic,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type RefCallback,
+  type RefObject,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import type { Board, BoardCard } from "@/entities/board";
+import {
+  createNote,
+  loadNotes,
+  saveNotes,
+  type Note,
+  type NoteBlock,
+  type NoteBlockType,
+} from "@/features/manage-notes";
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
+  MY_WORK_ROUTE,
   NOTES_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
-import { createId, cn } from "@/shared/lib";
-import { Button, ConfirmDialog, IconButton, Textarea, TextField } from "@/shared/ui";
+import { cn, createId } from "@/shared/lib";
+import { Button, ConfirmDialog, IconButton, TextField } from "@/shared/ui";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
-const NOTES_STORAGE_KEY = "planora.notes.v1";
+import { NotesDataModal } from "./NotesDataModal";
 
-type Note = Readonly<{
-  id: string;
-  title: string;
-  content: string;
-  createdAt: number;
-  updatedAt: number;
-}>;
+const DEFAULT_TABLE_ROW_COUNT = 2;
+const DEFAULT_TABLE_COLUMN_COUNT = 2;
 
-function createNote(): Note {
-  const timestamp = Date.now();
+function createTableCells(
+  rowCount = DEFAULT_TABLE_ROW_COUNT,
+  columnCount = DEFAULT_TABLE_COLUMN_COUNT,
+): string[][] {
+  return Array.from({ length: rowCount }, () =>
+    Array.from({ length: columnCount }, () => ""),
+  );
+}
 
+function createBlock(
+  type: NoteBlockType = "paragraph",
+  text = "",
+  parentId?: string,
+): NoteBlock {
   return {
-    id: createId("note"),
-    title: "Новая заметка",
-    content: "# Новая заметка\n\n- [ ] Связать с задачей\n- Добавить детали",
-    createdAt: timestamp,
-    updatedAt: timestamp,
+    checked: type === "todo" ? false : undefined,
+    collapsed: type === "toggle" ? false : undefined,
+    id: createId("note-block"),
+    tableCells: type === "table" ? createTableCells() : undefined,
+    tableHasHeaderRow: type === "table" ? true : undefined,
+    text,
+    type,
+    parentId,
   };
 }
 
-function loadNotes(): Note[] {
-  try {
-    const raw = window.localStorage.getItem(NOTES_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
+function getTableCells(block: NoteBlock): string[][] {
+  const source = block.tableCells && block.tableCells.length > 0
+    ? block.tableCells
+    : createTableCells();
+  const columnCount = Math.max(1, ...source.map((row) => row.length));
 
-    if (!Array.isArray(parsed)) {
-      return [createNote()];
+  return source.map((row) =>
+    Array.from({ length: columnCount }, (_, cellIndex) => row[cellIndex] ?? ""),
+  );
+}
+
+function getTableCellKey(
+  blockId: string,
+  rowIndex: number,
+  cellIndex: number,
+): string {
+  return `${blockId}:${rowIndex}:${cellIndex}`;
+}
+
+function getBoardTaskItems(board: Board): NoteTaskItem[] {
+  return board.listIds.flatMap((listId) => {
+    const list = board.lists[listId];
+
+  if (!list || list.isArchived) {
+      return [];
     }
 
-    const notes = parsed.flatMap((note): Note[] => {
-      if (
-        !note ||
-        typeof note.id !== "string" ||
-        typeof note.title !== "string" ||
-        typeof note.content !== "string"
-      ) {
+    return list.cardIds.flatMap((cardId) => {
+      const card = board.cards[cardId];
+
+      if (!card || card.isArchived) {
         return [];
       }
 
       return [
         {
-          id: note.id,
-          title: note.title,
-          content: note.content,
-          createdAt: typeof note.createdAt === "number" ? note.createdAt : Date.now(),
-          updatedAt: typeof note.updatedAt === "number" ? note.updatedAt : Date.now(),
+          boardId: board.id,
+          boardTitle: board.title,
+          card,
+          listTitle: list.title,
         },
       ];
     });
-
-    return notes.length > 0 ? notes : [createNote()];
-  } catch {
-    return [createNote()];
-  }
+  });
 }
 
-function MarkdownPreview({ content }: Readonly<{ content: string }>) {
-  const lines = content.split("\n");
+function filterTaskItems(
+  items: readonly NoteTaskItem[],
+  query: string,
+): NoteTaskItem[] {
+  const normalizedQuery = query.trim().toLowerCase();
 
-  return (
-    <div className="space-y-2 text-sm leading-6 text-text">
-      {lines.map((line, index) => {
-        const key = `${index}-${line}`;
+  if (!normalizedQuery) {
+    return [...items];
+  }
 
-        if (!line.trim()) {
-          return <div key={key} className="h-2" />;
-        }
-
-        if (line.startsWith("### ")) {
-          return <h4 key={key} className="pt-2 text-base font-semibold">{line.slice(4)}</h4>;
-        }
-
-        if (line.startsWith("## ")) {
-          return <h3 key={key} className="pt-2 text-lg font-semibold">{line.slice(3)}</h3>;
-        }
-
-        if (line.startsWith("# ")) {
-          return <h2 key={key} className="pt-1 text-xl font-semibold">{line.slice(2)}</h2>;
-        }
-
-        if (line.startsWith("- [ ] ")) {
-          return (
-            <p key={key} className="flex items-start gap-2 text-text-muted">
-              <span className="mt-1 grid size-4 shrink-0 place-items-center rounded border border-white/20" />
-              <span>{line.slice(6)}</span>
-            </p>
-          );
-        }
-
-        if (line.startsWith("- [x] ") || line.startsWith("- [X] ")) {
-          return (
-            <p key={key} className="flex items-start gap-2 text-text-muted line-through">
-              <span className="mt-1 grid size-4 shrink-0 place-items-center rounded border border-emerald-300/40 bg-emerald-400/20 text-[10px] text-emerald-100">
-                ✓
-              </span>
-              <span>{line.slice(6)}</span>
-            </p>
-          );
-        }
-
-        if (line.startsWith("- ")) {
-          return (
-            <p key={key} className="flex items-start gap-2 text-text-muted">
-              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-text-muted" />
-              <span>{line.slice(2)}</span>
-            </p>
-          );
-        }
-
-        return <p key={key} className="text-text-muted">{line}</p>;
-      })}
-    </div>
+  return items.filter((item) =>
+    [item.card.title, item.card.description, item.listTitle, item.boardTitle]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery),
   );
 }
+
+function getNumberedListNumbers(
+  blocks: readonly NoteBlock[],
+): ReadonlyMap<string, number> {
+  const numbers = new Map<string, number>();
+  const currentNumbers = new Map<string, number>();
+
+  for (const block of blocks) {
+    const parentKey = block.parentId ?? "root";
+
+    if (block.type !== "numbered") {
+      currentNumbers.set(parentKey, 0);
+      continue;
+    }
+
+    const nextNumber = (currentNumbers.get(parentKey) ?? 0) + 1;
+    currentNumbers.set(parentKey, nextNumber);
+    numbers.set(block.id, nextNumber);
+  }
+
+  return numbers;
+}
+
+function getVisibleBlocks(blocks: readonly NoteBlock[]): NoteBlock[] {
+  const blockIds = new Set(blocks.map((block) => block.id));
+  const visibleBlocks: NoteBlock[] = [];
+
+  for (const block of blocks) {
+    if (block.parentId && blockIds.has(block.parentId)) {
+      const parent = blocks.find((candidate) => candidate.id === block.parentId);
+
+      if (parent?.type === "toggle" && !parent.collapsed) {
+        visibleBlocks.push(block);
+      }
+
+      continue;
+    }
+
+    visibleBlocks.push(block);
+  }
+
+  return visibleBlocks;
+}
+
+type BlockCommand = Readonly<{
+  id: NoteBlockType;
+  title: string;
+  description: string;
+  shortcut?: string;
+  icon: ReactNode;
+}>;
+
+type NoteTaskItem = Readonly<{
+  boardId: string;
+  boardTitle: string;
+  card: BoardCard;
+  listTitle: string;
+}>;
+
+const basicBlockCommands: readonly BlockCommand[] = [
+  {
+    id: "paragraph",
+    title: "Text",
+    description: "Обычный текстовый блок",
+    icon: <Text aria-hidden="true" size={17} />,
+  },
+  {
+    id: "heading1",
+    title: "Heading 1",
+    description: "Большой заголовок раздела",
+    shortcut: "#",
+    icon: <Heading1 aria-hidden="true" size={18} />,
+  },
+  {
+    id: "heading2",
+    title: "Heading 2",
+    description: "Средний заголовок",
+    shortcut: "##",
+    icon: <Heading2 aria-hidden="true" size={18} />,
+  },
+  {
+    id: "heading3",
+    title: "Heading 3",
+    description: "Малый заголовок",
+    shortcut: "###",
+    icon: <Heading3 aria-hidden="true" size={18} />,
+  },
+  {
+    id: "heading4",
+    title: "Heading 4",
+    description: "Компактный заголовок",
+    shortcut: "####",
+    icon: <Heading4 aria-hidden="true" size={18} />,
+  },
+  {
+    id: "bulleted",
+    title: "Bulleted list",
+    description: "Список с маркерами",
+    shortcut: "-",
+    icon: <List aria-hidden="true" size={17} />,
+  },
+  {
+    id: "numbered",
+    title: "Numbered list",
+    description: "Нумерованный список",
+    shortcut: "1.",
+    icon: <ListOrdered aria-hidden="true" size={17} />,
+  },
+  {
+    id: "todo",
+    title: "To-do list",
+    description: "Чекбокс с текстом",
+    shortcut: "[]",
+    icon: <SquareCheck aria-hidden="true" size={17} />,
+  },
+  {
+    id: "toggle",
+    title: "Toggle list",
+    description: "Сворачиваемый пункт",
+    shortcut: ">",
+    icon: <ToggleRight aria-hidden="true" size={17} />,
+  },
+  {
+    id: "quote",
+    title: "Quote",
+    description: "Цитата с вертикальной линией",
+    shortcut: '"',
+    icon: <Quote aria-hidden="true" size={17} />,
+  },
+  {
+    id: "callout",
+    title: "Callout",
+    description: "Выделенный блок заметки",
+    icon: <MessageSquare aria-hidden="true" size={17} />,
+  },
+  {
+    id: "code",
+    title: "Code",
+    description: "Моноширинный блок кода",
+    shortcut: "```",
+    icon: <Code2 aria-hidden="true" size={17} />,
+  },
+  {
+    id: "table",
+    title: "Table",
+    description: "Быстрая таблица 2 x 2",
+    icon: <Table2 aria-hidden="true" size={17} />,
+  },
+  {
+    id: "divider",
+    title: "Divider",
+    description: "Горизонтальная линия",
+    shortcut: "---",
+    icon: <Minus aria-hidden="true" size={17} />,
+  },
+];
+
+type BlockColorOption = Readonly<{
+  id: string;
+  label: string;
+  className: string;
+  styleValue?: string;
+  swatchClassName: string;
+}>;
+
+const textColorOptions: readonly BlockColorOption[] = [
+  {
+    id: "default",
+    label: "Обычный",
+    className: "",
+    styleValue: undefined,
+    swatchClassName: "bg-text",
+  },
+  {
+    id: "gray",
+    label: "Серый",
+    className: "text-slate-400",
+    styleValue: "#94a3b8",
+    swatchClassName: "bg-slate-400",
+  },
+  {
+    id: "red",
+    label: "Красный",
+    className: "text-red-200",
+    styleValue: "#fecaca",
+    swatchClassName: "bg-red-300",
+  },
+  {
+    id: "yellow",
+    label: "Желтый",
+    className: "text-amber-200",
+    styleValue: "#fde68a",
+    swatchClassName: "bg-amber-300",
+  },
+  {
+    id: "green",
+    label: "Зеленый",
+    className: "text-emerald-200",
+    styleValue: "#a7f3d0",
+    swatchClassName: "bg-emerald-300",
+  },
+  {
+    id: "blue",
+    label: "Синий",
+    className: "text-sky-200",
+    styleValue: "#bae6fd",
+    swatchClassName: "bg-sky-300",
+  },
+  {
+    id: "purple",
+    label: "Фиолетовый",
+    className: "text-violet-200",
+    styleValue: "#ddd6fe",
+    swatchClassName: "bg-violet-300",
+  },
+];
+
+const backgroundColorOptions: readonly BlockColorOption[] = [
+  {
+    id: "default",
+    label: "Без фона",
+    className: "",
+    styleValue: undefined,
+    swatchClassName: "bg-control",
+  },
+  {
+    id: "gray",
+    label: "Серый фон",
+    className: "bg-white/6",
+    styleValue: "rgb(255 255 255 / 0.06)",
+    swatchClassName: "bg-slate-500",
+  },
+  {
+    id: "red",
+    label: "Красный фон",
+    className: "bg-red-400/10",
+    styleValue: "rgb(248 113 113 / 0.10)",
+    swatchClassName: "bg-red-400",
+  },
+  {
+    id: "yellow",
+    label: "Желтый фон",
+    className: "bg-amber-300/12",
+    styleValue: "rgb(252 211 77 / 0.12)",
+    swatchClassName: "bg-amber-300",
+  },
+  {
+    id: "green",
+    label: "Зеленый фон",
+    className: "bg-emerald-300/10",
+    styleValue: "rgb(110 231 183 / 0.10)",
+    swatchClassName: "bg-emerald-300",
+  },
+  {
+    id: "blue",
+    label: "Синий фон",
+    className: "bg-sky-300/10",
+    styleValue: "rgb(125 211 252 / 0.10)",
+    swatchClassName: "bg-sky-300",
+  },
+  {
+    id: "purple",
+    label: "Фиолетовый фон",
+    className: "bg-violet-300/10",
+    styleValue: "rgb(196 181 253 / 0.10)",
+    swatchClassName: "bg-violet-300",
+  },
+];
 
 function NotesLoadingState() {
   return (
@@ -144,6 +448,2545 @@ function NotesLoadingState() {
         Загружаем заметки…
       </p>
     </main>
+  );
+}
+
+function getBlockClassName(type: NoteBlockType): string {
+  if (type === "heading1") {
+    return "min-h-11 text-3xl font-semibold leading-tight text-text";
+  }
+
+  if (type === "heading2") {
+    return "min-h-10 text-2xl font-semibold leading-tight text-text";
+  }
+
+  if (type === "heading3") {
+    return "min-h-9 text-xl font-semibold leading-tight text-text";
+  }
+
+  if (type === "heading4") {
+    return "min-h-8 text-lg font-semibold leading-tight text-text";
+  }
+
+  if (type === "quote") {
+    return "min-h-8 border-l-2 border-white/22 pl-3 text-base italic leading-7 text-text";
+  }
+
+  if (type === "callout") {
+    return "min-h-11 rounded-lg border border-amber-300/18 bg-amber-300/8 px-3 py-2 text-base leading-7 text-text";
+  }
+
+  if (type === "code") {
+    return "min-h-10 rounded-lg border border-white/10 bg-black/24 px-3 py-2 font-mono text-sm leading-6 text-sky-100";
+  }
+
+  if (type === "table") {
+    return "min-h-9 font-mono text-sm leading-6 text-text";
+  }
+
+  return "min-h-8 text-base leading-7 text-text";
+}
+
+function getBlockColorClassName(block: NoteBlock): string {
+  const backgroundColor = backgroundColorOptions.find(
+    (option) => option.id === block.backgroundColor,
+  );
+
+  return cn(backgroundColor?.className);
+}
+
+function getBlockStyle(block: NoteBlock): CSSProperties | undefined {
+  const textColor = textColorOptions.find(
+    (option) => option.id === block.textColor,
+  );
+  const backgroundColor = backgroundColorOptions.find(
+    (option) => option.id === block.backgroundColor,
+  );
+  const style: CSSProperties = {};
+
+  if (textColor?.styleValue) {
+    style.color = textColor.styleValue;
+  }
+
+  if (backgroundColor?.styleValue) {
+    style.backgroundColor = backgroundColor.styleValue;
+  }
+
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
+function getTextFromEditable(element: HTMLElement): string {
+  return element.innerText.replace(/\u00a0/g, " ").replace(/\n$/, "");
+}
+
+function escapeInlineHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\n/g, "<br>");
+}
+
+function getNormalizedInlineTagName(tagName: string): string | null {
+  const normalizedTagName = tagName.toLowerCase();
+
+  if (normalizedTagName === "b" || normalizedTagName === "strong") {
+    return "strong";
+  }
+
+  if (normalizedTagName === "i" || normalizedTagName === "em") {
+    return "em";
+  }
+
+  if (normalizedTagName === "u") {
+    return "u";
+  }
+
+  if (normalizedTagName === "s" || normalizedTagName === "strike") {
+    return "s";
+  }
+
+  if (normalizedTagName === "code") {
+    return "code";
+  }
+
+  if (normalizedTagName === "br") {
+    return "br";
+  }
+
+  return null;
+}
+
+function sanitizeInlineHtml(value: string): string {
+  if (typeof document === "undefined") {
+    return escapeInlineHtml(value);
+  }
+
+  const source = document.createElement("template");
+  const target = document.createElement("div");
+  source.innerHTML = value;
+
+  const appendCleanNode = (node: Node, parent: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parent.appendChild(document.createTextNode(node.textContent ?? ""));
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const element = node as HTMLElement;
+    const tagName = getNormalizedInlineTagName(element.tagName);
+
+    if (tagName === "br") {
+      parent.appendChild(document.createElement("br"));
+      return;
+    }
+
+    if (!tagName) {
+      element.childNodes.forEach((childNode) =>
+        appendCleanNode(childNode, parent),
+      );
+      return;
+    }
+
+    const cleanElement = document.createElement(tagName);
+    element.childNodes.forEach((childNode) =>
+      appendCleanNode(childNode, cleanElement),
+    );
+    parent.appendChild(cleanElement);
+  };
+
+  source.content.childNodes.forEach((node) => appendCleanNode(node, target));
+
+  return target.innerHTML;
+}
+
+function getBlockInlineHtml(block: NoteBlock): string {
+  return sanitizeInlineHtml(block.html ?? escapeInlineHtml(block.text));
+}
+
+function getInlineHtmlFromEditable(element: HTMLElement): string {
+  return sanitizeInlineHtml(element.innerHTML);
+}
+
+function placeCaretAtEnd(element: HTMLElement): void {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function clearEditableText(element: HTMLElement): void {
+  element.textContent = "";
+  placeCaretAtEnd(element);
+}
+
+function insertSoftBreakAtCaret(): void {
+  const selection = window.getSelection();
+
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const br = document.createElement("br");
+  range.deleteContents();
+  range.insertNode(br);
+  range.setStartAfter(br);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function getElementFromSelectionNode(node: Node | null): HTMLElement | null {
+  if (!node) {
+    return null;
+  }
+
+  return node.nodeType === Node.ELEMENT_NODE
+    ? (node as HTMLElement)
+    : node.parentElement;
+}
+
+function getClosestInlineElement(
+  node: Node | null,
+  editorElement: HTMLElement,
+  tagName: string,
+): HTMLElement | null {
+  const element = getElementFromSelectionNode(node);
+  const closest = element?.closest(tagName);
+
+  return closest instanceof HTMLElement && editorElement.contains(closest)
+    ? closest
+    : null;
+}
+
+function unwrapInlineElement(element: HTMLElement): void {
+  const parent = element.parentNode;
+
+  if (!parent) {
+    return;
+  }
+
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element);
+  }
+
+  parent.removeChild(element);
+}
+
+function isSelectionInsideElement(
+  selection: Selection | null,
+  element: HTMLElement,
+): selection is Selection {
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return false;
+  }
+
+  return (
+    Boolean(selection.anchorNode && element.contains(selection.anchorNode)) &&
+    Boolean(selection.focusNode && element.contains(selection.focusNode))
+  );
+}
+
+function getActiveInlineFormats(element: HTMLElement): ReadonlySet<InlineFormat> {
+  const selection = window.getSelection();
+  const activeFormats = new Set<InlineFormat>();
+
+  if (!isSelectionInsideElement(selection, element)) {
+    return activeFormats;
+  }
+
+  if (document.queryCommandState("bold")) {
+    activeFormats.add("bold");
+  }
+
+  if (document.queryCommandState("italic")) {
+    activeFormats.add("italic");
+  }
+
+  if (document.queryCommandState("underline")) {
+    activeFormats.add("underline");
+  }
+
+  if (document.queryCommandState("strikeThrough")) {
+    activeFormats.add("strike");
+  }
+
+  if (
+    getClosestInlineElement(selection.anchorNode, element, "code") ||
+    getClosestInlineElement(selection.focusNode, element, "code")
+  ) {
+    activeFormats.add("code");
+  }
+
+  return activeFormats;
+}
+
+function toggleInlineCode(element: HTMLElement): void {
+  const selection = window.getSelection();
+
+  if (!isSelectionInsideElement(selection, element)) {
+    return;
+  }
+
+  const activeCodeElement =
+    getClosestInlineElement(selection.anchorNode, element, "code") ??
+    getClosestInlineElement(selection.focusNode, element, "code");
+
+  if (activeCodeElement) {
+    unwrapInlineElement(activeCodeElement);
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const codeElement = document.createElement("code");
+  codeElement.appendChild(range.extractContents());
+  range.insertNode(codeElement);
+  selection.removeAllRanges();
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(codeElement);
+  selection.addRange(nextRange);
+}
+
+function applyInlineFormat(format: InlineFormat, element: HTMLElement): void {
+  if (format === "bold") {
+    document.execCommand("bold");
+    return;
+  }
+
+  if (format === "italic") {
+    document.execCommand("italic");
+    return;
+  }
+
+  if (format === "underline") {
+    document.execCommand("underline");
+    return;
+  }
+
+  if (format === "strike") {
+    document.execCommand("strikeThrough");
+    return;
+  }
+
+  toggleInlineCode(element);
+}
+
+function getInlineFormatShortcut(
+  event: KeyboardEvent<HTMLElement>,
+): InlineFormat | null {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+    return null;
+  }
+
+  const key = event.key.toLowerCase();
+
+  if (key === "b") {
+    return "bold";
+  }
+
+  if (key === "i") {
+    return "italic";
+  }
+
+  if (key === "u") {
+    return "underline";
+  }
+
+  if (key === "x" && event.shiftKey) {
+    return "strike";
+  }
+
+  if (key === "`") {
+    return "code";
+  }
+
+  return null;
+}
+
+type NotesEditorProps = Readonly<{
+  activeBoard: Board;
+  blocks: readonly NoteBlock[];
+  onChange: (blocks: NoteBlock[]) => void;
+  onOpenCard: (cardId: string) => void;
+}>;
+
+type EditableBlockProps = Readonly<{
+  block: NoteBlock;
+  className: string;
+  registerElement: RefCallback<HTMLElement>;
+  style?: CSSProperties;
+  onBlur: (element: HTMLElement) => void;
+  onInput: (element: HTMLElement) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onSelectionChange: (element: HTMLElement) => void;
+}>;
+
+function EditableBlock({
+  block,
+  className,
+  registerElement,
+  style,
+  onBlur,
+  onInput,
+  onKeyDown,
+  onSelectionChange,
+}: EditableBlockProps) {
+  const elementRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = elementRef.current;
+
+    if (!element || document.activeElement === element) {
+      return;
+    }
+
+    const html = getBlockInlineHtml(block);
+
+    if (sanitizeInlineHtml(element.innerHTML) !== html) {
+      element.innerHTML = html;
+    }
+  }, [block]);
+
+  return (
+    <div
+      ref={(element) => {
+        elementRef.current = element;
+        registerElement(element);
+
+        if (element && document.activeElement !== element) {
+          element.innerHTML = getBlockInlineHtml(block);
+        }
+      }}
+      className={cn(
+        className,
+        "cursor-text [&_code]:rounded [&_code]:border [&_code]:border-white/10 [&_code]:bg-white/8 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.92em] [&_code]:text-sky-100",
+      )}
+      contentEditable
+      data-placeholder="Напишите что-нибудь или введите ###, ---, -"
+      role="textbox"
+      style={style}
+      suppressContentEditableWarning
+      onBlur={(event) => onBlur(event.currentTarget)}
+      onInput={(event) => onInput(event.currentTarget)}
+      onKeyDown={onKeyDown}
+      onKeyUp={(event) => onSelectionChange(event.currentTarget)}
+      onMouseUp={(event) => onSelectionChange(event.currentTarget)}
+      onPaste={(event) => {
+        event.preventDefault();
+        const text = event.clipboardData.getData("text/plain");
+        document.execCommand("insertHTML", false, escapeInlineHtml(text));
+        onInput(event.currentTarget);
+      }}
+    />
+  );
+}
+
+type EditableTableCellProps = Readonly<{
+  blockId: string;
+  canDeleteColumn: boolean;
+  canDeleteRow: boolean;
+  cellIndex: number;
+  className?: string;
+  isHeader: boolean;
+  isMenuOpen: boolean;
+  placeholder: string;
+  rowIndex: number;
+  tableHasHeaderRow: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onCloseMenu: () => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onOpenMenu: () => void;
+  onRegisterElement: (element: HTMLElement | null) => void;
+  onTableAction: (action: TableCellAction) => void;
+}>;
+
+function EditableTableCell({
+  blockId,
+  canDeleteColumn,
+  canDeleteRow,
+  cellIndex,
+  className,
+  isHeader,
+  isMenuOpen,
+  placeholder,
+  rowIndex,
+  tableHasHeaderRow,
+  value,
+  onChange,
+  onCloseMenu,
+  onKeyDown,
+  onOpenMenu,
+  onRegisterElement,
+  onTableAction,
+}: EditableTableCellProps) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const elementRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = elementRef.current;
+
+    if (!element || document.activeElement === element) {
+      return;
+    }
+
+    if (element.textContent !== value) {
+      element.textContent = value;
+    }
+  }, [value]);
+
+  return (
+    <div
+      ref={wrapperRef}
+      className={cn("group/cell relative min-h-9", className)}
+      onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        onOpenMenu();
+      }}
+    >
+      <div
+        ref={(element) => {
+          elementRef.current = element;
+          onRegisterElement(element);
+
+          if (element && document.activeElement !== element) {
+            element.textContent = value;
+          }
+        }}
+        className={cn(
+          "min-h-9 px-3 py-2 pr-8 outline-none empty:before:text-text-muted/55 empty:before:content-[attr(data-placeholder)] focus:bg-white/5",
+          isHeader && "font-medium text-white",
+        )}
+        contentEditable
+        data-placeholder={placeholder}
+        data-table-block-id={blockId}
+        data-table-cell-index={cellIndex}
+        data-table-row-index={rowIndex}
+        role="textbox"
+        suppressContentEditableWarning
+        onInput={(event) => onChange(getTextFromEditable(event.currentTarget))}
+        onKeyDown={onKeyDown}
+      />
+      <button
+        aria-label="Открыть меню ячейки"
+        className="absolute right-1 top-1 grid size-6 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/10 hover:text-text focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent/60 group-hover/cell:opacity-80 group-focus-within/cell:opacity-80"
+        type="button"
+        onClick={onOpenMenu}
+      >
+        <MoreHorizontal aria-hidden="true" size={14} />
+      </button>
+      {isMenuOpen ? (
+        <TableCellActionMenu
+          anchorRef={wrapperRef}
+          canDeleteColumn={canDeleteColumn}
+          canDeleteRow={canDeleteRow}
+          hasHeaderRow={tableHasHeaderRow}
+          onAction={onTableAction}
+          onClose={onCloseMenu}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+type SlashMenuState = Readonly<{
+  blockId: string;
+  query: string;
+}> | null;
+
+type BlockActionMenuState = Readonly<{
+  blockId: string;
+}> | null;
+
+type TableCellMenuState = Readonly<{
+  blockId: string;
+  cellIndex: number;
+  rowIndex: number;
+}> | null;
+
+type TableCellAction =
+  | "insert-row-above"
+  | "insert-row-below"
+  | "delete-row"
+  | "insert-column-left"
+  | "insert-column-right"
+  | "delete-column"
+  | "toggle-header-row";
+
+type InlineFormat = "bold" | "italic" | "underline" | "strike" | "code";
+
+type InlineFormatMenuState = Readonly<{
+  blockId: string;
+  left: number;
+  top: number;
+  activeFormats: ReadonlySet<InlineFormat>;
+}> | null;
+
+function filterBlockCommands(query: string): readonly BlockCommand[] {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return basicBlockCommands;
+  }
+
+  return basicBlockCommands.filter((command) => {
+    const haystack = [
+      command.title,
+      command.description,
+      command.shortcut ?? "",
+      command.id,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(normalizedQuery);
+  });
+}
+
+function useViewportMenuStyle(
+  menuRef: RefObject<HTMLDivElement | null>,
+  maxHeight = 352,
+  placementKey = 0,
+): CSSProperties {
+  const [style, setStyle] = useState<CSSProperties>({});
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+
+    if (!menu) {
+      return;
+    }
+
+    const margin = 8;
+    const rect = menu.getBoundingClientRect();
+    const availableHeight = window.innerHeight - margin * 2;
+    const nextMaxHeight = Math.min(maxHeight, availableHeight);
+    const overflowBottom = rect.bottom - (window.innerHeight - margin);
+    const overflowTopAfterShift = rect.top - Math.max(0, overflowBottom);
+    const shiftY =
+      overflowBottom > 0
+        ? -Math.min(overflowBottom, Math.max(0, overflowTopAfterShift - margin))
+        : 0;
+
+    setStyle({
+      maxHeight: nextMaxHeight,
+      transform: shiftY ? `translateY(${shiftY}px)` : undefined,
+    });
+  }, [maxHeight, menuRef, placementKey]);
+
+  return style;
+}
+
+function BlockCommandMenu({
+  anchorRef,
+  commands,
+  tasks,
+  onClose,
+  onSelect,
+  onSelectTask,
+}: Readonly<{
+  anchorRef: RefObject<HTMLDivElement | null>;
+  commands: readonly BlockCommand[];
+  tasks: readonly NoteTaskItem[];
+  onClose: () => void;
+  onSelect: (command: BlockCommand) => void;
+  onSelectTask: (task: NoteTaskItem) => void;
+}>) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({
+    left: 8,
+    maxHeight: 440,
+    top: 8,
+    width: 352,
+  });
+
+  useLayoutEffect(() => {
+    const updateMenuPosition = () => {
+      const anchor = anchorRef.current;
+
+      if (!anchor) {
+        return;
+      }
+
+      const margin = 8;
+      const gap = 4;
+      const rect = anchor.getBoundingClientRect();
+      const menuWidth = Math.min(352, window.innerWidth - margin * 2);
+      const maxHeight = Math.min(440, window.innerHeight - margin * 2);
+      const preferredTop = rect.bottom + gap;
+      const top =
+        preferredTop + maxHeight <= window.innerHeight - margin
+          ? preferredTop
+          : Math.max(margin, rect.top - maxHeight - gap);
+      const left = Math.min(
+        Math.max(margin, rect.left),
+        window.innerWidth - menuWidth - margin,
+      );
+
+      setMenuStyle({
+        left,
+        maxHeight,
+        top,
+        width: menuWidth,
+      });
+    };
+
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      onClose();
+    };
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("pointerdown", closeOnPointerDown);
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    updateMenuPosition();
+
+    return () => {
+      window.removeEventListener("pointerdown", closeOnPointerDown);
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [anchorRef, onClose]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="flex flex-col overflow-hidden rounded-lg border border-white/12 bg-[#242424] text-white shadow-2xl"
+      role="menu"
+      style={{
+        ...menuStyle,
+        position: "fixed",
+        zIndex: 85,
+      }}
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      <div className="min-h-24 flex-1 overflow-y-auto p-1.5">
+        <p className="px-2 py-1.5 text-xs font-semibold text-white/45">
+          Basic blocks
+        </p>
+        {commands.length > 0 ? (
+          commands.map((command) => (
+            <button
+              key={command.id}
+              className="flex min-h-10 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition hover:bg-white/10 focus:bg-white/10 focus:outline-none"
+              role="menuitem"
+              type="button"
+              onClick={() => onSelect(command)}
+            >
+              <span className="grid size-6 shrink-0 place-items-center text-white/78">
+                {command.icon}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium text-white/90">
+                  {command.title}
+                </span>
+                <span className="block truncate text-xs text-white/42">
+                  {command.description}
+                </span>
+              </span>
+              {command.shortcut ? (
+                <span className="shrink-0 font-mono text-xs text-white/32">
+                  {command.shortcut}
+                </span>
+              ) : null}
+            </button>
+          ))
+        ) : (
+          <p className="px-2.5 py-6 text-center text-sm text-white/45">
+            Ничего не найдено
+          </p>
+        )}
+      </div>
+      <div className="shrink-0 border-t border-white/10 p-1.5">
+        <div className="flex items-center justify-between gap-3 px-2 py-1.5">
+          <p className="text-xs font-semibold text-white/45">Задачи доски</p>
+          <span className="rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white/38">
+            {tasks.length}
+          </span>
+        </div>
+        <div className="max-h-44 overflow-x-hidden overflow-y-auto pr-1">
+          {tasks.length > 0 ? (
+            <div className="grid min-w-0 gap-1">
+              {tasks.map((task) => (
+                <button
+                  key={`${task.boardId}-${task.card.id}`}
+                  className="flex min-h-11 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-white/8 bg-white/4 px-2.5 py-2 text-left text-sm transition hover:border-accent/45 hover:bg-white/10 focus:border-accent/60 focus:outline-none"
+                  role="menuitem"
+                  title={`${task.boardTitle}: ${task.card.title}`}
+                  type="button"
+                  onClick={() => onSelectTask(task)}
+                >
+                  {task.card.sticker ? (
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 text-base leading-none"
+                    >
+                      {task.card.sticker}
+                    </span>
+                  ) : (
+                    <span className="size-2 shrink-0 rounded-full bg-accent" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block max-w-full truncate font-semibold text-white/90">
+                      {task.card.title}
+                    </span>
+                    <span className="block max-w-full truncate text-xs text-white/42">
+                      {task.listTitle}
+                      {task.card.dueDate ? ` · ${task.card.dueDate}` : ""}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-2.5 py-4 text-center text-sm text-white/45">
+              В этой доске нет задач
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex min-h-10 items-center justify-between border-t border-white/10 px-3 text-sm">
+        <button
+          className="font-medium text-white/85 transition hover:text-white"
+          type="button"
+          onClick={onClose}
+        >
+          Close menu
+        </button>
+        <span className="text-xs text-white/35">esc</span>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function BlockActionMenu({
+  block,
+  onClose,
+  onDelete,
+  onSetBackgroundColor,
+  onSetTextColor,
+}: Readonly<{
+  block: NoteBlock;
+  onClose: () => void;
+  onDelete: () => void;
+  onSetBackgroundColor: (color: string | undefined) => void;
+  onSetTextColor: (color: string | undefined) => void;
+}>) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const viewportStyle = useViewportMenuStyle(menuRef, 304);
+  const canChangeColors = block.type !== "linked-card" && block.type !== "table";
+
+  useLayoutEffect(() => {
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      onClose();
+    };
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("pointerdown", closeOnPointerDown);
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", onClose);
+
+    return () => {
+      window.removeEventListener("pointerdown", closeOnPointerDown);
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="absolute left-8 top-9 z-40 w-[min(18rem,calc(100vw-3rem))] overflow-y-auto rounded-lg border border-white/12 bg-[#242424] p-1.5 text-white shadow-2xl"
+      role="menu"
+      style={viewportStyle}
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      <button
+        className="flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium text-red-200 transition hover:bg-red-500/12"
+        role="menuitem"
+        type="button"
+        onClick={() => {
+          onDelete();
+          onClose();
+        }}
+      >
+        <Trash2 aria-hidden="true" size={15} />
+        Удалить
+      </button>
+
+      {canChangeColors ? (
+        <>
+          <div className="mt-1 border-t border-white/10 pt-2">
+            <p className="px-2 py-1 text-xs font-semibold text-white/45">
+              Цвет текста
+            </p>
+            <div className="grid gap-1">
+              {textColorOptions.map((option) => {
+                const value = option.id === "default" ? undefined : option.id;
+                const isActive = (block.textColor ?? "default") === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    className={cn(
+                      "flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10",
+                      isActive && "bg-white/10 text-white",
+                    )}
+                    role="menuitem"
+                    type="button"
+                    onClick={() => onSetTextColor(value)}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-3 rounded-full",
+                        option.swatchClassName,
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {option.label}
+                    </span>
+                    {isActive ? <Check aria-hidden="true" size={14} /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-1 border-t border-white/10 pt-2">
+            <p className="px-2 py-1 text-xs font-semibold text-white/45">
+              Фон
+            </p>
+            <div className="grid gap-1">
+              {backgroundColorOptions.map((option) => {
+                const value = option.id === "default" ? undefined : option.id;
+                const isActive =
+                  (block.backgroundColor ?? "default") === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    className={cn(
+                      "flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10",
+                      isActive && "bg-white/10 text-white",
+                    )}
+                    role="menuitem"
+                    type="button"
+                    onClick={() => onSetBackgroundColor(value)}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-3 rounded-full",
+                        option.swatchClassName,
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {option.label}
+                    </span>
+                    {isActive ? <Check aria-hidden="true" size={14} /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function TableCellActionMenu({
+  anchorRef,
+  canDeleteColumn,
+  canDeleteRow,
+  hasHeaderRow,
+  onAction,
+  onClose,
+}: Readonly<{
+  anchorRef: RefObject<HTMLDivElement | null>;
+  canDeleteColumn: boolean;
+  canDeleteRow: boolean;
+  hasHeaderRow: boolean;
+  onAction: (action: TableCellAction) => void;
+  onClose: () => void;
+}>) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({
+    left: 8,
+    maxHeight: 240,
+    top: 8,
+    width: 256,
+  });
+
+  useLayoutEffect(() => {
+    const updateMenuPosition = () => {
+      const anchor = anchorRef.current;
+
+      if (!anchor) {
+        return;
+      }
+
+      const margin = 8;
+      const gap = 4;
+      const menuWidth = Math.min(256, window.innerWidth - margin * 2);
+      const maxHeight = Math.min(240, window.innerHeight - margin * 2);
+      const rect = anchor.getBoundingClientRect();
+      const preferredTop = rect.bottom + gap;
+      const top =
+        preferredTop + maxHeight <= window.innerHeight - margin
+          ? preferredTop
+          : Math.max(margin, rect.top - maxHeight - gap);
+      const left = Math.min(
+        Math.max(margin, rect.right - menuWidth),
+        window.innerWidth - menuWidth - margin,
+      );
+
+      setMenuStyle({
+        left,
+        maxHeight,
+        top,
+        width: menuWidth,
+      });
+    };
+
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      onClose();
+    };
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("pointerdown", closeOnPointerDown);
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    updateMenuPosition();
+
+    return () => {
+      window.removeEventListener("pointerdown", closeOnPointerDown);
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [anchorRef, onClose]);
+
+  const runAction = (action: TableCellAction) => {
+    onAction(action);
+    onClose();
+  };
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="overflow-y-auto rounded-lg border border-white/12 bg-[#242424] p-1.5 text-white shadow-2xl"
+      role="menu"
+      style={{
+        ...menuStyle,
+        position: "fixed",
+        zIndex: 80,
+      }}
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      <button
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
+        role="menuitem"
+        type="button"
+        onClick={() => runAction("insert-row-above")}
+      >
+        <Plus aria-hidden="true" size={14} />
+        Строка выше
+      </button>
+      <button
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
+        role="menuitem"
+        type="button"
+        onClick={() => runAction("insert-row-below")}
+      >
+        <Plus aria-hidden="true" size={14} />
+        Строка ниже
+      </button>
+      <button
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
+        role="menuitem"
+        type="button"
+        onClick={() => runAction("insert-column-left")}
+      >
+        <Plus aria-hidden="true" size={14} />
+        Колонка слева
+      </button>
+      <button
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
+        role="menuitem"
+        type="button"
+        onClick={() => runAction("insert-column-right")}
+      >
+        <Plus aria-hidden="true" size={14} />
+        Колонка справа
+      </button>
+
+      <div className="my-1 border-t border-white/10" />
+
+      <button
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
+        role="menuitemcheckbox"
+        type="button"
+        aria-checked={hasHeaderRow}
+        onClick={() => runAction("toggle-header-row")}
+      >
+        <span className="grid size-4 place-items-center">
+          {hasHeaderRow ? <Check aria-hidden="true" size={14} /> : null}
+        </span>
+        Header row
+      </button>
+
+      <div className="my-1 border-t border-white/10" />
+
+      <button
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-200 transition hover:bg-red-500/12 disabled:cursor-not-allowed disabled:text-white/28 disabled:hover:bg-transparent"
+        disabled={!canDeleteRow}
+        role="menuitem"
+        type="button"
+        onClick={() => runAction("delete-row")}
+      >
+        <Trash2 aria-hidden="true" size={14} />
+        Удалить строку
+      </button>
+      <button
+        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-200 transition hover:bg-red-500/12 disabled:cursor-not-allowed disabled:text-white/28 disabled:hover:bg-transparent"
+        disabled={!canDeleteColumn}
+        role="menuitem"
+        type="button"
+        onClick={() => runAction("delete-column")}
+      >
+        <Trash2 aria-hidden="true" size={14} />
+        Удалить колонку
+      </button>
+    </div>,
+    document.body,
+  );
+}
+
+function InlineFormatBubble({
+  menu,
+  onFormat,
+}: Readonly<{
+  menu: InlineFormatMenuState;
+  onFormat: (format: InlineFormat) => void;
+}>) {
+  if (!menu || typeof document === "undefined") {
+    return null;
+  }
+
+  const actions: ReadonlyArray<{
+    format: InlineFormat;
+    label: string;
+    icon: ReactNode;
+  }> = [
+    {
+      format: "bold",
+      label: "Bold",
+      icon: <Bold aria-hidden="true" size={15} />,
+    },
+    {
+      format: "italic",
+      label: "Italic",
+      icon: <Italic aria-hidden="true" size={15} />,
+    },
+    {
+      format: "underline",
+      label: "Underline",
+      icon: <Underline aria-hidden="true" size={15} />,
+    },
+    {
+      format: "strike",
+      label: "Strike",
+      icon: <Strikethrough aria-hidden="true" size={15} />,
+    },
+    {
+      format: "code",
+      label: "Inline code",
+      icon: <Code2 aria-hidden="true" size={15} />,
+    },
+  ];
+
+  return createPortal(
+    <div
+      className="fixed z-[90] flex items-center gap-1 rounded-lg border border-white/12 bg-[#242424] p-1 text-white shadow-2xl"
+      role="toolbar"
+      style={{
+        left: menu.left,
+        top: menu.top,
+      }}
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      {actions.map((action) => {
+        const isActive = menu.activeFormats.has(action.format);
+
+        return (
+          <button
+            key={action.format}
+            aria-label={action.label}
+            aria-pressed={isActive}
+            className={cn(
+              "grid size-8 place-items-center rounded-md text-white/72 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+              isActive && "bg-white/14 text-white",
+            )}
+            type="button"
+            onClick={() => onFormat(action.format)}
+          >
+            {action.icon}
+          </button>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+}
+
+type SortableNoteBlockProps = Readonly<{
+  block: NoteBlock;
+  isNested: boolean;
+  isActionMenuOpen: boolean;
+  isSlashMenuOpen: boolean;
+  openTableCellMenu: TableCellMenuState;
+  menuCommands: readonly BlockCommand[];
+  numberedListNumber: number | undefined;
+  taskItems: readonly NoteTaskItem[];
+  onBlur: (block: NoteBlock, element: HTMLElement) => void;
+  onCloseTableCellMenu: () => void;
+  onDeleteBlock: (blockId: string) => void;
+  onInput: (block: NoteBlock, element: HTMLElement) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>, block: NoteBlock) => void;
+  onOpenActionMenu: (blockId: string) => void;
+  onOpenTableCellMenu: (
+    blockId: string,
+    rowIndex: number,
+    cellIndex: number,
+  ) => void;
+  onCloseActionMenu: () => void;
+  onCloseSlashMenu: () => void;
+  onInsertAfter: (blockId: string) => void;
+  onRegisterElement: (blockId: string, element: HTMLElement | null) => void;
+  onRegisterTableCell: (
+    blockId: string,
+    rowIndex: number,
+    cellIndex: number,
+    element: HTMLElement | null,
+  ) => void;
+  onSelectionChange: (block: NoteBlock, element: HTMLElement) => void;
+  onSetBlockColor: (
+    blockId: string,
+    patch: Pick<NoteBlock, "backgroundColor" | "textColor">,
+  ) => void;
+  onSelectCommand: (block: NoteBlock, command: BlockCommand) => void;
+  onSelectTask: (block: NoteBlock, task: NoteTaskItem) => void;
+  onOpenLinkedCard: (block: NoteBlock) => void;
+  onTableCellAction: (
+    blockId: string,
+    rowIndex: number,
+    cellIndex: number,
+    action: TableCellAction,
+  ) => void;
+  onTableCellKeyDown: (
+    event: KeyboardEvent<HTMLElement>,
+    block: NoteBlock,
+    rowIndex: number,
+    cellIndex: number,
+  ) => void;
+  onToggleCollapsed: (block: NoteBlock) => void;
+  onToggleTodo: (block: NoteBlock) => void;
+  onUpdateTableCell: (
+    blockId: string,
+    rowIndex: number,
+    cellIndex: number,
+    value: string,
+  ) => void;
+}>;
+
+function SortableNoteBlock({
+  block,
+  isNested,
+  isActionMenuOpen,
+  isSlashMenuOpen,
+  openTableCellMenu,
+  menuCommands,
+  numberedListNumber,
+  taskItems,
+  onBlur,
+  onCloseTableCellMenu,
+  onDeleteBlock,
+  onInput,
+  onKeyDown,
+  onOpenActionMenu,
+  onOpenTableCellMenu,
+  onCloseActionMenu,
+  onCloseSlashMenu,
+  onInsertAfter,
+  onRegisterElement,
+  onRegisterTableCell,
+  onSelectionChange,
+  onSetBlockColor,
+  onSelectCommand,
+  onSelectTask,
+  onOpenLinkedCard,
+  onTableCellAction,
+  onTableCellKeyDown,
+  onToggleCollapsed,
+  onToggleTodo,
+  onUpdateTableCell,
+}: SortableNoteBlockProps) {
+  const blockElementRef = useRef<HTMLDivElement | null>(null);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: block.id,
+    data: {
+      blockId: block.id,
+      blockType: block.type,
+      parentId: block.parentId,
+      type: "note-block",
+    },
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const tableCells = block.type === "table" ? getTableCells(block) : [];
+  const tableColumnCount =
+    tableCells[0]?.length ?? DEFAULT_TABLE_COLUMN_COUNT;
+  const tableHasHeaderRow = block.tableHasHeaderRow ?? true;
+  const linkedTask = block.linkedCardId
+    ? taskItems.find((task) => task.card.id === block.linkedCardId)
+    : undefined;
+
+  const registerBlockElement = (element: HTMLDivElement | null) => {
+    blockElementRef.current = element;
+    setNodeRef(element);
+  };
+
+  if (block.type === "divider") {
+    return (
+      <div
+        ref={registerBlockElement}
+        style={style}
+        className={cn(
+          "group relative flex items-center gap-1 py-3",
+          isNested && "ml-12 border-l border-white/10 pl-3",
+          isDragging && "opacity-35",
+        )}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onOpenActionMenu(block.id);
+        }}
+      >
+        <button
+          aria-label="Добавить строку ниже"
+          className="grid size-7 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
+          type="button"
+          onClick={() => onInsertAfter(block.id)}
+        >
+          <Plus aria-hidden="true" size={16} />
+        </button>
+        <button
+          aria-label="Открыть меню блока"
+          className="grid size-7 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
+          type="button"
+          onClick={() => onOpenActionMenu(block.id)}
+        >
+          <MoreHorizontal aria-hidden="true" size={16} />
+        </button>
+        <button
+          {...attributes}
+          {...listeners}
+          aria-label="Переместить блок"
+          className="grid size-7 touch-none place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
+          type="button"
+        >
+          <GripVertical aria-hidden="true" size={16} />
+        </button>
+        <button
+          className="h-px min-w-0 flex-1 bg-white/16 transition hover:bg-white/30"
+          type="button"
+          onClick={() => onInsertAfter(block.id)}
+        />
+        {isActionMenuOpen ? (
+          <BlockActionMenu
+            block={block}
+            onClose={onCloseActionMenu}
+            onDelete={() => onDeleteBlock(block.id)}
+            onSetBackgroundColor={(backgroundColor) =>
+              onSetBlockColor(block.id, { backgroundColor })
+            }
+            onSetTextColor={(textColor) =>
+              onSetBlockColor(block.id, { textColor })
+            }
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={registerBlockElement}
+      style={style}
+      className={cn(
+        "group relative flex items-start gap-1",
+        isNested && "ml-12 border-l border-white/10 pl-3",
+        isDragging && "opacity-35",
+      )}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onOpenActionMenu(block.id);
+      }}
+    >
+      <button
+        aria-label="Добавить строку ниже"
+        className="mt-0.5 grid size-7 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
+        type="button"
+        onClick={() => onInsertAfter(block.id)}
+      >
+        <Plus aria-hidden="true" size={16} />
+      </button>
+      <button
+        aria-label="Открыть меню блока"
+        className="mt-0.5 grid size-7 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
+        type="button"
+        onClick={() => onOpenActionMenu(block.id)}
+      >
+        <MoreHorizontal aria-hidden="true" size={16} />
+      </button>
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Переместить блок"
+        className="mt-0.5 grid size-7 touch-none place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
+        type="button"
+      >
+        <GripVertical aria-hidden="true" size={16} />
+      </button>
+
+      {block.type === "bulleted" ? (
+        <span className="mt-3 size-1.5 shrink-0 rounded-full bg-text-muted" />
+      ) : null}
+      {block.type === "numbered" ? (
+        <span className="mt-1.5 w-7 shrink-0 text-right text-sm tabular-nums text-text-muted">
+          {numberedListNumber ?? 1}.
+        </span>
+      ) : null}
+      {block.type === "todo" ? (
+        <button
+          aria-label={block.checked ? "Снять отметку" : "Отметить выполненным"}
+          className={cn(
+            "mt-1.5 grid size-5 shrink-0 place-items-center rounded border transition",
+            block.checked
+              ? "border-emerald-300/45 bg-emerald-400/20 text-emerald-100"
+              : "border-white/20 text-transparent hover:border-white/40",
+          )}
+          type="button"
+          onClick={() => onToggleTodo(block)}
+        >
+          <Check aria-hidden="true" size={13} />
+        </button>
+      ) : null}
+      {block.type === "toggle" ? (
+        <button
+          aria-label={block.collapsed ? "Развернуть" : "Свернуть"}
+          className="mt-1 grid size-6 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-white/8 hover:text-text"
+          type="button"
+          onClick={() => onToggleCollapsed(block)}
+        >
+          <ChevronRight
+            aria-hidden="true"
+            className={cn("transition", !block.collapsed && "rotate-90")}
+            size={16}
+          />
+        </button>
+      ) : null}
+      {block.type === "callout" ? (
+        <span className="mt-2 grid size-6 shrink-0 place-items-center rounded-md bg-amber-300/12 text-sm">
+          !
+        </span>
+      ) : null}
+
+      <div className="min-w-0 flex-1">
+        {block.type === "linked-card" ? (
+          <button
+            className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-white/10 bg-control/35 px-3 py-2 text-left transition hover:border-accent/45 hover:bg-control/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            type="button"
+            onClick={() => onOpenLinkedCard(block)}
+          >
+            {linkedTask?.card.sticker ? (
+              <span aria-hidden="true" className="shrink-0 text-lg leading-none">
+                {linkedTask.card.sticker}
+              </span>
+            ) : (
+              <span className="size-2.5 shrink-0 rounded-full bg-accent" />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-text">
+                {linkedTask?.card.title || block.text || "Задача недоступна"}
+              </span>
+              <span className="block truncate text-xs text-text-muted">
+                {linkedTask
+                  ? `${linkedTask.boardTitle} / ${linkedTask.listTitle}`
+                  : "Карточка не найдена в текущей доске"}
+              </span>
+            </span>
+            {linkedTask?.card.dueDate ? (
+              <span className="shrink-0 rounded-md border border-white/10 bg-black/12 px-2 py-1 text-[11px] font-semibold tabular-nums text-text-muted">
+                {linkedTask.card.dueDate}
+              </span>
+            ) : null}
+          </button>
+        ) : block.type === "table" ? (
+          <div className="max-w-full overflow-x-auto rounded-lg pb-2">
+            <div
+              className="grid overflow-hidden rounded-lg border border-white/12 bg-black/14 text-sm text-text"
+              style={{
+                gridTemplateColumns: `repeat(${tableColumnCount}, minmax(9rem, 1fr))`,
+                minWidth:
+                  tableColumnCount > 4
+                    ? `${tableColumnCount * 9}rem`
+                    : undefined,
+              }}
+            >
+              {tableCells.map((row, rowIndex) =>
+                row.map((cell, cellIndex) => (
+                  <EditableTableCell
+                    key={`${rowIndex}-${cellIndex}`}
+                    blockId={block.id}
+                    canDeleteColumn={tableColumnCount > 1}
+                    canDeleteRow={tableCells.length > 1}
+                    cellIndex={cellIndex}
+                    className={cn(
+                      rowIndex < tableCells.length - 1 &&
+                        "border-b border-white/10",
+                      cellIndex < tableColumnCount - 1 &&
+                        "border-r border-white/10",
+                      tableHasHeaderRow && rowIndex === 0 && "bg-white/5",
+                    )}
+                    isHeader={tableHasHeaderRow && rowIndex === 0}
+                    isMenuOpen={
+                      openTableCellMenu?.blockId === block.id &&
+                      openTableCellMenu.rowIndex === rowIndex &&
+                      openTableCellMenu.cellIndex === cellIndex
+                    }
+                    placeholder={
+                      tableHasHeaderRow && rowIndex === 0
+                        ? `Столбец ${cellIndex + 1}`
+                        : "Пусто"
+                    }
+                    rowIndex={rowIndex}
+                    tableHasHeaderRow={tableHasHeaderRow}
+                    value={cell}
+                    onCloseMenu={onCloseTableCellMenu}
+                    onChange={(value) =>
+                      onUpdateTableCell(block.id, rowIndex, cellIndex, value)
+                    }
+                    onKeyDown={(event) =>
+                      onTableCellKeyDown(event, block, rowIndex, cellIndex)
+                    }
+                    onOpenMenu={() =>
+                      onOpenTableCellMenu(block.id, rowIndex, cellIndex)
+                    }
+                    onRegisterElement={(element) =>
+                      onRegisterTableCell(block.id, rowIndex, cellIndex, element)
+                    }
+                    onTableAction={(action) =>
+                      onTableCellAction(block.id, rowIndex, cellIndex, action)
+                    }
+                  />
+                )),
+              )}
+            </div>
+          </div>
+        ) : (
+          <EditableBlock
+            block={block}
+            className={cn(
+            "min-w-0 flex-1 rounded-md px-1.5 py-0.5 outline-none transition empty:before:text-transparent empty:before:content-[attr(data-placeholder)] group-hover:empty:before:text-text-muted/60 focus:empty:before:text-text-muted/60 focus:bg-white/5",
+              "whitespace-pre-wrap",
+              getBlockClassName(block.type),
+              getBlockColorClassName(block),
+              block.type === "todo" &&
+                block.checked &&
+                "text-text-muted line-through",
+            )}
+            registerElement={(element) => onRegisterElement(block.id, element)}
+            style={getBlockStyle(block)}
+            onBlur={(element) => onBlur(block, element)}
+            onInput={(element) => onInput(block, element)}
+            onKeyDown={(event) => onKeyDown(event, block)}
+            onSelectionChange={(element) => onSelectionChange(block, element)}
+          />
+        )}
+      </div>
+
+      {isSlashMenuOpen ? (
+        <BlockCommandMenu
+          anchorRef={blockElementRef}
+          commands={menuCommands}
+          tasks={filterTaskItems(taskItems, block.text.startsWith("/") ? block.text.slice(1) : "")}
+          onClose={onCloseSlashMenu}
+          onSelect={(command) => onSelectCommand(block, command)}
+          onSelectTask={(task) => onSelectTask(block, task)}
+        />
+      ) : null}
+      {isActionMenuOpen ? (
+        <BlockActionMenu
+          block={block}
+          onClose={onCloseActionMenu}
+          onDelete={() => onDeleteBlock(block.id)}
+          onSetBackgroundColor={(backgroundColor) =>
+            onSetBlockColor(block.id, { backgroundColor })
+          }
+          onSetTextColor={(textColor) =>
+            onSetBlockColor(block.id, { textColor })
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function NotesEditor({
+  activeBoard,
+  blocks,
+  onChange,
+  onOpenCard,
+}: NotesEditorProps) {
+  const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const tableCellRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const pendingFocusIdRef = useRef<string | null>(null);
+  const pendingTableCellFocusRef = useRef<{
+    blockId: string;
+    rowIndex: number;
+    cellIndex: number;
+  } | null>(null);
+  const [slashMenu, setSlashMenu] = useState<SlashMenuState>(null);
+  const [actionMenu, setActionMenu] = useState<BlockActionMenuState>(null);
+  const [tableCellMenu, setTableCellMenu] = useState<TableCellMenuState>(null);
+  const [inlineMenu, setInlineMenu] = useState<InlineFormatMenuState>(null);
+  const visibleCommands = filterBlockCommands(slashMenu?.query ?? "");
+  const visibleBlocks = useMemo(() => getVisibleBlocks(blocks), [blocks]);
+  const taskItems = useMemo(() => getBoardTaskItems(activeBoard), [activeBoard]);
+  const numberedListNumbers = useMemo(
+    () => getNumberedListNumbers(visibleBlocks),
+    [visibleBlocks],
+  );
+
+  useEffect(() => {
+    const pendingFocusId = pendingFocusIdRef.current;
+
+    if (!pendingFocusId) {
+      return;
+    }
+
+    pendingFocusIdRef.current = null;
+    const element = blockRefs.current.get(pendingFocusId);
+
+    if (!element) {
+      return;
+    }
+
+    element.focus();
+    placeCaretAtEnd(element);
+  }, [blocks]);
+
+  useEffect(() => {
+    const pendingFocus = pendingTableCellFocusRef.current;
+
+    if (!pendingFocus) {
+      return;
+    }
+
+    pendingTableCellFocusRef.current = null;
+    const element = tableCellRefs.current.get(
+      getTableCellKey(
+        pendingFocus.blockId,
+        pendingFocus.rowIndex,
+        pendingFocus.cellIndex,
+      ),
+    );
+
+    if (!element) {
+      return;
+    }
+
+    element.focus();
+    placeCaretAtEnd(element);
+  }, [blocks]);
+
+  const focusBlock = (blockId: string) => {
+    pendingFocusIdRef.current = blockId;
+  };
+
+  const focusTableCell = (
+    blockId: string,
+    rowIndex: number,
+    cellIndex: number,
+  ) => {
+    pendingTableCellFocusRef.current = { blockId, rowIndex, cellIndex };
+  };
+
+  const closeSlashMenu = () => setSlashMenu(null);
+  const closeActionMenu = () => setActionMenu(null);
+  const closeTableCellMenu = () => setTableCellMenu(null);
+  const closeInlineMenu = () => setInlineMenu(null);
+
+  const updateInlineMenu = (block: NoteBlock, element: HTMLElement) => {
+    const selection = window.getSelection();
+
+    if (!isSelectionInsideElement(selection, element)) {
+      closeInlineMenu();
+      return;
+    }
+
+    const rect = selection.getRangeAt(0).getBoundingClientRect();
+
+    if (!rect.width && !rect.height) {
+      closeInlineMenu();
+      return;
+    }
+
+    const menuWidth = 184;
+    const margin = 8;
+    const left = Math.min(
+      Math.max(margin, rect.left + rect.width / 2 - menuWidth / 2),
+      window.innerWidth - menuWidth - margin,
+    );
+    const top = Math.max(margin, rect.top - 46);
+
+    setInlineMenu({
+      blockId: block.id,
+      left,
+      top,
+      activeFormats: getActiveInlineFormats(element),
+    });
+  };
+
+  const updateBlock = (blockId: string, patch: Partial<NoteBlock>) => {
+    onChange(
+      blocks.map((block) =>
+        block.id === blockId ? { ...block, ...patch } : block,
+      ),
+    );
+  };
+
+  const syncInlineBlock = (blockId: string, element: HTMLElement) => {
+    updateBlock(blockId, {
+      html: getInlineHtmlFromEditable(element),
+      text: getTextFromEditable(element),
+    });
+  };
+
+  const applyInlineFormatToCurrentSelection = (format: InlineFormat) => {
+    const blockId = inlineMenu?.blockId;
+    const element = blockId ? blockRefs.current.get(blockId) : undefined;
+    const block = blockId ? blocks.find((current) => current.id === blockId) : undefined;
+
+    if (!blockId || !element || !block) {
+      closeInlineMenu();
+      return;
+    }
+
+    element.focus();
+    applyInlineFormat(format, element);
+    syncInlineBlock(blockId, element);
+    updateInlineMenu(block, element);
+  };
+
+  const insertBlockAfter = (
+    blockId: string,
+    nextBlock: NoteBlock = createBlock(),
+  ) => {
+    const index = blocks.findIndex((block) => block.id === blockId);
+    const childIndexes =
+      nextBlock.parentId === blockId
+        ? blocks
+            .map((block, blockIndex) =>
+              block.parentId === blockId ? blockIndex : -1,
+            )
+            .filter((blockIndex) => blockIndex >= 0)
+        : [];
+    const insertIndex =
+      childIndexes.length > 0 ? Math.max(...childIndexes) : index;
+    const nextBlocks = [...blocks];
+
+    if (nextBlock.parentId === blockId && index >= 0) {
+      nextBlocks[index] = {
+        ...nextBlocks[index],
+        collapsed: false,
+      };
+    }
+
+    nextBlocks.splice(insertIndex + 1, 0, nextBlock);
+    focusBlock(nextBlock.id);
+    onChange(nextBlocks);
+  };
+
+  const createContinuationBlock = (block: NoteBlock): NoteBlock => {
+    if (block.type === "toggle") {
+      return createBlock("paragraph", "", block.id);
+    }
+
+    if (
+      block.type === "numbered" ||
+      block.type === "bulleted" ||
+      block.type === "quote"
+    ) {
+      return createBlock(block.type, "", block.parentId);
+    }
+
+    if (block.type === "todo") {
+      return createBlock("todo", "", block.parentId);
+    }
+
+    return createBlock("paragraph", "", block.parentId);
+  };
+
+  const removeBlock = (blockId: string) => {
+    if (blocks.length <= 1) {
+      updateBlock(blockId, {
+        checked: false,
+        html: undefined,
+        text: "",
+        type: "paragraph",
+      });
+      return;
+    }
+
+    const index = blocks.findIndex((block) => block.id === blockId);
+    const nextBlocks = blocks.filter((block) => block.id !== blockId);
+    const focusTarget = nextBlocks[Math.max(0, index - 1)];
+
+    if (focusTarget) {
+      focusBlock(focusTarget.id);
+    }
+
+    onChange(nextBlocks);
+  };
+
+  const updateTableCell = (
+    blockId: string,
+    rowIndex: number,
+    cellIndex: number,
+    value: string,
+  ) => {
+    onChange(
+      blocks.map((block) => {
+        if (block.id !== blockId) {
+          return block;
+        }
+
+        const tableCells = getTableCells(block);
+        tableCells[rowIndex][cellIndex] = value;
+
+        return {
+          ...block,
+          tableCells,
+        };
+      }),
+    );
+  };
+
+  const applyTableCellAction = (
+    blockId: string,
+    rowIndex: number,
+    cellIndex: number,
+    action: TableCellAction,
+  ) => {
+    closeTableCellMenu();
+
+    onChange(
+      blocks.map((block) => {
+        if (block.id !== blockId) {
+          return block;
+        }
+
+        const tableCells = getTableCells(block);
+        const rowCount = tableCells.length;
+        const columnCount = tableCells[0]?.length ?? 1;
+
+        if (action === "toggle-header-row") {
+          focusTableCell(blockId, rowIndex, cellIndex);
+          return {
+            ...block,
+            tableHasHeaderRow: !(block.tableHasHeaderRow ?? true),
+            tableCells,
+          };
+        }
+
+        if (action === "insert-row-above" || action === "insert-row-below") {
+          const insertIndex =
+            action === "insert-row-above" ? rowIndex : rowIndex + 1;
+          const nextTableCells = [...tableCells];
+          nextTableCells.splice(insertIndex, 0, Array(columnCount).fill(""));
+          focusTableCell(blockId, insertIndex, cellIndex);
+
+          return {
+            ...block,
+            tableCells: nextTableCells,
+          };
+        }
+
+        if (action === "delete-row") {
+          if (rowCount <= 1) {
+            return block;
+          }
+
+          const nextTableCells = tableCells.filter(
+            (_, currentRowIndex) => currentRowIndex !== rowIndex,
+          );
+          focusTableCell(
+            blockId,
+            Math.min(rowIndex, nextTableCells.length - 1),
+            Math.min(cellIndex, columnCount - 1),
+          );
+
+          return {
+            ...block,
+            tableCells: nextTableCells,
+          };
+        }
+
+        if (
+          action === "insert-column-left" ||
+          action === "insert-column-right"
+        ) {
+          const insertIndex =
+            action === "insert-column-left" ? cellIndex : cellIndex + 1;
+          const nextTableCells = tableCells.map((row) => {
+            const nextRow = [...row];
+            nextRow.splice(insertIndex, 0, "");
+            return nextRow;
+          });
+          focusTableCell(blockId, rowIndex, insertIndex);
+
+          return {
+            ...block,
+            tableCells: nextTableCells,
+          };
+        }
+
+        if (action === "delete-column") {
+          if (columnCount <= 1) {
+            return block;
+          }
+
+          const nextTableCells = tableCells.map((row) =>
+            row.filter((_, currentCellIndex) => currentCellIndex !== cellIndex),
+          );
+          focusTableCell(
+            blockId,
+            rowIndex,
+            Math.min(cellIndex, columnCount - 2),
+          );
+
+          return {
+            ...block,
+            tableCells: nextTableCells,
+          };
+        }
+
+        return block;
+      }),
+    );
+  };
+
+  const handleTableCellKeyDown = (
+    event: KeyboardEvent<HTMLElement>,
+    block: NoteBlock,
+    rowIndex: number,
+    cellIndex: number,
+  ) => {
+    if (event.key === "Escape") {
+      closeTableCellMenu();
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.blur();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    event.preventDefault();
+    const tableCells = getTableCells(block);
+    const rowCount = tableCells.length;
+    const columnCount = tableCells[0]?.length ?? 1;
+
+    if (event.shiftKey) {
+      if (rowIndex === 0 && cellIndex === 0) {
+        return;
+      }
+
+      if (cellIndex > 0) {
+        focusTableCell(block.id, rowIndex, cellIndex - 1);
+        return;
+      }
+
+      focusTableCell(block.id, rowIndex - 1, columnCount - 1);
+      return;
+    }
+
+    if (cellIndex < columnCount - 1) {
+      focusTableCell(block.id, rowIndex, cellIndex + 1);
+      return;
+    }
+
+    if (rowIndex < rowCount - 1) {
+      focusTableCell(block.id, rowIndex + 1, 0);
+      return;
+    }
+
+    applyTableCellAction(block.id, rowIndex, cellIndex, "insert-row-below");
+  };
+
+  const applyBlockCommand = (block: NoteBlock, command: BlockCommand) => {
+    const element = blockRefs.current.get(block.id);
+    const currentText = element ? getTextFromEditable(element) : block.text;
+    const currentHtml = element
+      ? getInlineHtmlFromEditable(element)
+      : block.html;
+    const shouldClearText =
+      currentText.startsWith("/") || command.id === "divider";
+    const nextText = shouldClearText ? "" : currentText;
+    const nextBlocks = blocks.map((current) =>
+      current.id === block.id
+        ? {
+            ...current,
+            checked: command.id === "todo" ? false : undefined,
+            collapsed: command.id === "toggle" ? false : undefined,
+            html:
+              shouldClearText || command.id === "table"
+                ? undefined
+                : currentHtml,
+            tableHasHeaderRow: command.id === "table" ? true : undefined,
+            tableCells:
+              command.id === "table"
+                ? getTableCells({ ...current, tableCells: undefined })
+                : undefined,
+            text: command.id === "table" ? "" : nextText,
+            type: command.id,
+          }
+        : current,
+    );
+
+    if (element && shouldClearText) {
+      clearEditableText(element);
+    }
+
+    if (command.id === "divider") {
+      const index = nextBlocks.findIndex((current) => current.id === block.id);
+      const nextBlock = createBlock();
+      const withInserted = [...nextBlocks];
+      withInserted.splice(index + 1, 0, nextBlock);
+      focusBlock(nextBlock.id);
+      onChange(withInserted);
+      closeSlashMenu();
+      return;
+    }
+
+    focusBlock(block.id);
+    onChange(nextBlocks);
+    closeSlashMenu();
+  };
+
+  const applyTaskLink = (block: NoteBlock, task: NoteTaskItem) => {
+    const element = blockRefs.current.get(block.id);
+    const nextBlocks = blocks.map((current) =>
+      current.id === block.id
+        ? {
+            ...current,
+            checked: undefined,
+            collapsed: undefined,
+            html: undefined,
+            linkedBoardId: task.boardId,
+            linkedCardId: task.card.id,
+            tableCells: undefined,
+            tableHasHeaderRow: undefined,
+            text: task.card.title,
+            type: "linked-card" as const,
+          }
+        : current,
+    );
+
+    if (element) {
+      clearEditableText(element);
+    }
+
+    onChange(nextBlocks);
+    closeSlashMenu();
+    closeInlineMenu();
+  };
+
+  const handleShortcut = (
+    block: NoteBlock,
+    text: string,
+    element: HTMLElement,
+  ): boolean => {
+    if (text === "#") {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "heading1" });
+      return true;
+    }
+
+    if (text === "##") {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "heading2" });
+      return true;
+    }
+
+    if (text === "###") {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "heading3" });
+      return true;
+    }
+
+    if (text === "####") {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "heading4" });
+      return true;
+    }
+
+    if (text === "-") {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "bulleted" });
+      return true;
+    }
+
+    if (/^\d+\.$/.test(text)) {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "numbered" });
+      return true;
+    }
+
+    if (text === "[]" || text === "[ ]") {
+      clearEditableText(element);
+      updateBlock(block.id, {
+        checked: false,
+        html: undefined,
+        text: "",
+        type: "todo",
+      });
+      return true;
+    }
+
+    if (text === ">") {
+      clearEditableText(element);
+      updateBlock(block.id, {
+        collapsed: false,
+        html: undefined,
+        text: "",
+        type: "toggle",
+      });
+      return true;
+    }
+
+    if (text === "\"") {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "quote" });
+      return true;
+    }
+
+    if (text === "```") {
+      clearEditableText(element);
+      updateBlock(block.id, { html: undefined, text: "", type: "code" });
+      return true;
+    }
+
+    if (text === "---") {
+      clearEditableText(element);
+      const nextBlock = createBlock();
+      const nextBlocks = blocks.map((current) =>
+        current.id === block.id
+          ? { ...current, html: undefined, text: "", type: "divider" as const }
+          : current,
+      );
+      const index = nextBlocks.findIndex((current) => current.id === block.id);
+      const withInserted = [...nextBlocks];
+      withInserted.splice(index + 1, 0, nextBlock);
+      focusBlock(nextBlock.id);
+      onChange(withInserted);
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleInput = (block: NoteBlock, element: HTMLElement) => {
+    const text = getTextFromEditable(element);
+    updateBlock(block.id, {
+      html: getInlineHtmlFromEditable(element),
+      text,
+    });
+
+    if (text.startsWith("/")) {
+      setSlashMenu({
+        blockId: block.id,
+        query: text.slice(1),
+      });
+      closeActionMenu();
+      closeTableCellMenu();
+      closeInlineMenu();
+      return;
+    }
+
+    if (slashMenu?.blockId === block.id) {
+      closeSlashMenu();
+    }
+  };
+
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLElement>,
+    block: NoteBlock,
+  ) => {
+    const text = getTextFromEditable(event.currentTarget);
+    const isCurrentMenuOpen = slashMenu?.blockId === block.id;
+    const inlineShortcut = getInlineFormatShortcut(event);
+
+    if (inlineShortcut && block.type !== "code") {
+      event.preventDefault();
+      applyInlineFormat(inlineShortcut, event.currentTarget);
+      syncInlineBlock(block.id, event.currentTarget);
+      updateInlineMenu(block, event.currentTarget);
+      return;
+    }
+
+    if (event.key === "Escape" && inlineMenu?.blockId === block.id) {
+      event.preventDefault();
+      closeInlineMenu();
+      return;
+    }
+
+    if (event.key === "Escape" && isCurrentMenuOpen) {
+      event.preventDefault();
+      closeSlashMenu();
+      closeInlineMenu();
+      return;
+    }
+
+    if (event.key === "Enter" && isCurrentMenuOpen) {
+      const command = visibleCommands[0];
+
+      if (command) {
+        event.preventDefault();
+        applyBlockCommand(block, command);
+        return;
+      }
+    }
+
+    if (event.key === " " && handleShortcut(block, text, event.currentTarget)) {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+      const element = event.currentTarget;
+      insertSoftBreakAtCaret();
+      window.requestAnimationFrame(() => {
+        updateBlock(block.id, {
+          text: getTextFromEditable(element),
+        });
+      });
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      if (
+        !text &&
+        (block.type === "numbered" ||
+          block.type === "bulleted" ||
+          block.type === "todo" ||
+          block.type === "quote")
+      ) {
+        updateBlock(block.id, {
+          checked: false,
+          html: undefined,
+          text: "",
+          type: "paragraph",
+        });
+        return;
+      }
+
+      if (text === "---") {
+        const nextBlock = createBlock();
+        const nextBlocks = blocks.map((current) =>
+          current.id === block.id
+            ? { ...current, html: undefined, text: "", type: "divider" as const }
+            : current,
+        );
+        const index = nextBlocks.findIndex(
+          (current) => current.id === block.id,
+        );
+        const withInserted = [...nextBlocks];
+        withInserted.splice(index + 1, 0, nextBlock);
+        focusBlock(nextBlock.id);
+        onChange(withInserted);
+        return;
+      }
+
+      insertBlockAfter(block.id, createContinuationBlock(block));
+      return;
+    }
+
+    if (event.key === "Backspace" && !text && block.type !== "paragraph") {
+      event.preventDefault();
+      updateBlock(block.id, {
+        checked: false,
+        html: undefined,
+        text: "",
+        type: "paragraph",
+      });
+      return;
+    }
+
+    if (event.key === "Backspace" && !text) {
+      event.preventDefault();
+      removeBlock(block.id);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const activeId = String(event.active.id);
+    const overId = event.over ? String(event.over.id) : null;
+
+    if (!overId || activeId === overId) {
+      return;
+    }
+
+    closeSlashMenu();
+    closeActionMenu();
+    closeTableCellMenu();
+    closeInlineMenu();
+
+    const activeBlock = blocks.find((block) => block.id === activeId);
+    const overBlock = blocks.find((block) => block.id === overId);
+    const oldIndex = blocks.findIndex((block) => block.id === activeId);
+    const newIndex = blocks.findIndex((block) => block.id === overId);
+
+    if (!activeBlock || !overBlock || oldIndex < 0 || newIndex < 0) {
+      return;
+    }
+
+    if (overBlock.type === "toggle" && activeBlock.parentId !== overBlock.id) {
+      if (overBlock.parentId === activeBlock.id) {
+        return;
+      }
+
+      const withoutActive = blocks.filter((block) => block.id !== activeId);
+      const toggleIndex = withoutActive.findIndex(
+        (block) => block.id === overBlock.id,
+      );
+      const childIndexes = withoutActive
+        .map((block, index) => (block.parentId === overBlock.id ? index : -1))
+        .filter((index) => index >= 0);
+      const insertIndex =
+        childIndexes.length > 0 ? Math.max(...childIndexes) : toggleIndex;
+      const movedBlock = {
+        ...activeBlock,
+        parentId: overBlock.id,
+      };
+      const nextBlocks = withoutActive.map((block) =>
+        block.id === overBlock.id ? { ...block, collapsed: false } : block,
+      );
+      nextBlocks.splice(insertIndex + 1, 0, movedBlock);
+      onChange(nextBlocks);
+      return;
+    }
+
+    if (activeBlock.parentId !== overBlock.parentId) {
+      const withoutActive = blocks.filter((block) => block.id !== activeId);
+      const targetIndex = withoutActive.findIndex(
+        (block) => block.id === overBlock.id,
+      );
+
+      if (targetIndex < 0) {
+        return;
+      }
+
+      withoutActive.splice(targetIndex, 0, {
+        ...activeBlock,
+        parentId: overBlock.parentId,
+      });
+      onChange(withoutActive);
+      return;
+    }
+
+    onChange(arrayMove([...blocks], oldIndex, newIndex));
+  };
+  const lastBlock = visibleBlocks[visibleBlocks.length - 1];
+
+  return (
+    <div className="mx-auto min-h-full w-full max-w-3xl px-4 py-8 sm:px-8">
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext
+          items={visibleBlocks.map((block) => block.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-1">
+            {visibleBlocks.map((block) => (
+              <SortableNoteBlock
+                key={block.id}
+                block={block}
+                isNested={Boolean(block.parentId)}
+                isActionMenuOpen={actionMenu?.blockId === block.id}
+                isSlashMenuOpen={slashMenu?.blockId === block.id}
+                openTableCellMenu={tableCellMenu}
+                menuCommands={visibleCommands}
+                numberedListNumber={numberedListNumbers.get(block.id)}
+                taskItems={taskItems}
+                onBlur={(currentBlock, element) =>
+                  updateBlock(currentBlock.id, {
+                    html: getInlineHtmlFromEditable(element),
+                    text: getTextFromEditable(element),
+                  })
+                }
+                onCloseActionMenu={closeActionMenu}
+                onCloseSlashMenu={closeSlashMenu}
+                onCloseTableCellMenu={closeTableCellMenu}
+                onDeleteBlock={removeBlock}
+                onInput={handleInput}
+                onInsertAfter={insertBlockAfter}
+                onKeyDown={handleKeyDown}
+                onOpenActionMenu={(blockId) => {
+                  closeSlashMenu();
+                  closeTableCellMenu();
+                  closeInlineMenu();
+                  setActionMenu({ blockId });
+                }}
+                onOpenTableCellMenu={(blockId, rowIndex, cellIndex) => {
+                  closeSlashMenu();
+                  closeActionMenu();
+                  closeInlineMenu();
+                  setTableCellMenu({ blockId, rowIndex, cellIndex });
+                }}
+                onRegisterElement={(blockId, element) => {
+                  if (element) {
+                    blockRefs.current.set(blockId, element);
+                  } else {
+                    blockRefs.current.delete(blockId);
+                  }
+                }}
+                onRegisterTableCell={(blockId, rowIndex, cellIndex, element) => {
+                  const key = getTableCellKey(blockId, rowIndex, cellIndex);
+
+                  if (element) {
+                    tableCellRefs.current.set(key, element);
+                  } else {
+                    tableCellRefs.current.delete(key);
+                  }
+                }}
+                onSetBlockColor={(blockId, patch) =>
+                  updateBlock(blockId, patch)
+                }
+                onSelectionChange={(currentBlock, element) => {
+                  if (currentBlock.type === "code") {
+                    closeInlineMenu();
+                    return;
+                  }
+
+                  updateInlineMenu(currentBlock, element);
+                }}
+                onSelectCommand={applyBlockCommand}
+                onSelectTask={applyTaskLink}
+                onOpenLinkedCard={(currentBlock) => {
+                  if (currentBlock.linkedCardId) {
+                    onOpenCard(currentBlock.linkedCardId);
+                  }
+                }}
+                onTableCellAction={applyTableCellAction}
+                onTableCellKeyDown={handleTableCellKeyDown}
+                onToggleCollapsed={(currentBlock) =>
+                  updateBlock(currentBlock.id, {
+                    collapsed: !currentBlock.collapsed,
+                  })
+                }
+                onToggleTodo={(currentBlock) =>
+                  updateBlock(currentBlock.id, {
+                    checked: !currentBlock.checked,
+                  })
+                }
+                onUpdateTableCell={updateTableCell}
+              />
+            ))}
+            {lastBlock ? (
+              <button
+                className="ml-[6.5rem] mt-2 inline-flex min-h-9 items-center gap-2 rounded-md px-2 text-sm font-medium text-text-muted transition hover:bg-white/8 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                type="button"
+                onClick={() => insertBlockAfter(lastBlock.id)}
+              >
+                <Plus aria-hidden="true" size={16} />
+                Новая строка
+              </button>
+            ) : null}
+          </div>
+        </SortableContext>
+      </DndContext>
+      <InlineFormatBubble
+        menu={inlineMenu}
+        onFormat={applyInlineFormatToCurrentSelection}
+      />
+    </div>
   );
 }
 
@@ -164,10 +3007,19 @@ export function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
+  const [isNotesDataOpen, setIsNotesDataOpen] = useState(false);
   const [isNotesReady, setIsNotesReady] = useState(false);
+  const activeBoardId = activeBoard?.id ?? null;
+  const boardNotes = useMemo(
+    () =>
+      activeBoardId
+        ? notes.filter((note) => note.boardId === activeBoardId)
+        : [],
+    [activeBoardId, notes],
+  );
   const activeNote = useMemo(
-    () => notes.find((note) => note.id === activeNoteId) ?? notes[0],
-    [activeNoteId, notes],
+    () => boardNotes.find((note) => note.id === activeNoteId) ?? boardNotes[0],
+    [activeNoteId, boardNotes],
   );
   const deleteNote = deleteNoteId
     ? notes.find((note) => note.id === deleteNoteId)
@@ -189,8 +3041,67 @@ export function NotesPage() {
       return;
     }
 
-    window.localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+    saveNotes(notes);
   }, [isNotesReady, notes]);
+
+  useEffect(() => {
+    if (!isNotesReady || !workspace || !activeBoard) {
+      return;
+    }
+
+    const hasUnscopedNotes = notes.some((note) => !note.boardId);
+
+    if (!hasUnscopedNotes) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setNotes((currentNotes) =>
+        currentNotes.map((note) => {
+          if (note.boardId) {
+            return note;
+          }
+
+          const titleMatch = workspace.boards.find(
+            (board) =>
+              board.title.trim().toLowerCase() ===
+              note.title.trim().toLowerCase(),
+          );
+
+          return {
+            ...note,
+            boardId: titleMatch?.id ?? activeBoard.id,
+          };
+        }),
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeBoard, isNotesReady, notes, workspace]);
+
+  useEffect(() => {
+    if (!isNotesReady || !activeBoard) {
+      return;
+    }
+
+    if (boardNotes.length === 0) {
+      const timeoutId = window.setTimeout(() => {
+        const note = createNote(activeBoard.id);
+        setNotes((currentNotes) => [note, ...currentNotes]);
+        setActiveNoteId(note.id);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+
+    if (!activeNoteId || !boardNotes.some((note) => note.id === activeNoteId)) {
+      const timeoutId = window.setTimeout(() => {
+        setActiveNoteId(boardNotes[0]?.id ?? null);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [activeBoard, activeNoteId, boardNotes, isNotesReady]);
 
   if (!isReady || !workspace || !activeBoard || !isNotesReady || !activeNote) {
     return <NotesLoadingState />;
@@ -204,7 +3115,7 @@ export function NotesPage() {
         : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
           ? `Сохранено в папку: ${workspaceStorage.name}`
           : workspaceStorage.kind === "folder"
-            ? "Папка требует доступа"
+            ? "Требуется доступ к папке"
             : "Сохранено в браузере";
 
   const openBoard = (boardId: string) => {
@@ -213,18 +3124,18 @@ export function NotesPage() {
     router.push(getBoardRoute(boardId));
   };
 
-  const patchActiveNote = (patch: Partial<Pick<Note, "content" | "title">>) => {
+  const patchActiveNote = (patch: Partial<Pick<Note, "blocks" | "title">>) => {
     setNotes((currentNotes) =>
       currentNotes.map((note) =>
         note.id === activeNote.id
-          ? { ...note, ...patch, updatedAt: Date.now() }
+          ? { ...note, boardId: activeBoard.id, ...patch, updatedAt: Date.now() }
           : note,
       ),
     );
   };
 
   const addNote = () => {
-    const note = createNote();
+    const note = createNote(activeBoard.id);
     setNotes((currentNotes) => [note, ...currentNotes]);
     setActiveNoteId(note.id);
   };
@@ -233,21 +3144,25 @@ export function NotesPage() {
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
       <WorkspaceHeader
         activeView="notes"
+        dataToolsGroupLabel="Заметки"
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
         persistenceLabel={statusLabel}
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        onOpenWorkspaceData={() => setIsNotesDataOpen(true)}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
+        workspaceDataLabel="Backup заметок"
       >
         <div className="flex flex-col items-center px-2 py-2 sm:px-3">
           <h1 className="text-base font-semibold text-text sm:text-lg">
             Заметки
           </h1>
           <p className="hidden text-xs text-text-muted sm:block">
-            Локальные markdown-заметки
+            Блочный редактор
           </p>
         </div>
       </WorkspaceHeader>
@@ -267,8 +3182,8 @@ export function NotesPage() {
           boards={workspace.boards}
           isOpen={isProjectsOpen}
           onClose={() => setIsProjectsOpen(false)}
-          onCreateBoard={(title) => {
-            const createdBoardId = createProject(title);
+          onCreateBoard={(title, templateId) => {
+            const createdBoardId = createProject(title, templateId);
             if (createdBoardId) {
               openBoard(createdBoardId);
             }
@@ -291,8 +3206,8 @@ export function NotesPage() {
             </div>
           ) : null}
 
-          <div className="mx-auto grid min-h-0 w-full max-w-[1800px] flex-1 gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[20rem_minmax(0,1fr)] lg:py-6">
-            <aside className="min-h-0 rounded-lg border border-white/10 bg-panel/72 p-3 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]">
+          <div className="grid min-h-0 flex-1 lg:grid-cols-[18rem_minmax(0,1fr)]">
+            <aside className="min-h-0 border-r border-white/10 bg-panel/72 p-3">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-text">Notes</h2>
                 <Button size="sm" onClick={addNote}>
@@ -301,8 +3216,8 @@ export function NotesPage() {
                 </Button>
               </div>
 
-              <div className="mt-3 max-h-[17rem] space-y-1 overflow-y-auto lg:max-h-[calc(100dvh-12rem)]">
-                {notes.map((note) => (
+              <div className="mt-3 max-h-[15rem] space-y-1 overflow-y-auto lg:max-h-[calc(100dvh-12rem)]">
+                {boardNotes.map((note) => (
                   <button
                     key={note.id}
                     className={cn(
@@ -314,7 +3229,11 @@ export function NotesPage() {
                     type="button"
                     onClick={() => setActiveNoteId(note.id)}
                   >
-                    <FileText aria-hidden="true" className="shrink-0" size={17} />
+                    <FileText
+                      aria-hidden="true"
+                      className="shrink-0"
+                      size={17}
+                    />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">
                         {note.title || "Без названия"}
@@ -328,43 +3247,42 @@ export function NotesPage() {
               </div>
             </aside>
 
-            <section className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="flex min-h-0 flex-col rounded-lg border border-white/10 bg-panel/72 p-4 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]">
-                <div className="flex items-center gap-2">
+            <section className="min-h-0 overflow-y-auto">
+              <div className="mx-auto w-full max-w-3xl px-4 pt-8 sm:px-8">
+                <div className="flex items-start gap-2">
                   <TextField
                     aria-label="Название заметки"
-                    className="h-11 text-base font-semibold"
+                    className="h-auto border-0 bg-transparent px-0 py-1 text-4xl font-semibold leading-tight text-text shadow-none focus:border-0"
                     value={activeNote.title}
                     onChange={(event) =>
                       patchActiveNote({ title: event.currentTarget.value })
                     }
                     onBlur={(event) =>
                       patchActiveNote({
-                        title: event.currentTarget.value.trim() || "Без названия",
+                        title:
+                          event.currentTarget.value.trim() || "Без названия",
                       })
                     }
                   />
                   <IconButton
-                    className="text-red-300 hover:bg-red-500/10 hover:text-red-100"
+                    className="mt-1 text-red-300 hover:bg-red-500/10 hover:text-red-100"
                     label="Удалить заметку"
                     onClick={() => setDeleteNoteId(activeNote.id)}
                   >
                     <Trash2 aria-hidden="true" size={17} />
                   </IconButton>
                 </div>
-
-                <Textarea
-                  className="mt-3 min-h-[22rem] flex-1 resize-none font-mono text-sm leading-6"
-                  value={activeNote.content}
-                  onChange={(event) =>
-                    patchActiveNote({ content: event.currentTarget.value })
-                  }
-                />
               </div>
 
-              <div className="min-h-0 overflow-y-auto rounded-lg border border-white/10 bg-panel/72 p-5 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]">
-                <MarkdownPreview content={activeNote.content} />
-              </div>
+              <NotesEditor
+                activeBoard={activeBoard}
+                blocks={activeNote.blocks}
+                onChange={(blocks) => patchActiveNote({ blocks })}
+                onOpenCard={(cardId) => {
+                  selectProject(activeBoard.id);
+                  router.push(getBoardRoute(activeBoard.id, cardId));
+                }}
+              />
             </section>
           </div>
         </section>
@@ -384,11 +3302,42 @@ export function NotesPage() {
         onConfirm={() => {
           if (deleteNoteId) {
             setNotes((currentNotes) => {
-              const nextNotes = currentNotes.filter((note) => note.id !== deleteNoteId);
-              return nextNotes.length > 0 ? nextNotes : [createNote()];
+              const nextNotes = currentNotes.filter(
+                (note) => note.id !== deleteNoteId,
+              );
+              const nextBoardNotes = nextNotes.filter(
+                (note) => note.boardId === activeBoard.id,
+              );
+
+              if (nextBoardNotes.length > 0) {
+                setActiveNoteId(nextBoardNotes[0]?.id ?? null);
+                return nextNotes;
+              }
+
+              const fallbackNote = createNote(activeBoard.id);
+              setActiveNoteId(fallbackNote.id);
+              return [fallbackNote, ...nextNotes];
             });
           }
           setDeleteNoteId(null);
+        }}
+      />
+
+      <NotesDataModal
+        activeNote={activeNote}
+        isOpen={isNotesDataOpen}
+        notes={boardNotes}
+        onClose={() => setIsNotesDataOpen(false)}
+        onReplaceNotes={(nextNotes) => {
+          const scopedNotes = nextNotes.map((note) => ({
+            ...note,
+            boardId: activeBoard.id,
+          }));
+          setNotes((currentNotes) => [
+            ...scopedNotes,
+            ...currentNotes.filter((note) => note.boardId !== activeBoard.id),
+          ]);
+          setActiveNoteId(scopedNotes[0]?.id ?? null);
         }}
       />
     </main>

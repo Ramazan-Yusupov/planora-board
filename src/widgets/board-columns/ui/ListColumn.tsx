@@ -382,6 +382,11 @@ export function ListColumn({
                 }
               }}
             />
+            {didAttemptEmptyCardTitle || isCardTitleWhitespaceOnly ? (
+              <FormHint className="mt-2" tone="warning">
+                Карточку нельзя создать из одних пробелов. Напишите название.
+              </FormHint>
+            ) : null}
             <div className="mt-2 flex items-center gap-2">
               <Button disabled={!canCreateCard} size="sm" type="submit">
                 <Check aria-hidden="true" size={16} />

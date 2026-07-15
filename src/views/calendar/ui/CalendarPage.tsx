@@ -14,7 +14,13 @@ import {
   shiftMonth,
   type CalendarItem,
 } from "@/features/view-calendar";
-import { ANALYTICS_ROUTE, CALENDAR_ROUTE, NOTES_ROUTE, getBoardRoute } from "@/shared/config/routes";
+import {
+  ANALYTICS_ROUTE,
+  CALENDAR_ROUTE,
+  MY_WORK_ROUTE,
+  NOTES_ROUTE,
+  getBoardRoute,
+} from "@/shared/config/routes";
 import { CalendarView } from "@/widgets/calendar-view";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
@@ -75,6 +81,8 @@ export function CalendarPage() {
     return <CalendarLoadingState />;
   }
 
+  const selectedCalendarBoardId = selectedBoardId ?? activeBoard.id;
+
   const statusLabel =
     persistenceState === "saving"
       ? "Сохраняем…"
@@ -83,7 +91,7 @@ export function CalendarPage() {
         : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
           ? `Сохранено в папку: ${workspaceStorage.name}`
           : workspaceStorage.kind === "folder"
-            ? "Папка требует доступа"
+            ? "Требуется доступ к папке"
             : "Сохранено в браузере";
 
   const openBoard = (boardId: string) => {
@@ -97,6 +105,14 @@ export function CalendarPage() {
     router.push(getBoardRoute(item.boardId, item.card.id));
   };
 
+  const selectCalendarBoard = (boardId: string | null) => {
+    if (boardId) {
+      selectProject(boardId);
+    }
+
+    setSelectedBoardId(boardId);
+  };
+
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
       <WorkspaceHeader
@@ -107,6 +123,7 @@ export function CalendarPage() {
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
@@ -170,10 +187,10 @@ export function CalendarPage() {
             boards={workspace.boards}
             filters={calendarFilters}
             month={month}
-            selectedBoardId={selectedBoardId}
+            selectedBoardId={selectedCalendarBoardId}
             onChangeFilters={setCalendarFilters}
             onOpenCard={openCalendarCard}
-            onSelectBoard={setSelectedBoardId}
+            onSelectBoard={selectCalendarBoard}
             onShiftMonth={(offset) =>
               setMonthOffset((current) => current + offset)
             }

@@ -152,7 +152,6 @@ export function CalendarView({
               value={selectedBoardId ?? ""}
               onChange={(event) => onSelectBoard(event.target.value || null)}
             >
-              <option value="">Все проекты</option>
               {boards.map((board) => (
                 <option key={board.id} value={board.id}>
                   {board.title}

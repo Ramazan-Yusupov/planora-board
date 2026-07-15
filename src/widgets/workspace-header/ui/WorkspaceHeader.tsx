@@ -4,6 +4,7 @@ import {
   Archive,
   BarChart3,
   CalendarDays,
+  ClipboardList,
   Cloud,
   Command,
   Download,
@@ -23,7 +24,12 @@ import { APP_NAME } from "@/shared/config/app";
 import { cn } from "@/shared/lib";
 import { IconButton } from "@/shared/ui";
 
-export type WorkspaceView = "board" | "calendar" | "analytics" | "notes";
+export type WorkspaceView =
+  | "board"
+  | "calendar"
+  | "analytics"
+  | "my-work"
+  | "notes";
 
 type WorkspaceHeaderProps = Readonly<{
   activeView: WorkspaceView;
@@ -31,6 +37,7 @@ type WorkspaceHeaderProps = Readonly<{
   activeFiltersCount?: number;
   canRedo?: boolean;
   canUndo?: boolean;
+  dataToolsGroupLabel?: string;
   isAppearanceOpen?: boolean;
   isArchiveOpen?: boolean;
   isFiltersOpen?: boolean;
@@ -41,9 +48,11 @@ type WorkspaceHeaderProps = Readonly<{
   onOpenBoard: () => void;
   onOpenAnalytics?: () => void;
   onOpenCalendar: () => void;
+  onOpenMyWork?: () => void;
   onOpenNotes?: () => void;
   onOpenCommands?: () => void;
   onOpenWorkspaceData?: () => void;
+  workspaceDataLabel?: string;
   onRedo?: () => void;
   onToggleAppearance?: () => void;
   onToggleArchive?: () => void;
@@ -120,12 +129,30 @@ function HeaderMenuItem({
   );
 }
 
+function HeaderTooltip({
+  children,
+  label,
+}: Readonly<{ children: ReactNode; label: string }>) {
+  return (
+    <span className="group/tooltip relative inline-flex">
+      {children}
+      <span
+        className="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] z-[80] -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-slate-950/95 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-2xl transition group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100"
+        role="tooltip"
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
 export function WorkspaceHeader({
   activeView,
   children,
   activeFiltersCount = 0,
   canRedo = false,
   canUndo = false,
+  dataToolsGroupLabel,
   isAppearanceOpen = false,
   isArchiveOpen = false,
   isFiltersOpen = false,
@@ -136,9 +163,11 @@ export function WorkspaceHeader({
   onOpenBoard,
   onOpenAnalytics,
   onOpenCalendar,
+  onOpenMyWork,
   onOpenNotes,
   onOpenCommands,
   onOpenWorkspaceData,
+  workspaceDataLabel = "Экспорт и импорт",
   onRedo,
   onToggleAppearance,
   onToggleArchive,
@@ -153,6 +182,8 @@ export function WorkspaceHeader({
   const filtersLabel = activeFiltersCount
     ? `Фильтры: активно ${activeFiltersCount}`
     : "Фильтры";
+  const dataGroupLabel =
+    dataToolsGroupLabel ?? (activeView === "board" ? "Доска" : "Данные");
 
   const desktopIconClass =
     "rounded-xl text-text-muted hover:bg-control/85 hover:text-text hover:shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]";
@@ -225,14 +256,16 @@ export function WorkspaceHeader({
           </IconButton>
 
           <div className="hidden items-center gap-3 sm:flex">
-            <button
-              aria-label="Открыть доску"
-              className="grid size-10 place-items-center rounded-xl border border-accent/25 bg-accent text-accent-foreground shadow-[0_8px_22px_rgb(59_130_246/22%)] transition hover:bg-accent-hover"
-              type="button"
-              onClick={onOpenBoard}
-            >
-              <LayoutDashboard aria-hidden="true" size={20} />
-            </button>
+            <HeaderTooltip label="Рабочая доска">
+              <button
+                aria-label="Открыть доску"
+                className="grid size-10 place-items-center rounded-xl border border-accent/25 bg-accent text-accent-foreground shadow-[0_8px_22px_rgb(59_130_246/22%)] transition hover:bg-accent-hover"
+                type="button"
+                onClick={onOpenBoard}
+              >
+                <LayoutDashboard aria-hidden="true" size={20} />
+              </button>
+            </HeaderTooltip>
 
             <div className="hidden md:block">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
@@ -249,147 +282,185 @@ export function WorkspaceHeader({
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
           <div className={desktopIconGroupClass}>
             <span
+              aria-live="polite"
               className={cn(
-                "inline-flex max-w-[16rem] items-center gap-1.5 truncate text-xs font-medium",
+                "inline-flex w-48 shrink-0 items-center gap-1.5 truncate text-xs font-medium",
                 isPersistenceError ? "text-red-300" : "text-text-muted",
               )}
+              role="status"
               title={persistenceLabel}
             >
               <Cloud aria-hidden="true" className="shrink-0" size={15} />
-              <span className="truncate">{persistenceLabel}</span>
+              <span className="min-w-0 truncate">{persistenceLabel}</span>
             </span>
           </div>
 
           {onUndo || onRedo || onOpenCommands ? (
             <div className={desktopIconGroupClass}>
               {onUndo ? (
-                <IconButton
-                  disabled={!canUndo}
-                  className={desktopIconClass}
-                  label="Отменить действие"
-                  size="sm"
-                  onClick={onUndo}
-                >
-                  <Undo2 aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label="Отменить действие">
+                  <IconButton
+                    disabled={!canUndo}
+                    className={desktopIconClass}
+                    label="Отменить действие"
+                    size="sm"
+                    onClick={onUndo}
+                  >
+                    <Undo2 aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
 
               {onRedo ? (
-                <IconButton
-                  disabled={!canRedo}
-                  className={desktopIconClass}
-                  label="Повторить действие"
-                  size="sm"
-                  onClick={onRedo}
-                >
-                  <Redo2 aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label="Повторить действие">
+                  <IconButton
+                    disabled={!canRedo}
+                    className={desktopIconClass}
+                    label="Повторить действие"
+                    size="sm"
+                    onClick={onRedo}
+                  >
+                    <Redo2 aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
 
               {onOpenCommands ? (
-                <IconButton
-                  className={desktopIconClass}
-                  label="Командная палитра"
-                  size="sm"
-                  onClick={onOpenCommands}
-                >
-                  <Command aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label="Командная палитра">
+                  <IconButton
+                    className={desktopIconClass}
+                    label="Командная палитра"
+                    size="sm"
+                    onClick={onOpenCommands}
+                  >
+                    <Command aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
             </div>
           ) : null}
 
           <div className={desktopIconGroupClass}>
             {onOpenAnalytics ? (
-              <IconButton
-                aria-pressed={activeView === "analytics"}
-                className={cn(
-                  activeView === "analytics"
-                    ? "bg-accent text-accent-foreground"
-                    : desktopIconClass,
-                )}
-                label="Аналитика"
-                size="sm"
-                onClick={onOpenAnalytics}
-              >
-                <BarChart3 aria-hidden="true" size={18} />
-              </IconButton>
+              <HeaderTooltip label="Аналитика">
+                <IconButton
+                  aria-pressed={activeView === "analytics"}
+                  className={cn(
+                    activeView === "analytics"
+                      ? "bg-accent text-accent-foreground"
+                      : desktopIconClass,
+                  )}
+                  label="Аналитика"
+                  size="sm"
+                  onClick={onOpenAnalytics}
+                >
+                  <BarChart3 aria-hidden="true" size={18} />
+                </IconButton>
+              </HeaderTooltip>
             ) : null}
 
             {onOpenNotes ? (
+              <HeaderTooltip label="Заметки">
+                <IconButton
+                  aria-pressed={activeView === "notes"}
+                  className={cn(
+                    activeView === "notes"
+                      ? "bg-accent text-accent-foreground"
+                      : desktopIconClass,
+                  )}
+                  label="Заметки"
+                  size="sm"
+                  onClick={onOpenNotes}
+                >
+                  <FileText aria-hidden="true" size={18} />
+                </IconButton>
+              </HeaderTooltip>
+            ) : null}
+
+            {onOpenMyWork ? (
+              <HeaderTooltip label="Мои задачи">
+                <IconButton
+                  aria-pressed={activeView === "my-work"}
+                  className={cn(
+                    activeView === "my-work"
+                      ? "bg-accent text-accent-foreground"
+                      : desktopIconClass,
+                  )}
+                  label="Мои задачи"
+                  size="sm"
+                  onClick={onOpenMyWork}
+                >
+                  <ClipboardList aria-hidden="true" size={18} />
+                </IconButton>
+              </HeaderTooltip>
+            ) : null}
+
+            <HeaderTooltip label="Календарь">
               <IconButton
-                aria-pressed={activeView === "notes"}
+                aria-pressed={activeView === "calendar"}
                 className={cn(
-                  activeView === "notes"
+                  activeView === "calendar"
                     ? "bg-accent text-accent-foreground"
                     : desktopIconClass,
                 )}
-                label="Заметки"
+                label="Календарь"
                 size="sm"
-                onClick={onOpenNotes}
+                onClick={onOpenCalendar}
               >
-                <FileText aria-hidden="true" size={18} />
+                <CalendarDays aria-hidden="true" size={18} />
               </IconButton>
-            ) : null}
-
-            <IconButton
-              aria-pressed={activeView === "calendar"}
-              className={cn(
-                activeView === "calendar"
-                  ? "bg-accent text-accent-foreground"
-                  : desktopIconClass,
-              )}
-              label="Календарь"
-              size="sm"
-              onClick={onOpenCalendar}
-            >
-              <CalendarDays aria-hidden="true" size={18} />
-            </IconButton>
+            </HeaderTooltip>
           </div>
 
           {onToggleFilters || onToggleArchive || onOpenWorkspaceData ? (
             <div className={desktopIconGroupClass}>
               {onToggleFilters ? (
-                <IconButton
-                  aria-pressed={isFiltersOpen}
-                  className={cn(
-                    isFiltersOpen
-                      ? "bg-accent text-accent-foreground"
-                      : desktopIconClass,
-                  )}
-                  label={filtersLabel}
-                  size="sm"
-                  onClick={onToggleFilters}
-                >
-                  <ListFilter aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label={filtersLabel}>
+                  <IconButton
+                    aria-pressed={isFiltersOpen}
+                    className={cn(
+                      isFiltersOpen
+                        ? "bg-accent text-accent-foreground"
+                        : desktopIconClass,
+                    )}
+                    label={filtersLabel}
+                    size="sm"
+                    onClick={onToggleFilters}
+                  >
+                    <ListFilter aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
 
               {onToggleArchive ? (
-                <IconButton
-                  aria-pressed={isArchiveOpen}
-                  className={cn(
-                    isArchiveOpen
-                      ? "bg-accent text-accent-foreground"
-                      : desktopIconClass,
-                  )}
-                  label="Архив"
-                  size="sm"
-                  onClick={onToggleArchive}
-                >
-                  <Archive aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label="Архив">
+                  <IconButton
+                    aria-pressed={isArchiveOpen}
+                    className={cn(
+                      isArchiveOpen
+                        ? "bg-accent text-accent-foreground"
+                        : desktopIconClass,
+                    )}
+                    label="Архив"
+                    size="sm"
+                    onClick={onToggleArchive}
+                  >
+                    <Archive aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
 
               {onOpenWorkspaceData ? (
-                <IconButton
-                  className={desktopIconClass}
-                  label="Экспорт и импорт"
-                  size="sm"
-                  onClick={onOpenWorkspaceData}
-                >
-                  <Download aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label={workspaceDataLabel}>
+                  <IconButton
+                    className={desktopIconClass}
+                    label={workspaceDataLabel}
+                    size="sm"
+                    onClick={onOpenWorkspaceData}
+                  >
+                    <Download aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
             </div>
           ) : null}
@@ -397,35 +468,39 @@ export function WorkspaceHeader({
           {onToggleBoardTools || onToggleAppearance ? (
             <div className="flex items-center gap-1">
               {onToggleBoardTools ? (
-                <IconButton
-                  aria-pressed={isBoardToolsOpen}
-                  className={cn(
-                    isBoardToolsOpen
-                      ? "bg-accent text-accent-foreground"
-                      : desktopIconClass,
-                  )}
-                  label="Инструменты доски"
-                  size="sm"
-                  onClick={onToggleBoardTools}
-                >
-                  <Settings2 aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label="Инструменты доски">
+                  <IconButton
+                    aria-pressed={isBoardToolsOpen}
+                    className={cn(
+                      isBoardToolsOpen
+                        ? "bg-accent text-accent-foreground"
+                        : desktopIconClass,
+                    )}
+                    label="Инструменты доски"
+                    size="sm"
+                    onClick={onToggleBoardTools}
+                  >
+                    <Settings2 aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
 
               {onToggleAppearance ? (
-                <IconButton
-                  aria-pressed={isAppearanceOpen}
-                  className={cn(
-                    isAppearanceOpen
-                      ? "bg-accent text-accent-foreground"
-                      : desktopIconClass,
-                  )}
-                  label="Оформление доски"
-                  size="sm"
-                  onClick={onToggleAppearance}
-                >
-                  <Palette aria-hidden="true" size={18} />
-                </IconButton>
+                <HeaderTooltip label="Оформление доски">
+                  <IconButton
+                    aria-pressed={isAppearanceOpen}
+                    className={cn(
+                      isAppearanceOpen
+                        ? "bg-accent text-accent-foreground"
+                        : desktopIconClass,
+                    )}
+                    label="Оформление доски"
+                    size="sm"
+                    onClick={onToggleAppearance}
+                  >
+                    <Palette aria-hidden="true" size={18} />
+                  </IconButton>
+                </HeaderTooltip>
               ) : null}
             </div>
           ) : null}
@@ -495,6 +570,15 @@ export function WorkspaceHeader({
                 />
               ) : null}
 
+              {onOpenMyWork ? (
+                <HeaderMenuItem
+                  active={activeView === "my-work"}
+                  icon={<ClipboardList aria-hidden="true" size={18} />}
+                  label="Мои задачи"
+                  onSelect={() => selectMenuAction(onOpenMyWork)}
+                />
+              ) : null}
+
               <div className="my-2 border-t border-white/10" />
 
               {onOpenCommands ? (
@@ -535,7 +619,7 @@ export function WorkspaceHeader({
                   <div className="my-2 border-t border-white/10" />
 
                   <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
-                    Доска
+                    {dataGroupLabel}
                   </p>
                 </>
               ) : null}
@@ -571,7 +655,7 @@ export function WorkspaceHeader({
               {onOpenWorkspaceData ? (
                 <HeaderMenuItem
                   icon={<Download aria-hidden="true" size={18} />}
-                  label="Экспорт и импорт"
+                  label={workspaceDataLabel}
                   onSelect={() => selectMenuAction(onOpenWorkspaceData)}
                 />
               ) : null}

@@ -15,6 +15,138 @@ type StarterBoardOptions = {
   createdAt?: number;
 };
 
+export const BOARD_PROJECT_TEMPLATES = [
+  { id: "blank", name: "Пустая доска" },
+  { id: "frontend", name: "Frontend" },
+  { id: "backend", name: "Backend" },
+  { id: "sprint", name: "Sprint" },
+  { id: "bug-tracker", name: "Bug tracker" },
+] as const;
+
+export type BoardProjectTemplateId =
+  (typeof BOARD_PROJECT_TEMPLATES)[number]["id"];
+
+type TemplateCard = Readonly<{
+  title: string;
+  description?: string;
+  labelIds?: string[];
+  priority?: Board["cards"][string]["priority"];
+  status?: Board["cards"][string]["status"];
+}>;
+
+type TemplateList = Readonly<{
+  title: string;
+  cards?: readonly TemplateCard[];
+}>;
+
+type BoardProjectTemplate = Readonly<{
+  lists: readonly TemplateList[];
+}>;
+
+const boardProjectTemplateDefinitions: Record<
+  Exclude<BoardProjectTemplateId, "blank">,
+  BoardProjectTemplate
+> = {
+  frontend: {
+    lists: [
+      {
+        title: "Backlog",
+        cards: [
+          {
+            title: "Собрать требования к экрану",
+            description: "Зафиксировать состояния, адаптив и основные действия.",
+            labelIds: ["label-idea"],
+            priority: "medium",
+          },
+          {
+            title: "Проверить accessibility",
+            description: "Фокус, Escape, aria-label и управление с клавиатуры.",
+            labelIds: ["label-urgent"],
+            priority: "high",
+          },
+        ],
+      },
+      {
+        title: "UI",
+        cards: [
+          {
+            title: "Сверстать основной сценарий",
+            description: "Сначала рабочий интерфейс, затем полировка состояний.",
+            labelIds: ["label-progress"],
+            status: "doing",
+          },
+        ],
+      },
+      { title: "Review" },
+      { title: "Done" },
+    ],
+  },
+  backend: {
+    lists: [
+      {
+        title: "API",
+        cards: [
+          {
+            title: "Описать контракт данных",
+            description: "Поля, ошибки, валидация и обратная совместимость.",
+            labelIds: ["label-idea"],
+          },
+        ],
+      },
+      {
+        title: "Implementation",
+        cards: [
+          {
+            title: "Добавить runtime validation",
+            description: "Не доверять входящему JSON без проверки схемой.",
+            labelIds: ["label-progress"],
+            priority: "high",
+            status: "doing",
+          },
+        ],
+      },
+      { title: "Tests" },
+      { title: "Release" },
+    ],
+  },
+  sprint: {
+    lists: [
+      { title: "Sprint backlog" },
+      {
+        title: "In progress",
+        cards: [
+          {
+            title: "Выбрать задачи на спринт",
+            description: "Оставить только реально выполнимый объём.",
+            labelIds: ["label-progress"],
+            status: "doing",
+          },
+        ],
+      },
+      { title: "Blocked" },
+      { title: "Done" },
+    ],
+  },
+  "bug-tracker": {
+    lists: [
+      {
+        title: "New",
+        cards: [
+          {
+            title: "Описать шаги воспроизведения",
+            description: "Что ожидали, что произошло, где видно ошибку.",
+            labelIds: ["label-urgent"],
+            priority: "high",
+          },
+        ],
+      },
+      { title: "Confirmed" },
+      { title: "Fixing" },
+      { title: "Verified" },
+    ],
+  },
+};
+
 function resolveAppearance(appearance?: BoardAppearance): BoardAppearance {
   return {
     ...DEFAULT_BOARD_APPEARANCE,
@@ -210,6 +342,67 @@ export function createEmptyBoard(title: string): Board {
       },
     },
     cards: {},
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+export function createBoardFromTemplate(
+  title: string,
+  templateId: BoardProjectTemplateId = "blank",
+): Board {
+  if (templateId === "blank") {
+    return createEmptyBoard(title);
+  }
+
+  const template = boardProjectTemplateDefinitions[templateId];
+  const board = createEmptyBoard(title);
+  const createdAt = Date.now();
+  const listIds = template.lists.map(() => createId("list"));
+  const lists: Board["lists"] = {};
+  const cards: Board["cards"] = {};
+
+  template.lists.forEach((listTemplate, listIndex) => {
+    const listId = listIds[listIndex];
+    const cardIds = (listTemplate.cards ?? []).map(() => createId("card"));
+
+    lists[listId] = {
+      id: listId,
+      title: listTemplate.title,
+      cardIds,
+      isArchived: false,
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    listTemplate.cards?.forEach((cardTemplate, cardIndex) => {
+      const cardId = cardIds[cardIndex];
+
+      cards[cardId] = {
+        id: cardId,
+        listId,
+        title: cardTemplate.title,
+        description: cardTemplate.description ?? "",
+        status: cardTemplate.status ?? "none",
+        priority: cardTemplate.priority ?? "none",
+        customFields: [],
+        labelIds: cardTemplate.labelIds ?? [],
+        memberIds: [],
+        checklistIds: [],
+        attachmentIds: [],
+        commentIds: [],
+        isArchived: false,
+        createdAt,
+        updatedAt: createdAt,
+      };
+    });
+  });
+
+  return {
+    ...board,
+    listIds,
+    lists,
+    cards,
     createdAt,
     updatedAt: createdAt,
   };

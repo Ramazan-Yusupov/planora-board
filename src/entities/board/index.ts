@@ -37,7 +37,13 @@ export {
   resolveBoardAppearance,
 } from "./lib/appearance";
 export type { CardSurface, ResolvedBoardAppearance } from "./lib/appearance";
-export { createEmptyBoard, createStarterBoard } from "./lib/createStarterBoard";
+export {
+  BOARD_PROJECT_TEMPLATES,
+  createBoardFromTemplate,
+  createEmptyBoard,
+  createStarterBoard,
+} from "./lib/createStarterBoard";
+export type { BoardProjectTemplateId } from "./lib/createStarterBoard";
 export {
   formatAttachmentSize,
   getCardAttachments,
