@@ -1107,15 +1107,28 @@ function BlockCommandMenu({
     top: 8,
     width: 352,
   });
+  const [isPositioned, setIsPositioned] = useState(false);
 
   useLayoutEffect(() => {
+    let animationFrameId: number | null = null;
+    let retryCount = 0;
+
     const updateMenuPosition = () => {
+      animationFrameId = null;
       const anchor = anchorRef.current;
 
       if (!anchor) {
+        setIsPositioned(false);
+
+        if (retryCount < 8) {
+          retryCount += 1;
+          animationFrameId = window.requestAnimationFrame(updateMenuPosition);
+        }
+
         return;
       }
 
+      retryCount = 0;
       const margin = 8;
       const gap = 4;
       const rect = anchor.getBoundingClientRect();
@@ -1137,6 +1150,15 @@ function BlockCommandMenu({
         top,
         width: menuWidth,
       });
+      setIsPositioned(true);
+    };
+
+    const scheduleMenuPositionUpdate = () => {
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+
+      animationFrameId = window.requestAnimationFrame(updateMenuPosition);
     };
 
     const closeOnPointerDown = (event: PointerEvent) => {
@@ -1155,15 +1177,19 @@ function BlockCommandMenu({
 
     window.addEventListener("pointerdown", closeOnPointerDown);
     window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", updateMenuPosition);
-    window.addEventListener("scroll", updateMenuPosition, true);
-    updateMenuPosition();
+    window.addEventListener("resize", scheduleMenuPositionUpdate);
+    window.addEventListener("scroll", scheduleMenuPositionUpdate, true);
+    scheduleMenuPositionUpdate();
 
     return () => {
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+
       window.removeEventListener("pointerdown", closeOnPointerDown);
       window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", updateMenuPosition);
-      window.removeEventListener("scroll", updateMenuPosition, true);
+      window.removeEventListener("resize", scheduleMenuPositionUpdate);
+      window.removeEventListener("scroll", scheduleMenuPositionUpdate, true);
     };
   }, [anchorRef, onClose]);
 
@@ -1178,6 +1204,8 @@ function BlockCommandMenu({
       role="menu"
       style={{
         ...menuStyle,
+        opacity: isPositioned ? 1 : 0,
+        pointerEvents: isPositioned ? undefined : "none",
         position: "fixed",
         zIndex: 85,
       }}
