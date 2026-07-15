@@ -7,6 +7,7 @@ import {
   BOARD_BACKGROUND_OPTIONS,
   CARD_COLOR_OPTIONS,
   DEFAULT_BOARD_APPEARANCE,
+  getReadableTextColor,
   resolveBoardAppearance,
   type Board,
   type BoardAppearance,
@@ -70,6 +71,7 @@ export function BoardAppearanceSidebar({ board, isOpen, onClose, onChange }: Boa
           <div className="mt-3 grid grid-cols-2 gap-2">
             {BOARD_BACKGROUND_OPTIONS.filter((option) => option.value !== "custom").map((option) => {
               const isSelected = board.appearance.background === option.value;
+              const textColor = getReadableTextColor(option.color);
 
               return (
                 <button
@@ -82,7 +84,7 @@ export function BoardAppearanceSidebar({ board, isOpen, onClose, onChange }: Boa
                   type="button"
                   onClick={() => patchAppearance({ background: option.value })}
                 >
-                  <span className="relative z-10 text-sm font-semibold text-white drop-shadow-sm">{option.label}</span>
+                  <span className="relative z-10 text-sm font-semibold drop-shadow-sm" style={{ color: textColor }}>{option.label}</span>
                   {isSelected ? (
                     <span className="absolute right-2 top-2 grid size-6 place-items-center rounded-full bg-white text-slate-950">
                       <Check aria-hidden="true" size={15} />
@@ -123,7 +125,7 @@ export function BoardAppearanceSidebar({ board, isOpen, onClose, onChange }: Boa
           <div className="mt-3 grid grid-cols-2 gap-2">
             {CARD_COLOR_OPTIONS.filter((option) => option.value !== "custom").map((option) => {
               const isSelected = board.appearance.cardColor === option.value;
-              const textColor = option.value === "sand" || option.value === "frost" ? "#0f172a" : "#f8fafc";
+              const textColor = getReadableTextColor(option.color);
 
               return (
                 <button

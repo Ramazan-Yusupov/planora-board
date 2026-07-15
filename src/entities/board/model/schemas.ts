@@ -6,6 +6,11 @@ const boardBackgroundValues = [
   "violet",
   "forest",
   "ember",
+  "daylight",
+  "graphite",
+  "aurora",
+  "berry",
+  "citrus",
   "custom",
 ] as const;
 const cardColorValues = [
@@ -14,6 +19,11 @@ const cardColorValues = [
   "plum",
   "sand",
   "frost",
+  "mint",
+  "sky",
+  "coral",
+  "lavender",
+  "carbon",
   "custom",
 ] as const;
 const boardActivityTypeValues = [

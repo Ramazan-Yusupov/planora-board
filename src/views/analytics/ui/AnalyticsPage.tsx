@@ -29,7 +29,7 @@ import {
   getWorkspaceNavigationActions,
   useCommandPaletteShortcut,
 } from "@/widgets/command-palette";
-import { ProjectSidebar } from "@/widgets/project-sidebar";
+import { ProjectSwitcher } from "@/widgets/project-switcher";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
 type ChartMode = "bars" | "line" | "area" | "donut";
@@ -524,6 +524,17 @@ export function AnalyticsPage() {
     setIsProjectsOpen(false);
     router.push(getBoardRoute(boardId));
   };
+  const selectProjectFromHeader = (boardId: string) => {
+    selectProject(boardId);
+    setIsProjectsOpen(false);
+  };
+  const createProjectFromHeader = (title: string, templateId?: Parameters<typeof createProject>[1]) => {
+    const createdBoardId = createProject(title, templateId);
+
+    if (createdBoardId) {
+      selectProjectFromHeader(createdBoardId);
+    }
+  };
   const chartModeActions = [
     ["bars", "Бары"],
     ["line", "Линия"],
@@ -561,44 +572,21 @@ export function AnalyticsPage() {
         onOpenCommands={openCommandPalette}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        showProjectsButton={false}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
-        <div className="flex flex-col items-center px-2 py-2 sm:px-3">
-          <h1 className="text-base font-semibold text-text sm:text-lg">
-            Аналитика
-          </h1>
-          <p className="hidden text-xs text-text-muted sm:block">
-            Прогресс и риски активной доски
-          </p>
-        </div>
+        <ProjectSwitcher
+          activeBoard={activeBoard}
+          boards={workspace.boards}
+          isOpen={isProjectsOpen}
+          onCreateBoard={createProjectFromHeader}
+          onDeleteBoard={deleteProject}
+          onOpenChange={setIsProjectsOpen}
+          onSelectBoard={selectProjectFromHeader}
+        />
       </WorkspaceHeader>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {isProjectsOpen ? (
-          <button
-            aria-label="Закрыть проекты"
-            className="absolute inset-0 z-30 bg-black/55 lg:hidden"
-            type="button"
-            onClick={() => setIsProjectsOpen(false)}
-          />
-        ) : null}
-
-        <ProjectSidebar
-          activeBoardId={workspace.activeBoardId}
-          boards={workspace.boards}
-          isOpen={isProjectsOpen}
-          onClose={() => setIsProjectsOpen(false)}
-          onCreateBoard={(title) => {
-            const createdBoardId = createProject(title);
-
-            if (createdBoardId) {
-              openBoard(createdBoardId);
-            }
-          }}
-          onDeleteBoard={deleteProject}
-          onSelectBoard={openBoard}
-        />
-
         <section className="relative z-0 min-w-0 flex-1 overflow-y-auto">
           {storageError ? (
             <div className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">

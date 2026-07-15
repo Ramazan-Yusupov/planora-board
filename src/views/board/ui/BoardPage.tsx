@@ -120,14 +120,13 @@ import {
   QuickCreateListDialog,
 } from "@/widgets/command-palette";
 import { ListActionsDialog } from "@/widgets/list-actions";
-import { ProjectSidebar } from "@/widgets/project-sidebar";
+import { ProjectSwitcher } from "@/widgets/project-switcher";
 import { WorkspaceDataModal } from "@/widgets/workspace-data";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
 import { getBoardCommandActions } from "../lib/getBoardCommandActions";
 import { useBoardKeyboardShortcuts } from "../lib/useBoardKeyboardShortcuts";
 import { BoardLoadingState } from "./BoardLoadingState";
-import { BoardTitleInput } from "./BoardTitleInput";
 
 type BoardPageProps = Readonly<{
   boardId: string;
@@ -172,13 +171,6 @@ function getOptionLabel<T extends string>(
   value: T,
 ): string {
   return options.find((option) => option.value === value)?.label ?? value;
-}
-
-function isMobileViewport(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 1023px)").matches
-  );
 }
 
 function getLinkedNotesForCard(
@@ -403,7 +395,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setIsFiltersOpen(false);
   };
 
-  const selectProjectFromSidebar = (nextBoardId: string) => {
+  const selectProjectFromHeader = (nextBoardId: string) => {
     selectProject(nextBoardId);
     setSelectedCardId(null);
     setIsInitialCardDismissed(true);
@@ -413,9 +405,45 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setIsFiltersOpen(false);
     router.push(getBoardRoute(nextBoardId));
 
-    if (isMobileViewport()) {
-      setIsProjectsOpen(false);
+    setIsProjectsOpen(false);
+  };
+
+  const createProjectFromHeader = (title: string, templateId?: Parameters<typeof createProject>[1]) => {
+    const createdBoardId = createProject(title, templateId);
+
+    if (createdBoardId) {
+      setSelectedCardId(null);
+      setIsInitialCardDismissed(true);
+      closePanels();
+      setIsArchiveOpen(false);
+      router.push(getBoardRoute(createdBoardId));
+      showToast({
+        title: "Проект создан",
+        description: title,
+        tone: "success",
+      });
     }
+  };
+
+  const deleteProjectFromHeader = (deletedBoardId: string) => {
+    const deletedBoardTitle =
+      workspace.boards.find((board) => board.id === deletedBoardId)?.title ??
+      "Проект";
+    const nextActiveBoardId = deleteProject(deletedBoardId);
+    setSelectedCardId(null);
+    setIsInitialCardDismissed(true);
+    setIsArchiveOpen(false);
+    setIsFiltersOpen(false);
+
+    if (deletedBoardId === boardId && nextActiveBoardId) {
+      router.replace(getBoardRoute(nextActiveBoardId));
+    }
+
+    showToast({
+      title: "Проект удалён",
+      description: deletedBoardTitle,
+      tone: "warning",
+    });
   };
 
   const openCalendar = () => {
@@ -481,6 +509,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         isProjectsOpen={isProjectsOpen}
         isBoardToolsOpen={isBoardToolsOpen}
         persistenceLabel={statusLabel}
+        showProjectsButton={false}
         onOpenAnalytics={openAnalytics}
         onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
         onOpenCalendar={openCalendar}
@@ -523,22 +552,22 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         }}
         onUndo={undo}
       >
-        <label className="sr-only" htmlFor="board-title">
-          Название проекта
-        </label>
-        <BoardTitleInput
-          key={activeBoard.id}
-          disabled={!isReady}
-          title={activeBoard.title}
-          onCommit={(title) =>
+        <ProjectSwitcher
+          activeBoard={activeBoard}
+          boards={workspace.boards}
+          isOpen={isProjectsOpen}
+          onCreateBoard={createProjectFromHeader}
+          onDeleteBoard={deleteProjectFromHeader}
+          onOpenChange={setIsProjectsOpen}
+          onRenameActiveBoard={(title) =>
             updateActiveBoard((board) => renameBoard(board, title), "immediate")
           }
+          onSelectBoard={selectProjectFromHeader}
         />
       </WorkspaceHeader>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {isProjectsOpen ||
-        isBoardToolsOpen ||
+        {isBoardToolsOpen ||
         isAppearanceOpen ||
         isFiltersOpen ? (
           <button
@@ -548,47 +577,6 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
             onClick={closePanels}
           />
         ) : null}
-
-        <ProjectSidebar
-          activeBoardId={workspace.activeBoardId}
-          boards={workspace.boards}
-          isOpen={isProjectsOpen}
-          onClose={() => setIsProjectsOpen(false)}
-          onCreateBoard={(title, templateId) => {
-            const createdBoardId = createProject(title, templateId);
-            if (createdBoardId) {
-              setSelectedCardId(null);
-              setIsInitialCardDismissed(true);
-              closePanels();
-              setIsArchiveOpen(false);
-              router.push(getBoardRoute(createdBoardId));
-              showToast({
-                title: "Проект создан",
-                description: title,
-                tone: "success",
-              });
-            }
-          }}
-          onDeleteBoard={(deletedBoardId) => {
-            const deletedBoardTitle =
-              workspace.boards.find((board) => board.id === deletedBoardId)
-                ?.title ?? "Проект";
-            const nextActiveBoardId = deleteProject(deletedBoardId);
-            setSelectedCardId(null);
-            setIsInitialCardDismissed(true);
-            setIsArchiveOpen(false);
-            setIsFiltersOpen(false);
-            if (deletedBoardId === boardId && nextActiveBoardId) {
-              router.replace(getBoardRoute(nextActiveBoardId));
-            }
-            showToast({
-              title: "Проект удалён",
-              description: deletedBoardTitle,
-              tone: "warning",
-            });
-          }}
-          onSelectBoard={selectProjectFromSidebar}
-        />
 
         <BoardToolsSidebar
           board={activeBoard}

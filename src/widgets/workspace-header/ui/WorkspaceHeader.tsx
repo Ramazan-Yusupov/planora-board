@@ -45,6 +45,7 @@ type WorkspaceHeaderProps = Readonly<{
   isPersistenceError: boolean;
   isProjectsOpen: boolean;
   persistenceLabel: string;
+  showProjectsButton?: boolean;
   onOpenBoard: () => void;
   onOpenAnalytics?: () => void;
   onOpenCalendar: () => void;
@@ -143,6 +144,7 @@ export function WorkspaceHeader({
   isPersistenceError,
   isProjectsOpen,
   persistenceLabel,
+  showProjectsButton = true,
   onOpenBoard,
   onOpenAnalytics,
   onOpenCalendar,
@@ -228,15 +230,17 @@ export function WorkspaceHeader({
     <header className="z-50 border-b border-white/10 bg-panel/88 px-2 py-2 shadow-[0_1px_0_rgb(255_255_255/2%),0_16px_40px_rgb(0_0_0/15%)] backdrop-blur-2xl sm:px-5 sm:py-3">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 sm:gap-3">
         <div className="flex">
-          <IconButton
-            aria-pressed={isProjectsOpen}
-            className="size-11 text-text-muted hover:bg-control hover:text-text sm:size-10"
-            label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
-            size="lg"
-            onClick={onToggleProjects}
-          >
-            <Menu aria-hidden="true" size={20} />
-          </IconButton>
+          {showProjectsButton ? (
+            <IconButton
+              aria-pressed={isProjectsOpen}
+              className="size-11 text-text-muted hover:bg-control hover:text-text sm:size-10"
+              label={isProjectsOpen ? "Закрыть проекты" : "Открыть проекты"}
+              size="lg"
+              onClick={onToggleProjects}
+            >
+              <Menu aria-hidden="true" size={20} />
+            </IconButton>
+          ) : null}
 
           <div className="hidden items-center gap-3 sm:flex">
             <Tooltip label="Рабочая доска">

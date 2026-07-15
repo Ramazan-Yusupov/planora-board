@@ -30,7 +30,7 @@ import {
   getWorkspaceNavigationActions,
   useCommandPaletteShortcut,
 } from "@/widgets/command-palette";
-import { ProjectSidebar } from "@/widgets/project-sidebar";
+import { ProjectSwitcher } from "@/widgets/project-switcher";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
 function subscribeToCurrentMonth() {
@@ -131,6 +131,25 @@ export function CalendarPage() {
     setIsProjectsOpen(false);
     router.push(getBoardRoute(boardId));
   };
+  const selectProjectFromHeader = (boardId: string) => {
+    selectProject(boardId);
+    setSelectedBoardId(boardId);
+    setIsProjectsOpen(false);
+  };
+  const createProjectFromHeader = (title: string, templateId?: Parameters<typeof createProject>[1]) => {
+    const createdBoardId = createProject(title, templateId);
+
+    if (createdBoardId) {
+      selectProjectFromHeader(createdBoardId);
+    }
+  };
+  const deleteProjectFromHeader = (boardId: string) => {
+    const nextActiveBoardId = deleteProject(boardId);
+
+    if (selectedBoardId === boardId) {
+      setSelectedBoardId(nextActiveBoardId);
+    }
+  };
   const openCalendarCard = (item: CalendarItem) => {
     selectProject(item.boardId);
     router.push(getBoardRoute(item.boardId, item.card.id));
@@ -193,50 +212,21 @@ export function CalendarPage() {
         onOpenCommands={openCommandPalette}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        showProjectsButton={false}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
-        <div className="px-2 py-2 sm:px-3 flex flex-col items-center">
-          <h1 className="text-base font-semibold text-text sm:text-lg">
-            Календарь
-          </h1>
-          <p className="hidden text-xs text-text-muted sm:block">
-            Задачи с установленным сроком
-          </p>
-        </div>
+        <ProjectSwitcher
+          activeBoard={activeBoard}
+          boards={workspace.boards}
+          isOpen={isProjectsOpen}
+          onCreateBoard={createProjectFromHeader}
+          onDeleteBoard={deleteProjectFromHeader}
+          onOpenChange={setIsProjectsOpen}
+          onSelectBoard={selectProjectFromHeader}
+        />
       </WorkspaceHeader>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {isProjectsOpen ? (
-          <button
-            aria-label="Закрыть проекты"
-            className="absolute inset-0 z-30 bg-black/55 lg:hidden"
-            type="button"
-            onClick={() => setIsProjectsOpen(false)}
-          />
-        ) : null}
-
-        <ProjectSidebar
-          activeBoardId={workspace.activeBoardId}
-          boards={workspace.boards}
-          isOpen={isProjectsOpen}
-          onClose={() => setIsProjectsOpen(false)}
-          onCreateBoard={(title) => {
-            const createdBoardId = createProject(title);
-
-            if (createdBoardId) {
-              router.push(getBoardRoute(createdBoardId));
-            }
-          }}
-          onDeleteBoard={(boardId) => {
-            deleteProject(boardId);
-
-            if (selectedBoardId === boardId) {
-              setSelectedBoardId(null);
-            }
-          }}
-          onSelectBoard={openBoard}
-        />
-
         <section className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
           {storageError ? (
             <div className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">

@@ -30,6 +30,36 @@ export const BOARD_BACKGROUND_OPTIONS = [
     backgroundImage: "radial-gradient(circle at 12% 14%, rgba(251, 146, 60, 0.35), transparent 30%), radial-gradient(circle at 86% 82%, rgba(190, 24, 93, 0.28), transparent 42%)",
   },
   {
+    value: "daylight",
+    label: "Светлая доска",
+    color: "#d8dde8",
+    backgroundImage: "radial-gradient(circle at 14% 16%, rgba(96, 165, 250, 0.2), transparent 32%), radial-gradient(circle at 86% 12%, rgba(148, 163, 184, 0.22), transparent 28%), linear-gradient(135deg, rgba(255,255,255,0.48), transparent 52%)",
+  },
+  {
+    value: "graphite",
+    label: "Графит",
+    color: "#111827",
+    backgroundImage: "linear-gradient(135deg, rgba(148, 163, 184, 0.16), transparent 34%), radial-gradient(circle at 82% 18%, rgba(75, 85, 99, 0.42), transparent 34%)",
+  },
+  {
+    value: "aurora",
+    label: "Аврора",
+    color: "#082f49",
+    backgroundImage: "radial-gradient(circle at 12% 22%, rgba(45, 212, 191, 0.3), transparent 30%), radial-gradient(circle at 82% 68%, rgba(168, 85, 247, 0.26), transparent 38%)",
+  },
+  {
+    value: "berry",
+    label: "Ягода",
+    color: "#4c0519",
+    backgroundImage: "radial-gradient(circle at 15% 12%, rgba(244, 114, 182, 0.24), transparent 32%), radial-gradient(circle at 88% 76%, rgba(127, 29, 29, 0.42), transparent 38%)",
+  },
+  {
+    value: "citrus",
+    label: "Цитрус",
+    color: "#422006",
+    backgroundImage: "radial-gradient(circle at 12% 18%, rgba(250, 204, 21, 0.28), transparent 31%), radial-gradient(circle at 84% 74%, rgba(234, 88, 12, 0.36), transparent 39%)",
+  },
+  {
     value: "custom",
     label: "Свой цвет",
     color: "#334155",
@@ -43,6 +73,11 @@ export const CARD_COLOR_OPTIONS = [
   { value: "plum", label: "Слива", color: "#3b1d4a" },
   { value: "sand", label: "Тёплый песок", color: "#f5e7cf" },
   { value: "frost", label: "Светлый иней", color: "#e2e8f0" },
+  { value: "mint", label: "Мята", color: "#d9f99d" },
+  { value: "sky", label: "Голубой", color: "#bae6fd" },
+  { value: "coral", label: "Коралл", color: "#fecaca" },
+  { value: "lavender", label: "Лаванда", color: "#ddd6fe" },
+  { value: "carbon", label: "Карбон", color: "#111827" },
   { value: "custom", label: "Свой цвет", color: "#334155" },
 ] as const;
 

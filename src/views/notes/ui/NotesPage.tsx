@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   AlertTriangle,
   Bold,
+  ChevronDown,
   ChevronRight,
   Check,
   Code2,
@@ -88,7 +89,6 @@ import { cn, createId } from "@/shared/lib";
 import {
   Button,
   ConfirmDialog,
-  IconButton,
   TextField,
   useViewportMenuPosition,
 } from "@/shared/ui";
@@ -97,7 +97,7 @@ import {
   getWorkspaceNavigationActions,
   useCommandPaletteShortcut,
 } from "@/widgets/command-palette";
-import { ProjectSidebar } from "@/widgets/project-sidebar";
+import { ProjectSwitcher } from "@/widgets/project-switcher";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
 import { NotesDataModal } from "./NotesDataModal";
@@ -3399,6 +3399,168 @@ type NoteHistoryState = Readonly<{
   past: NoteSnapshot[];
 }>;
 
+function NoteSwitcher({
+  activeNote,
+  isOpen,
+  notes,
+  onDelete,
+  onOpenChange,
+  onSelect,
+}: Readonly<{
+  activeNote: Note;
+  isOpen: boolean;
+  notes: readonly Note[];
+  onDelete: (noteId: string) => void;
+  onOpenChange: (isOpen: boolean) => void;
+  onSelect: (noteId: string) => void;
+}>) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        onOpenChange(false);
+      }
+    };
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen, onOpenChange]);
+
+  return (
+    <div ref={menuRef} className="relative min-w-0 flex-1">
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        className={cn(
+          "flex h-11 w-full min-w-0 items-center gap-3 rounded-xl border border-white/10 bg-control/45 px-3 text-left text-text transition hover:border-white/20 hover:bg-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          isOpen && "border-accent/55 ring-2 ring-accent/20",
+        )}
+        type="button"
+        onClick={() => onOpenChange(!isOpen)}
+      >
+        <FileText
+          aria-hidden="true"
+          className="hidden shrink-0 text-accent sm:block"
+          size={17}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">
+            {activeNote.title || "Без названия"}
+          </span>
+          <span className="block truncate text-xs text-text-muted">
+            {new Date(activeNote.updatedAt).toLocaleDateString("ru-RU")}
+          </span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            "shrink-0 text-text-muted transition",
+            isOpen && "rotate-180 text-text",
+          )}
+          size={17}
+        />
+      </button>
+
+      {isOpen ? (
+        <div
+          aria-label="Заметки"
+          className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-70 overflow-hidden rounded-2xl border border-white/10 bg-panel/98 p-2 shadow-2xl backdrop-blur-xl"
+          role="menu"
+        >
+          <div className="flex items-center justify-between gap-3 px-2 py-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">
+                Заметки
+              </p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                {notes.length} заметок
+              </p>
+            </div>
+          </div>
+
+          <div className="max-h-[15rem] overflow-y-auto px-1 py-1">
+            {notes.map((note) => {
+              const isActive = note.id === activeNote.id;
+
+              return (
+                <div
+                  key={note.id}
+                  className={cn(
+                    "group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 transition",
+                    isActive
+                      ? "bg-accent/15 text-text"
+                      : "text-text-muted hover:bg-control hover:text-text",
+                  )}
+                  role="none"
+                >
+                  <button
+                    aria-current={isActive ? "page" : undefined}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none"
+                    role="menuitem"
+                    type="button"
+                    onClick={() => {
+                      onSelect(note.id);
+                      onOpenChange(false);
+                    }}
+                  >
+                    <FileText
+                      aria-hidden="true"
+                      className="shrink-0"
+                      size={17}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">
+                        {note.title || "Без названия"}
+                      </span>
+                      <span className="block truncate text-xs opacity-70">
+                        {new Date(note.updatedAt).toLocaleDateString("ru-RU")}
+                      </span>
+                    </span>
+                  </button>
+                  {isActive ? (
+                    <Check
+                      aria-hidden="true"
+                      className="shrink-0 text-accent"
+                      size={16}
+                    />
+                  ) : null}
+                  <button
+                    aria-label={`Удалить заметку ${note.title || "Без названия"}`}
+                    className="grid size-8 shrink-0 place-items-center rounded-lg text-text-muted opacity-70 transition hover:bg-red-500/15 hover:text-red-300 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/40"
+                    type="button"
+                    onClick={() => {
+                      onDelete(note.id);
+                      onOpenChange(false);
+                    }}
+                  >
+                    <Trash2 aria-hidden="true" size={15} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function cloneNoteBlocks(blocks: readonly NoteBlock[]): NoteBlock[] {
   return blocks.map((block) => ({
     ...block,
@@ -3445,6 +3607,7 @@ export function NotesPage() {
   const [isNotesReady, setIsNotesReady] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [noteSearchQuery, setNoteSearchQuery] = useState("");
+  const [isNoteSwitcherOpen, setIsNoteSwitcherOpen] = useState(false);
   const noteHistoryRef = useRef<NoteHistoryState>({
     future: [],
     noteId: null,
@@ -3702,6 +3865,21 @@ export function NotesPage() {
     setIsProjectsOpen(false);
     router.push(getBoardRoute(boardId));
   };
+  const selectProjectFromHeader = (boardId: string) => {
+    selectProject(boardId);
+    setIsProjectsOpen(false);
+  };
+  const createProjectFromHeader = (title: string, templateId?: Parameters<typeof createProject>[1]) => {
+    const createdBoardId = createProject(title, templateId);
+
+    if (createdBoardId) {
+      selectProjectFromHeader(createdBoardId);
+    }
+  };
+  const deleteProjectFromHeader = (boardId: string) => {
+    deleteProject(boardId);
+    setIsProjectsOpen(false);
+  };
 
   const patchActiveNote = (patch: Partial<Pick<Note, "blocks" | "title">>) => {
     recordActiveNoteHistory();
@@ -3807,45 +3985,23 @@ export function NotesPage() {
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         onOpenWorkspaceData={() => setIsNotesDataOpen(true)}
         onRedo={redoActiveNote}
+        showProjectsButton={false}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
         onUndo={undoActiveNote}
         workspaceDataLabel="Backup заметок"
       >
-        <div className="flex flex-col items-center px-2 py-2 sm:px-3">
-          <h1 className="text-base font-semibold text-text sm:text-lg">
-            Заметки
-          </h1>
-          <p className="hidden text-xs text-text-muted sm:block">
-            Блочный редактор
-          </p>
-        </div>
+        <ProjectSwitcher
+          activeBoard={activeBoard}
+          boards={workspace.boards}
+          isOpen={isProjectsOpen}
+          onCreateBoard={createProjectFromHeader}
+          onDeleteBoard={deleteProjectFromHeader}
+          onOpenChange={setIsProjectsOpen}
+          onSelectBoard={selectProjectFromHeader}
+        />
       </WorkspaceHeader>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {isProjectsOpen ? (
-          <button
-            aria-label="Закрыть проекты"
-            className="absolute inset-0 z-30 bg-black/55 lg:hidden"
-            type="button"
-            onClick={() => setIsProjectsOpen(false)}
-          />
-        ) : null}
-
-        <ProjectSidebar
-          activeBoardId={workspace.activeBoardId}
-          boards={workspace.boards}
-          isOpen={isProjectsOpen}
-          onClose={() => setIsProjectsOpen(false)}
-          onCreateBoard={(title, templateId) => {
-            const createdBoardId = createProject(title, templateId);
-            if (createdBoardId) {
-              openBoard(createdBoardId);
-            }
-          }}
-          onDeleteBoard={deleteProject}
-          onSelectBoard={openBoard}
-        />
-
         <section className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
           {storageError ? (
             <div className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">
@@ -3861,7 +4017,7 @@ export function NotesPage() {
           ) : null}
 
           <div className="grid min-h-0 flex-1 lg:grid-cols-[18rem_minmax(0,1fr)]">
-            <aside className="min-h-0 border-r border-white/10 bg-panel/72 p-3">
+            <aside className="hidden min-h-0 border-r border-white/10 bg-panel/72 p-3 lg:block">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-text">Notes</h2>
                 <Button size="sm" onClick={addNote}>
@@ -3889,33 +4045,66 @@ export function NotesPage() {
 
               <div className="mt-3 max-h-[15rem] space-y-1 overflow-y-auto lg:max-h-[calc(100dvh-12rem)]">
                 {filteredBoardNotes.length > 0 ? (
-                  filteredBoardNotes.map((note) => (
-                    <button
+                  filteredBoardNotes.map((note) => {
+                    const isActive = activeNote.id === note.id;
+
+                    return (
+                    <div
                       key={note.id}
                       className={cn(
-                        "flex min-h-14 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition",
-                        activeNote.id === note.id
+                        "group flex min-h-14 w-full items-center gap-2 rounded-lg px-3 py-2 transition",
+                        isActive
                           ? "bg-accent text-accent-foreground"
                           : "text-text-muted hover:bg-control hover:text-text",
                       )}
-                      type="button"
-                      onClick={() => setActiveNoteId(note.id)}
+                      role="none"
                     >
-                      <FileText
-                        aria-hidden="true"
-                        className="shrink-0"
-                        size={17}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {note.title || "Без названия"}
+                      <button
+                        aria-current={isActive ? "page" : undefined}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none"
+                        type="button"
+                        onClick={() => setActiveNoteId(note.id)}
+                      >
+                        <FileText
+                          aria-hidden="true"
+                          className="shrink-0"
+                          size={17}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">
+                            {note.title || "Без названия"}
+                          </span>
+                          <span className="block truncate text-xs opacity-75">
+                            {new Date(note.updatedAt).toLocaleDateString("ru-RU")}
+                          </span>
                         </span>
-                        <span className="block truncate text-xs opacity-75">
-                          {new Date(note.updatedAt).toLocaleDateString("ru-RU")}
-                        </span>
-                      </span>
-                    </button>
-                  ))
+                      </button>
+                      {isActive ? (
+                        <Check
+                          aria-hidden="true"
+                          className={cn(
+                            "shrink-0",
+                            isActive ? "text-accent-foreground" : "text-accent",
+                          )}
+                          size={16}
+                        />
+                      ) : null}
+                      <button
+                        aria-label={`Удалить заметку ${note.title || "Без названия"}`}
+                        className={cn(
+                          "grid size-8 shrink-0 place-items-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/40 lg:opacity-0 lg:group-hover:opacity-100",
+                          isActive
+                            ? "text-accent-foreground/75 hover:bg-black/10 hover:text-accent-foreground"
+                            : "text-text-muted hover:bg-red-500/15 hover:text-red-300",
+                        )}
+                        type="button"
+                        onClick={() => setDeleteNoteId(note.id)}
+                      >
+                        <Trash2 aria-hidden="true" size={15} />
+                      </button>
+                    </div>
+                    );
+                  })
                 ) : (
                   <p className="rounded-lg border border-dashed border-white/12 px-3 py-5 text-center text-sm text-text-muted">
                     Ничего не найдено.
@@ -3925,6 +4114,22 @@ export function NotesPage() {
             </aside>
 
             <section className="min-h-0 overflow-y-auto">
+              <div className="border-b border-white/10 bg-panel/70 px-4 py-3 lg:hidden">
+                <div className="flex items-center gap-2">
+                  <NoteSwitcher
+                    activeNote={activeNote}
+                    isOpen={isNoteSwitcherOpen}
+                    notes={boardNotes}
+                    onDelete={setDeleteNoteId}
+                    onOpenChange={setIsNoteSwitcherOpen}
+                    onSelect={setActiveNoteId}
+                  />
+                  <Button size="sm" onClick={addNote}>
+                    <Plus aria-hidden="true" size={16} />
+                    Новая
+                  </Button>
+                </div>
+              </div>
               <div className="mx-auto w-full max-w-3xl px-4 pt-8 sm:px-8">
                 <div className="flex items-start gap-2">
                   <TextField
@@ -3941,13 +4146,6 @@ export function NotesPage() {
                       })
                     }
                   />
-                  <IconButton
-                    className="mt-1 text-red-300 hover:bg-red-500/10 hover:text-red-100"
-                    label="Удалить заметку"
-                    onClick={() => setDeleteNoteId(activeNote.id)}
-                  >
-                    <Trash2 aria-hidden="true" size={17} />
-                  </IconButton>
                 </div>
               </div>
 
