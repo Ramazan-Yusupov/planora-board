@@ -393,7 +393,14 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     router.push(MY_WORK_ROUTE);
   };
 
+  const openCard = (cardId: string) => {
+    setIsInitialCardDismissed(true);
+    closePanels();
+    setSelectedCardId(cardId);
+  };
+
   const commandActions = getBoardCommandActions({
+    board: activeBoard,
     activeListsCount: activeLists.length,
     onOpenArchive: () => setIsArchiveOpen(true),
     onOpenAnalytics: openAnalytics,
@@ -403,6 +410,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     onOpenNotes: openNotes,
     onOpenFilters: () => setIsFiltersOpen(true),
     onOpenProjects: () => setIsProjectsOpen(true),
+    onOpenCard: openCard,
     onOpenQuickCreateCard: () => setIsQuickCreateOpen(true),
     onOpenQuickCreateList: () => setIsQuickCreateListOpen(true),
   });
@@ -944,11 +952,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                     moveList(board, listId, destinationListId),
                   )
                 }
-                onOpenCard={(cardId) => {
-                  setIsInitialCardDismissed(true);
-                  setIsFiltersOpen(false);
-                  setSelectedCardId(cardId);
-                }}
+                onOpenCard={openCard}
                 onOpenListActions={setListActionsListId}
                 onRenameList={(listId, title) =>
                   updateActiveBoard((board) => renameList(board, listId, title))

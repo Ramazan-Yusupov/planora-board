@@ -1,6 +1,15 @@
 "use client";
 
 import {
+  DndContext,
+  DragOverlay,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ChevronLeft,
   ChevronRight,
   CircleDot,
@@ -8,7 +17,7 @@ import {
   Search,
   Tag,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import {
   BoardLabelSelector,
@@ -40,12 +49,135 @@ type CalendarViewProps = Readonly<{
   selectedBoardId: string | null;
   onChangeFilters: (filters: CalendarCardFilters) => void;
   onOpenCard: (item: CalendarItem) => void;
+  onMoveCardDate: (item: CalendarItem, dateKey: string) => void;
   onSelectBoard: (boardId: string | null) => void;
   onShiftMonth: (offset: number) => void;
   onShowToday: () => void;
 }>;
 
 const weekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+function CalendarTaskButton({
+  item,
+  onOpenCard,
+}: Readonly<{
+  item: CalendarItem;
+  onOpenCard: (item: CalendarItem) => void;
+}>) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: `${item.boardId}:${item.card.id}`,
+      data: {
+        boardId: item.boardId,
+        cardId: item.card.id,
+        item,
+        type: "calendar-card",
+      },
+    });
+  const labels = getCardLabels(item.card, item.labels).slice(0, 2);
+  const checklistProgress = getCardChecklistProgress(
+    item.card,
+    item.checklists,
+    item.checklistItems,
+  );
+
+  return (
+    <button
+      ref={setNodeRef}
+      className={cn(
+        "flex w-full min-w-0 items-center gap-1.5 rounded-lg border border-white/10 bg-control/55 px-2 py-1 text-left text-xs text-text transition hover:bg-control-hover focus-visible:outline-offset-1",
+        isDragging && "opacity-35",
+      )}
+      style={{ transform: CSS.Translate.toString(transform) }}
+      title={`${item.boardTitle}: ${item.card.title}`}
+      type="button"
+      onClick={() => onOpenCard(item)}
+      {...listeners}
+      {...attributes}
+    >
+      {item.card.sticker ? (
+        <span aria-hidden="true" className="shrink-0 text-sm leading-none">
+          {item.card.sticker}
+        </span>
+      ) : (
+        <CircleDot
+          aria-hidden="true"
+          className="shrink-0 text-accent"
+          size={12}
+        />
+      )}
+      <span className="min-w-0 flex-1 truncate">{item.card.title}</span>
+      {checklistProgress.total > 0 ? (
+        <span
+          className="inline-flex shrink-0 items-center gap-0.5 text-[10px] text-text-muted"
+          title={`Чек-лист: ${checklistProgress.completed} из ${checklistProgress.total}`}
+        >
+          <ListChecks aria-hidden="true" size={12} />
+          {checklistProgress.completed}/{checklistProgress.total}
+        </span>
+      ) : null}
+      {labels.length > 0 ? (
+        <span className="flex shrink-0 gap-0.5" aria-label="Метки карточки">
+          {labels.map((label) => (
+            <span
+              key={label.id}
+              className="size-1.5 rounded-full"
+              style={{ backgroundColor: label.color }}
+              title={label.name}
+            />
+          ))}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function CalendarDayCell({
+  children,
+  dateKey,
+  isCurrentMonth,
+  isToday,
+  label,
+}: Readonly<{
+  children: ReactNode;
+  dateKey: string;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  label: string;
+}>) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `calendar-day-${dateKey}`,
+    data: { dateKey, type: "calendar-day" },
+  });
+
+  return (
+    <section
+      ref={setNodeRef}
+      aria-label={label}
+      className={cn(
+        "min-h-32 border-b border-r border-white/10 p-2 last:border-r-0 transition",
+        !isCurrentMonth && "bg-slate-950/25",
+        isOver && "bg-accent/10 ring-1 ring-inset ring-accent/55",
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span
+          className={cn(
+            "grid size-7 place-items-center rounded-full text-sm font-medium",
+            isToday
+              ? "bg-accent text-accent-foreground"
+              : isCurrentMonth
+                ? "text-text"
+                : "text-text-muted",
+          )}
+        >
+          {Number(dateKey.slice(-2))}
+        </span>
+      </div>
+      {children}
+    </section>
+  );
+}
 
 function getCalendarLabels(
   boards: readonly Board[],
@@ -74,6 +206,7 @@ export function CalendarView({
   selectedBoardId,
   onChangeFilters,
   onOpenCard,
+  onMoveCardDate,
   onSelectBoard,
   onShiftMonth,
   onShowToday,
@@ -100,6 +233,26 @@ export function CalendarView({
     return nextItemsByDate;
   }, [boards, filters, selectedBoardId]);
   const monthTitle = formatMonthTitle(month);
+  const [activeDragItem, setActiveDragItem] = useState<CalendarItem | null>(
+    null,
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const item = event.active.data.current?.item;
+    setActiveDragItem(item ?? null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const item = event.active.data.current?.item;
+    const dateKey = event.over?.data.current?.dateKey;
+    setActiveDragItem(null);
+
+    if (!item || typeof dateKey !== "string" || item.card.dueDate === dateKey) {
+      return;
+    }
+
+    onMoveCardDate(item, dateKey);
+  };
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-canvas text-text">
@@ -177,8 +330,13 @@ export function CalendarView({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6">
-        <div className="min-w-[46rem] overflow-hidden rounded-2xl border border-white/10 bg-panel/60 shadow-sm">
+      <DndContext
+        onDragCancel={() => setActiveDragItem(null)}
+        onDragEnd={handleDragEnd}
+        onDragStart={handleDragStart}
+      >
+        <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6">
+          <div className="min-w-[46rem] overflow-hidden rounded-2xl border border-white/10 bg-panel/60 shadow-sm">
           <div className="grid grid-cols-7 border-b border-white/10 bg-control/35">
             {weekdayLabels.map((weekday) => (
               <div
@@ -197,83 +355,21 @@ export function CalendarView({
               const hiddenItemsCount = Math.max(0, items.length - visibleItems.length);
 
               return (
-                <section
+                <CalendarDayCell
                   key={day.dateKey}
-                  aria-label={formatDayLabel(day.date)}
-                  className={cn(
-                    "min-h-32 border-b border-r border-white/10 p-2 last:border-r-0",
-                    !day.isCurrentMonth && "bg-slate-950/25",
-                  )}
+                  dateKey={day.dateKey}
+                  isCurrentMonth={day.isCurrentMonth}
+                  isToday={day.isToday}
+                  label={formatDayLabel(day.date)}
                 >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        "grid size-7 place-items-center rounded-full text-sm font-medium",
-                        day.isToday
-                          ? "bg-accent text-accent-foreground"
-                          : day.isCurrentMonth
-                            ? "text-text"
-                            : "text-text-muted",
-                      )}
-                    >
-                      {day.date.getDate()}
-                    </span>
-                  </div>
-
                   <div className="space-y-1">
                     {visibleItems.map((item) => {
-                      const labels = getCardLabels(item.card, item.labels).slice(0, 2);
-                      const checklistProgress = getCardChecklistProgress(
-                        item.card,
-                        item.checklists,
-                        item.checklistItems,
-                      );
-
                       return (
-                        <button
+                        <CalendarTaskButton
                           key={`${item.boardId}-${item.card.id}`}
-                          className="flex w-full items-center gap-1.5 rounded-lg border border-white/10 bg-control/55 px-2 py-1 text-left text-xs text-text transition hover:bg-control-hover focus-visible:outline-offset-1"
-                          title={`${item.boardTitle}: ${item.card.title}`}
-                          type="button"
-                          onClick={() => onOpenCard(item)}
-                        >
-                          {item.card.sticker ? (
-                            <span
-                              aria-hidden="true"
-                              className="shrink-0 text-sm leading-none"
-                            >
-                              {item.card.sticker}
-                            </span>
-                          ) : (
-                            <CircleDot
-                              aria-hidden="true"
-                              className="shrink-0 text-accent"
-                              size={12}
-                            />
-                          )}
-                          <span className="min-w-0 flex-1 truncate">{item.card.title}</span>
-                          {checklistProgress.total > 0 ? (
-                            <span
-                              className="inline-flex shrink-0 items-center gap-0.5 text-[10px] text-text-muted"
-                              title={`Чек-лист: ${checklistProgress.completed} из ${checklistProgress.total}`}
-                            >
-                              <ListChecks aria-hidden="true" size={12} />
-                              {checklistProgress.completed}/{checklistProgress.total}
-                            </span>
-                          ) : null}
-                          {labels.length > 0 ? (
-                            <span className="flex shrink-0 gap-0.5" aria-label="Метки карточки">
-                              {labels.map((label) => (
-                                <span
-                                  key={label.id}
-                                  className="size-1.5 rounded-full"
-                                  style={{ backgroundColor: label.color }}
-                                  title={label.name}
-                                />
-                              ))}
-                            </span>
-                          ) : null}
-                        </button>
+                          item={item}
+                          onOpenCard={onOpenCard}
+                        />
                       );
                     })}
 
@@ -283,12 +379,20 @@ export function CalendarView({
                       </p>
                     ) : null}
                   </div>
-                </section>
+                </CalendarDayCell>
               );
             })}
           </div>
         </div>
-      </div>
+        </div>
+        <DragOverlay>
+          {activeDragItem ? (
+            <div className="w-56 rounded-lg border border-accent/45 bg-panel px-2 py-1 text-xs font-semibold text-text shadow-2xl">
+              {activeDragItem.card.title}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { Download, FileUp, LoaderCircle } from "lucide-react";
 import { useRef, useState } from "react";
 
 import {
+  downloadNoteMarkdown,
   downloadNotesExport,
   parseNotesImport,
   type Note,
@@ -29,7 +30,9 @@ function getImportDescription(importResult: NotesImportResult | null): string {
       ? "workspace backup"
       : importResult.source === "legacy"
         ? "старый notes JSON"
-        : "notes backup";
+        : importResult.source === "markdown"
+          ? "Markdown"
+          : "notes backup";
 
   return `Будут заменены только заметки. Проекты и доски не изменятся. Источник: ${sourceLabel}. В файле: ${importResult.notes.length} заметк(и).`;
 }
@@ -93,7 +96,15 @@ export function NotesDataModal({
                 onClick={() => downloadNotesExport(notes, "note", activeNote.id)}
               >
                 <Download aria-hidden="true" size={17} />
-                Текущая заметка
+                JSON заметки
+              </Button>
+              <Button
+                className="sm:flex-1"
+                variant="secondary"
+                onClick={() => downloadNoteMarkdown(activeNote)}
+              >
+                <Download aria-hidden="true" size={17} />
+                Markdown
               </Button>
               <Button
                 className="sm:flex-1"
@@ -110,12 +121,12 @@ export function NotesDataModal({
             <h3 className="text-sm font-semibold text-text">Импорт в Notes</h3>
             <p className="mt-1 text-xs leading-5 text-text-muted">
               Импорт заменяет только заметки на этой странице. Можно выбрать
-              `planora-notes` файл или общий workspace backup, если в нём есть
-              заметки.
+              `planora-notes` файл, Markdown или общий workspace backup, если в
+              нём есть заметки.
             </p>
             <input
               ref={inputRef}
-              accept="application/json,.json"
+              accept="application/json,.json,text/markdown,.md,.markdown"
               className="sr-only"
               type="file"
               onChange={(event) => void chooseFile(event.target.files?.[0])}

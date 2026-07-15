@@ -22,7 +22,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { APP_NAME } from "@/shared/config/app";
 import { cn } from "@/shared/lib";
-import { IconButton } from "@/shared/ui";
+import { IconButton, Tooltip } from "@/shared/ui";
 
 export type WorkspaceView =
   | "board"
@@ -126,23 +126,6 @@ function HeaderMenuItem({
         </span>
       ) : null}
     </button>
-  );
-}
-
-function HeaderTooltip({
-  children,
-  label,
-}: Readonly<{ children: ReactNode; label: string }>) {
-  return (
-    <span className="group/tooltip relative inline-flex">
-      {children}
-      <span
-        className="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] z-[80] -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-slate-950/95 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-2xl transition group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100"
-        role="tooltip"
-      >
-        {label}
-      </span>
-    </span>
   );
 }
 
@@ -256,7 +239,7 @@ export function WorkspaceHeader({
           </IconButton>
 
           <div className="hidden items-center gap-3 sm:flex">
-            <HeaderTooltip label="Рабочая доска">
+            <Tooltip label="Рабочая доска">
               <button
                 aria-label="Открыть доску"
                 className="grid size-10 place-items-center rounded-xl border border-accent/25 bg-accent text-accent-foreground shadow-[0_8px_22px_rgb(59_130_246/22%)] transition hover:bg-accent-hover"
@@ -265,7 +248,7 @@ export function WorkspaceHeader({
               >
                 <LayoutDashboard aria-hidden="true" size={20} />
               </button>
-            </HeaderTooltip>
+            </Tooltip>
 
             <div className="hidden md:block">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
@@ -298,7 +281,7 @@ export function WorkspaceHeader({
           {onUndo || onRedo || onOpenCommands ? (
             <div className={desktopIconGroupClass}>
               {onUndo ? (
-                <HeaderTooltip label="Отменить действие">
+                <Tooltip label="Отменить действие">
                   <IconButton
                     disabled={!canUndo}
                     className={desktopIconClass}
@@ -308,11 +291,11 @@ export function WorkspaceHeader({
                   >
                     <Undo2 aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
 
               {onRedo ? (
-                <HeaderTooltip label="Повторить действие">
+                <Tooltip label="Повторить действие">
                   <IconButton
                     disabled={!canRedo}
                     className={desktopIconClass}
@@ -322,11 +305,11 @@ export function WorkspaceHeader({
                   >
                     <Redo2 aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
 
               {onOpenCommands ? (
-                <HeaderTooltip label="Командная палитра">
+                <Tooltip label="Командная палитра">
                   <IconButton
                     className={desktopIconClass}
                     label="Командная палитра"
@@ -335,14 +318,14 @@ export function WorkspaceHeader({
                   >
                     <Command aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
             </div>
           ) : null}
 
           <div className={desktopIconGroupClass}>
             {onOpenAnalytics ? (
-              <HeaderTooltip label="Аналитика">
+              <Tooltip label="Аналитика">
                 <IconButton
                   aria-pressed={activeView === "analytics"}
                   className={cn(
@@ -356,11 +339,11 @@ export function WorkspaceHeader({
                 >
                   <BarChart3 aria-hidden="true" size={18} />
                 </IconButton>
-              </HeaderTooltip>
+              </Tooltip>
             ) : null}
 
             {onOpenNotes ? (
-              <HeaderTooltip label="Заметки">
+              <Tooltip label="Заметки">
                 <IconButton
                   aria-pressed={activeView === "notes"}
                   className={cn(
@@ -374,11 +357,11 @@ export function WorkspaceHeader({
                 >
                   <FileText aria-hidden="true" size={18} />
                 </IconButton>
-              </HeaderTooltip>
+              </Tooltip>
             ) : null}
 
             {onOpenMyWork ? (
-              <HeaderTooltip label="Мои задачи">
+              <Tooltip label="Мои задачи">
                 <IconButton
                   aria-pressed={activeView === "my-work"}
                   className={cn(
@@ -392,10 +375,10 @@ export function WorkspaceHeader({
                 >
                   <ClipboardList aria-hidden="true" size={18} />
                 </IconButton>
-              </HeaderTooltip>
+              </Tooltip>
             ) : null}
 
-            <HeaderTooltip label="Календарь">
+            <Tooltip label="Календарь">
               <IconButton
                 aria-pressed={activeView === "calendar"}
                 className={cn(
@@ -409,13 +392,13 @@ export function WorkspaceHeader({
               >
                 <CalendarDays aria-hidden="true" size={18} />
               </IconButton>
-            </HeaderTooltip>
+            </Tooltip>
           </div>
 
           {onToggleFilters || onToggleArchive || onOpenWorkspaceData ? (
             <div className={desktopIconGroupClass}>
               {onToggleFilters ? (
-                <HeaderTooltip label={filtersLabel}>
+                <Tooltip label={filtersLabel}>
                   <IconButton
                     aria-pressed={isFiltersOpen}
                     className={cn(
@@ -429,11 +412,11 @@ export function WorkspaceHeader({
                   >
                     <ListFilter aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
 
               {onToggleArchive ? (
-                <HeaderTooltip label="Архив">
+                <Tooltip label="Архив">
                   <IconButton
                     aria-pressed={isArchiveOpen}
                     className={cn(
@@ -447,11 +430,11 @@ export function WorkspaceHeader({
                   >
                     <Archive aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
 
               {onOpenWorkspaceData ? (
-                <HeaderTooltip label={workspaceDataLabel}>
+                <Tooltip label={workspaceDataLabel}>
                   <IconButton
                     className={desktopIconClass}
                     label={workspaceDataLabel}
@@ -460,7 +443,7 @@ export function WorkspaceHeader({
                   >
                     <Download aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
             </div>
           ) : null}
@@ -468,7 +451,7 @@ export function WorkspaceHeader({
           {onToggleBoardTools || onToggleAppearance ? (
             <div className="flex items-center gap-1">
               {onToggleBoardTools ? (
-                <HeaderTooltip label="Инструменты доски">
+                <Tooltip label="Инструменты доски">
                   <IconButton
                     aria-pressed={isBoardToolsOpen}
                     className={cn(
@@ -482,11 +465,11 @@ export function WorkspaceHeader({
                   >
                     <Settings2 aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
 
               {onToggleAppearance ? (
-                <HeaderTooltip label="Оформление доски">
+                <Tooltip label="Оформление доски">
                   <IconButton
                     aria-pressed={isAppearanceOpen}
                     className={cn(
@@ -500,7 +483,7 @@ export function WorkspaceHeader({
                   >
                     <Palette aria-hidden="true" size={18} />
                   </IconButton>
-                </HeaderTooltip>
+                </Tooltip>
               ) : null}
             </div>
           ) : null}

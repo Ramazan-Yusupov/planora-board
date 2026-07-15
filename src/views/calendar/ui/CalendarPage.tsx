@@ -1,15 +1,18 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { AlertTriangle, CalendarDays } from "lucide-react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 import {
   DEFAULT_CALENDAR_CARD_FILTERS,
   type CalendarCardFilters,
 } from "@/features/filter-cards";
+import { type BoardCard, type CardDraft } from "@/entities/board";
+import { updateCard } from "@/features/board-management";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import {
+  getCalendarItems,
   getMonthStart,
   shiftMonth,
   type CalendarItem,
@@ -22,6 +25,11 @@ import {
   getBoardRoute,
 } from "@/shared/config/routes";
 import { CalendarView } from "@/widgets/calendar-view";
+import {
+  CommandPalette,
+  getWorkspaceNavigationActions,
+  useCommandPaletteShortcut,
+} from "@/widgets/command-palette";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
@@ -51,6 +59,24 @@ function CalendarLoadingState() {
   );
 }
 
+function createCardDraftWithDueDate(
+  card: BoardCard,
+  dueDate: string,
+): CardDraft {
+  return {
+    title: card.title,
+    description: card.description,
+    status: card.status,
+    priority: card.priority,
+    startDate: card.startDate,
+    dueDate,
+    labelIds: [...card.labelIds],
+    customFields: card.customFields.map((field) => ({ ...field })),
+    sticker: card.sticker,
+    cover: card.cover,
+  };
+}
+
 export function CalendarPage() {
   const router = useRouter();
   const {
@@ -63,6 +89,7 @@ export function CalendarPage() {
     createProject,
     deleteProject,
     selectProject,
+    updateBoard,
   } = useBoardWorkspace();
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
@@ -70,6 +97,11 @@ export function CalendarPage() {
     ...DEFAULT_CALENDAR_CARD_FILTERS,
   });
   const [monthOffset, setMonthOffset] = useState(0);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const openCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(true);
+  }, []);
+  useCommandPaletteShortcut(openCommandPalette);
   const currentMonthTimestamp = useSyncExternalStore(
     subscribeToCurrentMonth,
     getCurrentMonthTimestamp,
@@ -99,11 +131,31 @@ export function CalendarPage() {
     setIsProjectsOpen(false);
     router.push(getBoardRoute(boardId));
   };
-
   const openCalendarCard = (item: CalendarItem) => {
     selectProject(item.boardId);
     router.push(getBoardRoute(item.boardId, item.card.id));
   };
+  const calendarTaskActions = Array.from(
+    getCalendarItems(workspace.boards, selectedCalendarBoardId).entries(),
+  ).flatMap(([dateKey, items]) =>
+    items.map((item) => ({
+      id: `calendar-card-${item.boardId}-${item.card.id}`,
+      label: item.card.title,
+      description: `${item.boardTitle} · ${dateKey}`,
+      icon: <CalendarDays aria-hidden="true" size={18} />,
+      onSelect: () => openCalendarCard(item),
+    })),
+  );
+  const commandActions = [
+    ...getWorkspaceNavigationActions({
+      onOpenAnalytics: () => router.push(ANALYTICS_ROUTE),
+      onOpenBoard: () => openBoard(activeBoard.id),
+      onOpenCalendar: () => router.push(CALENDAR_ROUTE),
+      onOpenMyWork: () => router.push(MY_WORK_ROUTE),
+      onOpenNotes: () => router.push(NOTES_ROUTE),
+    }),
+    ...calendarTaskActions,
+  ];
 
   const selectCalendarBoard = (boardId: string | null) => {
     if (boardId) {
@@ -111,6 +163,21 @@ export function CalendarPage() {
     }
 
     setSelectedBoardId(boardId);
+  };
+  const moveCalendarCardDate = (item: CalendarItem, dateKey: string) => {
+    updateBoard(
+      item.boardId,
+      (board) => {
+        const card = board.cards[item.card.id];
+
+        if (!card) {
+          return board;
+        }
+
+        return updateCard(board, item.card.id, createCardDraftWithDueDate(card, dateKey));
+      },
+      "immediate",
+    );
   };
 
   return (
@@ -123,6 +190,7 @@ export function CalendarPage() {
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenCommands={openCommandPalette}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
@@ -189,6 +257,7 @@ export function CalendarPage() {
             month={month}
             selectedBoardId={selectedCalendarBoardId}
             onChangeFilters={setCalendarFilters}
+            onMoveCardDate={moveCalendarCardDate}
             onOpenCard={openCalendarCard}
             onSelectBoard={selectCalendarBoard}
             onShiftMonth={(offset) =>
@@ -198,6 +267,11 @@ export function CalendarPage() {
           />
         </section>
       </div>
+      <CommandPalette
+        actions={commandActions}
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
     </main>
   );
 }

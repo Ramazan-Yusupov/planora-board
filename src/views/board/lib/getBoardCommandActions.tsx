@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarDays,
   ClipboardList,
+  FileSearch,
   FileText,
   Filter,
   LayoutDashboard,
@@ -13,9 +14,11 @@ import {
   Plus,
 } from "lucide-react";
 
+import type { Board } from "@/entities/board";
 import type { CommandPaletteAction } from "@/widgets/command-palette";
 
 type GetBoardCommandActionsOptions = Readonly<{
+  board: Board;
   activeListsCount: number;
   onOpenArchive: () => void;
   onOpenAnalytics: () => void;
@@ -25,11 +28,13 @@ type GetBoardCommandActionsOptions = Readonly<{
   onOpenNotes: () => void;
   onOpenFilters: () => void;
   onOpenProjects: () => void;
+  onOpenCard: (cardId: string) => void;
   onOpenQuickCreateCard: () => void;
   onOpenQuickCreateList: () => void;
 }>;
 
 export function getBoardCommandActions({
+  board,
   activeListsCount,
   onOpenArchive,
   onOpenAnalytics,
@@ -39,9 +44,32 @@ export function getBoardCommandActions({
   onOpenNotes,
   onOpenFilters,
   onOpenProjects,
+  onOpenCard,
   onOpenQuickCreateCard,
   onOpenQuickCreateList,
 }: GetBoardCommandActionsOptions): CommandPaletteAction[] {
+  const cardActions = Object.values(board.cards)
+    .filter((card) => {
+      const list = board.lists[card.listId];
+
+      return !card.isArchived && list && !list.isArchived;
+    })
+    .sort((firstCard, secondCard) =>
+      firstCard.title.localeCompare(secondCard.title, "ru-RU"),
+    )
+    .map((card): CommandPaletteAction => {
+      const listTitle = board.lists[card.listId]?.title ?? "Список";
+      const dueDate = card.dueDate ? ` · ${card.dueDate}` : "";
+
+      return {
+        id: `card-${card.id}`,
+        label: card.title,
+        description: `${listTitle}${dueDate}`,
+        icon: <FileSearch aria-hidden="true" size={18} />,
+        onSelect: () => onOpenCard(card.id),
+      };
+    });
+
   return [
     {
       id: "new-card",
@@ -117,5 +145,6 @@ export function getBoardCommandActions({
       icon: <Palette aria-hidden="true" size={18} />,
       onSelect: onOpenAppearance,
     },
+    ...cardActions,
   ];
 }

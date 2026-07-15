@@ -36,13 +36,19 @@ export function CommandPalette({ actions, isOpen, onClose }: CommandPaletteProps
       `${action.label} ${action.description}`.toLocaleLowerCase("ru-RU").includes(normalizedQuery),
     );
   }, [actions, query]);
+  const firstEnabledAction = visibleActions.find((action) => !action.disabled);
+
+  const closePalette = () => {
+    setQuery("");
+    onClose();
+  };
 
   if (!isOpen) {
     return null;
   }
 
   return (
-    <Modal title="Команды" zIndexClassName="z-[85]" onClose={onClose}>
+    <Modal title="Команды" zIndexClassName="z-[85]" onClose={closePalette}>
       <div className="space-y-4">
         <label className="relative block">
           <span className="sr-only">Поиск команды</span>
@@ -53,6 +59,15 @@ export function CommandPalette({ actions, isOpen, onClose }: CommandPaletteProps
             placeholder="Введите команду…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || !firstEnabledAction) {
+                return;
+              }
+
+              event.preventDefault();
+              firstEnabledAction.onSelect();
+              closePalette();
+            }}
           />
         </label>
 
@@ -67,7 +82,7 @@ export function CommandPalette({ actions, isOpen, onClose }: CommandPaletteProps
               type="button"
               onClick={() => {
                 action.onSelect();
-                onClose();
+                closePalette();
               }}
             >
               <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-control text-accent">

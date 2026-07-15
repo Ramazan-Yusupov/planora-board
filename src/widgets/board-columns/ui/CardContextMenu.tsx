@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 
 import {
   CARD_PRIORITY_OPTIONS,
@@ -27,6 +27,7 @@ import {
   type CardStatus,
 } from "@/entities/board";
 import { cn, createId } from "@/shared/lib";
+import { useViewportMenuPosition } from "@/shared/ui";
 
 type CardContextMenuPosition = Readonly<{
   x: number;
@@ -137,7 +138,16 @@ export function CardContextMenu({
   onSave,
 }: CardContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [coords, setCoords] = useState(position);
+  const menuPoint = useMemo(
+    () => ({ x: position.x, y: position.y }),
+    [position.x, position.y],
+  );
+  const { style: menuStyle } = useViewportMenuPosition({
+    maxHeight: 672,
+    menuRef,
+    point: menuPoint,
+    width: 464,
+  });
   const boardLabels = Object.values(labels);
   const menuStatusOptions: MenuOption[] = [
     ...CARD_STATUS_OPTIONS.map((option) => ({
@@ -163,21 +173,6 @@ export function CardContextMenu({
       color: option.color,
     })),
   ];
-
-  useLayoutEffect(() => {
-    const menu = menuRef.current;
-
-    if (!menu) {
-      return;
-    }
-
-    const rect = menu.getBoundingClientRect();
-    const margin = 10;
-    setCoords({
-      x: Math.min(position.x, window.innerWidth - rect.width - margin),
-      y: Math.min(position.y, window.innerHeight - rect.height - margin),
-    });
-  }, [position]);
 
   useLayoutEffect(() => {
     const closeOnPointerDown = (event: PointerEvent) => {
@@ -244,10 +239,7 @@ export function CardContextMenu({
       ref={menuRef}
       className="fixed z-[80] grid max-h-[min(80dvh,42rem)] w-[min(94vw,29rem)] gap-3 overflow-y-auto rounded-xl border border-white/10 bg-panel/98 p-3 text-text shadow-float backdrop-blur-2xl"
       role="menu"
-      style={{
-        left: Math.max(8, coords.x),
-        top: Math.max(8, coords.y),
-      }}
+      style={menuStyle}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

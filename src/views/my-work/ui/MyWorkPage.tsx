@@ -17,7 +17,7 @@ import {
   FolderKanban,
   ListChecks,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -39,6 +39,11 @@ import {
   getBoardRoute,
 } from "@/shared/config/routes";
 import { cn } from "@/shared/lib";
+import {
+  CommandPalette,
+  getWorkspaceNavigationActions,
+  useCommandPaletteShortcut,
+} from "@/widgets/command-palette";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
@@ -313,7 +318,7 @@ function WorkCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "w-full rounded-lg border border-white/10 bg-control/30 p-3 text-left transition hover:border-accent/40 hover:bg-control/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-control/30 p-3 text-left transition hover:border-accent/40 hover:bg-control/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         isDragging && "opacity-35",
         isOverlay && "w-80 shadow-2xl",
       )}
@@ -327,10 +332,10 @@ function WorkCard({
           <FolderKanban aria-hidden="true" size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-text">
+          <p className="block max-w-full truncate text-sm font-semibold text-text">
             {card.title}
           </p>
-          <p className="mt-1 truncate text-xs text-text-muted">
+          <p className="mt-1 block max-w-full truncate text-xs text-text-muted">
             {board.title} / {listTitle}
           </p>
         </div>
@@ -407,7 +412,7 @@ function WorkGroupColumn({
         </div>
       </header>
 
-      <div className="mt-3 grid gap-2">
+      <div className="mt-3 grid min-w-0 gap-2 overflow-hidden">
         {group.items.length > 0 ? (
           group.items.map((item) => (
             <WorkCard
@@ -442,6 +447,11 @@ export function MyWorkPage() {
   } = useBoardWorkspace();
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [activeDragItem, setActiveDragItem] = useState<MyWorkItem | null>(null);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const openCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(true);
+  }, []);
+  useCommandPaletteShortcut(openCommandPalette);
   const groups = useMemo(
     () => (activeBoard ? buildGroups(getActiveItems([activeBoard])) : []),
     [activeBoard],
@@ -476,6 +486,25 @@ export function MyWorkPage() {
     selectProject(item.board.id);
     router.push(getBoardRoute(item.board.id, item.card.id));
   };
+  const myWorkTaskActions = groups.flatMap((group) =>
+    group.items.map((item) => ({
+      id: `my-work-card-${item.board.id}-${item.card.id}`,
+      label: item.card.title,
+      description: `${group.title} · ${item.board.title} / ${item.listTitle}`,
+      icon: <ListChecks aria-hidden="true" size={18} />,
+      onSelect: () => openWorkItem(item),
+    })),
+  );
+  const commandActions = [
+    ...getWorkspaceNavigationActions({
+      onOpenAnalytics: () => router.push(ANALYTICS_ROUTE),
+      onOpenBoard: () => openBoard(activeBoard.id),
+      onOpenCalendar: () => router.push(CALENDAR_ROUTE),
+      onOpenMyWork: () => router.push(MY_WORK_ROUTE),
+      onOpenNotes: () => router.push(NOTES_ROUTE),
+    }),
+    ...myWorkTaskActions,
+  ];
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDragItem(null);
@@ -532,6 +561,7 @@ export function MyWorkPage() {
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenCommands={openCommandPalette}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
@@ -632,7 +662,7 @@ export function MyWorkPage() {
                 setActiveDragItem(item ?? null);
               }}
             >
-              <div className="grid gap-4 xl:grid-cols-4">
+              <div className="grid min-w-0 gap-4 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
                 {groups.map((group) => (
                   <WorkGroupColumn
                     key={group.id}
@@ -655,6 +685,11 @@ export function MyWorkPage() {
           </div>
         </section>
       </div>
+      <CommandPalette
+        actions={commandActions}
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
     </main>
   );
 }

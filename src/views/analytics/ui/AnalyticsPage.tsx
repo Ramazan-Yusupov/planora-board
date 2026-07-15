@@ -8,7 +8,7 @@ import {
   TimerReset,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   buildBoardAnalytics,
@@ -24,6 +24,11 @@ import {
   getBoardRoute,
 } from "@/shared/config/routes";
 import { cn } from "@/shared/lib";
+import {
+  CommandPalette,
+  getWorkspaceNavigationActions,
+  useCommandPaletteShortcut,
+} from "@/widgets/command-palette";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
@@ -298,7 +303,7 @@ function SegmentChart({
         >
           <div className="relative mx-auto size-52">
             <svg
-              aria-label={`${title}: пончиковый график`}
+              aria-label={`${title}: Donutовый график`}
               className="size-full"
               role="img"
               viewBox="0 0 100 100"
@@ -489,6 +494,11 @@ export function AnalyticsPage() {
   } = useBoardWorkspace();
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [chartMode, setChartMode] = useState<ChartMode>("bars");
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const openCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(true);
+  }, []);
+  useCommandPaletteShortcut(openCommandPalette);
   const analytics = useMemo(
     () => (activeBoard ? buildBoardAnalytics(activeBoard) : null),
     [activeBoard],
@@ -514,6 +524,29 @@ export function AnalyticsPage() {
     setIsProjectsOpen(false);
     router.push(getBoardRoute(boardId));
   };
+  const chartModeActions = [
+    ["bars", "Бары"],
+    ["line", "Линия"],
+    ["area", "Площадь"],
+    ["donut", "Donut"],
+  ].map(([mode, label]) => ({
+    id: `analytics-chart-${mode}`,
+    label: `График: ${label}`,
+    description: "Переключить режим визуализации аналитики",
+    disabled: chartMode === mode,
+    icon: <BarChart3 aria-hidden="true" size={18} />,
+    onSelect: () => setChartMode(mode as ChartMode),
+  }));
+  const commandActions = [
+    ...getWorkspaceNavigationActions({
+      onOpenAnalytics: () => router.push(ANALYTICS_ROUTE),
+      onOpenBoard: () => openBoard(activeBoard.id),
+      onOpenCalendar: () => router.push(CALENDAR_ROUTE),
+      onOpenMyWork: () => router.push(MY_WORK_ROUTE),
+      onOpenNotes: () => router.push(NOTES_ROUTE),
+    }),
+    ...chartModeActions,
+  ];
 
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
@@ -525,6 +558,7 @@ export function AnalyticsPage() {
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenCommands={openCommandPalette}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
@@ -645,7 +679,7 @@ export function AnalyticsPage() {
                     type="button"
                     onClick={() => setChartMode("donut")}
                   >
-                    Пончик
+                    Donut
                   </button>
                 </div>
               </div>
@@ -744,6 +778,11 @@ export function AnalyticsPage() {
           </div>
         </section>
       </div>
+      <CommandPalette
+        actions={commandActions}
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
     </main>
   );
 }

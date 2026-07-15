@@ -184,7 +184,7 @@ export function BoardColumns({
     <DndContext
       autoScroll={isDragEnabled}
       collisionDetection={closestCorners}
-      sensors={isDragEnabled ? sensors : undefined}
+      sensors={sensors}
       onDragCancel={() => setActiveItem(null)}
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}

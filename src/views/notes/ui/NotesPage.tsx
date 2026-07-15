@@ -1,6 +1,13 @@
 "use client";
 
-import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
+import {
+  closestCenter,
+  DndContext,
+  useDroppable,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
@@ -27,6 +34,7 @@ import {
   MoreHorizontal,
   Plus,
   Quote,
+  Search,
   SquareCheck,
   Strikethrough,
   Table2,
@@ -38,6 +46,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -57,6 +66,7 @@ import type { Board, BoardCard } from "@/entities/board";
 import {
   createNote,
   loadNotes,
+  parseMarkdownBlocks,
   saveNotes,
   type Note,
   type NoteBlock,
@@ -70,7 +80,18 @@ import {
   getBoardRoute,
 } from "@/shared/config/routes";
 import { cn, createId } from "@/shared/lib";
-import { Button, ConfirmDialog, IconButton, TextField } from "@/shared/ui";
+import {
+  Button,
+  ConfirmDialog,
+  IconButton,
+  TextField,
+  useViewportMenuPosition,
+} from "@/shared/ui";
+import {
+  CommandPalette,
+  getWorkspaceNavigationActions,
+  useCommandPaletteShortcut,
+} from "@/widgets/command-palette";
 import { ProjectSidebar } from "@/widgets/project-sidebar";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
@@ -78,6 +99,19 @@ import { NotesDataModal } from "./NotesDataModal";
 
 const DEFAULT_TABLE_ROW_COUNT = 2;
 const DEFAULT_TABLE_COLUMN_COUNT = 2;
+const NOTES_ROOT_DROP_ZONE_ID = "notes-root-drop-zone";
+
+type NoteDropIntent = Readonly<{
+  blockId: string;
+  type: "line" | "nest";
+}>;
+
+type NoteDropTarget =
+  | NoteDropIntent
+  | Readonly<{
+      type: "root";
+    }>
+  | null;
 
 function createTableCells(
   rowCount = DEFAULT_TABLE_ROW_COUNT,
@@ -103,6 +137,36 @@ function createBlock(
     type,
     parentId,
   };
+}
+
+function getNoteSearchText(note: Note): string {
+  return [
+    note.title,
+    ...note.blocks.flatMap((block) => [
+      block.text,
+      block.tableCells?.flat().join(" ") ?? "",
+    ]),
+  ]
+    .join(" ")
+    .toLocaleLowerCase("ru-RU");
+}
+
+function isDescendantBlock(
+  block: NoteBlock,
+  ancestorId: string,
+  blocks: readonly NoteBlock[],
+): boolean {
+  let parentId = block.parentId;
+
+  while (parentId) {
+    if (parentId === ancestorId) {
+      return true;
+    }
+
+    parentId = blocks.find((current) => current.id === parentId)?.parentId;
+  }
+
+  return false;
 }
 
 function getTableCells(block: NoteBlock): string[][] {
@@ -826,6 +890,7 @@ type EditableBlockProps = Readonly<{
   onBlur: (element: HTMLElement) => void;
   onInput: (element: HTMLElement) => void;
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onPasteMarkdown: (text: string, element: HTMLElement) => boolean;
   onSelectionChange: (element: HTMLElement) => void;
 }>;
 
@@ -837,6 +902,7 @@ function EditableBlock({
   onBlur,
   onInput,
   onKeyDown,
+  onPasteMarkdown,
   onSelectionChange,
 }: EditableBlockProps) {
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -880,8 +946,14 @@ function EditableBlock({
       onKeyUp={(event) => onSelectionChange(event.currentTarget)}
       onMouseUp={(event) => onSelectionChange(event.currentTarget)}
       onPaste={(event) => {
-        event.preventDefault();
         const text = event.clipboardData.getData("text/plain");
+
+        if (onPasteMarkdown(text, event.currentTarget)) {
+          event.preventDefault();
+          return;
+        }
+
+        event.preventDefault();
         document.execCommand("insertHTML", false, escapeInlineHtml(text));
         onInput(event.currentTarget);
       }}
@@ -1101,66 +1173,14 @@ function BlockCommandMenu({
   onSelectTask: (task: NoteTaskItem) => void;
 }>) {
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({
-    left: 8,
+  const { style: menuStyle } = useViewportMenuPosition({
+    anchorRef,
     maxHeight: 440,
-    top: 8,
+    menuRef,
     width: 352,
   });
-  const [isPositioned, setIsPositioned] = useState(false);
 
   useLayoutEffect(() => {
-    let animationFrameId: number | null = null;
-    let retryCount = 0;
-
-    const updateMenuPosition = () => {
-      animationFrameId = null;
-      const anchor = anchorRef.current;
-
-      if (!anchor) {
-        setIsPositioned(false);
-
-        if (retryCount < 8) {
-          retryCount += 1;
-          animationFrameId = window.requestAnimationFrame(updateMenuPosition);
-        }
-
-        return;
-      }
-
-      retryCount = 0;
-      const margin = 8;
-      const gap = 4;
-      const rect = anchor.getBoundingClientRect();
-      const menuWidth = Math.min(352, window.innerWidth - margin * 2);
-      const maxHeight = Math.min(440, window.innerHeight - margin * 2);
-      const preferredTop = rect.bottom + gap;
-      const top =
-        preferredTop + maxHeight <= window.innerHeight - margin
-          ? preferredTop
-          : Math.max(margin, rect.top - maxHeight - gap);
-      const left = Math.min(
-        Math.max(margin, rect.left),
-        window.innerWidth - menuWidth - margin,
-      );
-
-      setMenuStyle({
-        left,
-        maxHeight,
-        top,
-        width: menuWidth,
-      });
-      setIsPositioned(true);
-    };
-
-    const scheduleMenuPositionUpdate = () => {
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
-
-      animationFrameId = window.requestAnimationFrame(updateMenuPosition);
-    };
-
     const closeOnPointerDown = (event: PointerEvent) => {
       if (menuRef.current?.contains(event.target as Node)) {
         return;
@@ -1177,21 +1197,12 @@ function BlockCommandMenu({
 
     window.addEventListener("pointerdown", closeOnPointerDown);
     window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", scheduleMenuPositionUpdate);
-    window.addEventListener("scroll", scheduleMenuPositionUpdate, true);
-    scheduleMenuPositionUpdate();
 
     return () => {
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
-
       window.removeEventListener("pointerdown", closeOnPointerDown);
       window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", scheduleMenuPositionUpdate);
-      window.removeEventListener("scroll", scheduleMenuPositionUpdate, true);
     };
-  }, [anchorRef, onClose]);
+  }, [onClose]);
 
   if (typeof document === "undefined") {
     return null;
@@ -1204,9 +1215,6 @@ function BlockCommandMenu({
       role="menu"
       style={{
         ...menuStyle,
-        opacity: isPositioned ? 1 : 0,
-        pointerEvents: isPositioned ? undefined : "none",
-        position: "fixed",
         zIndex: 85,
       }}
       onMouseDown={(event) => event.preventDefault()}
@@ -1255,7 +1263,7 @@ function BlockCommandMenu({
             {tasks.length}
           </span>
         </div>
-        <div className="max-h-44 overflow-x-hidden overflow-y-auto pr-1">
+        <div className="max-h-[6.75rem] overflow-x-hidden overflow-y-auto pr-1">
           {tasks.length > 0 ? (
             <div className="grid min-w-0 gap-1">
               {tasks.map((task) => (
@@ -1473,44 +1481,15 @@ function TableCellActionMenu({
   onClose: () => void;
 }>) {
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({
-    left: 8,
+  const { style: menuStyle } = useViewportMenuPosition({
+    align: "end",
+    anchorRef,
     maxHeight: 240,
-    top: 8,
+    menuRef,
     width: 256,
   });
 
   useLayoutEffect(() => {
-    const updateMenuPosition = () => {
-      const anchor = anchorRef.current;
-
-      if (!anchor) {
-        return;
-      }
-
-      const margin = 8;
-      const gap = 4;
-      const menuWidth = Math.min(256, window.innerWidth - margin * 2);
-      const maxHeight = Math.min(240, window.innerHeight - margin * 2);
-      const rect = anchor.getBoundingClientRect();
-      const preferredTop = rect.bottom + gap;
-      const top =
-        preferredTop + maxHeight <= window.innerHeight - margin
-          ? preferredTop
-          : Math.max(margin, rect.top - maxHeight - gap);
-      const left = Math.min(
-        Math.max(margin, rect.right - menuWidth),
-        window.innerWidth - menuWidth - margin,
-      );
-
-      setMenuStyle({
-        left,
-        maxHeight,
-        top,
-        width: menuWidth,
-      });
-    };
-
     const closeOnPointerDown = (event: PointerEvent) => {
       if (menuRef.current?.contains(event.target as Node)) {
         return;
@@ -1527,17 +1506,12 @@ function TableCellActionMenu({
 
     window.addEventListener("pointerdown", closeOnPointerDown);
     window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", updateMenuPosition);
-    window.addEventListener("scroll", updateMenuPosition, true);
-    updateMenuPosition();
 
     return () => {
       window.removeEventListener("pointerdown", closeOnPointerDown);
       window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", updateMenuPosition);
-      window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [anchorRef, onClose]);
+  }, [onClose]);
 
   const runAction = (action: TableCellAction) => {
     onAction(action);
@@ -1555,7 +1529,6 @@ function TableCellActionMenu({
       role="menu"
       style={{
         ...menuStyle,
-        position: "fixed",
         zIndex: 80,
       }}
       onMouseDown={(event) => event.preventDefault()}
@@ -1716,8 +1689,36 @@ function InlineFormatBubble({
   );
 }
 
+function RootDropZone({
+  isDraggingNestedBlock,
+}: Readonly<{
+  isDraggingNestedBlock: boolean;
+}>) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: NOTES_ROOT_DROP_ZONE_ID,
+    data: { type: "notes-root-drop-zone" },
+  });
+
+  if (!isDraggingNestedBlock) {
+    return null;
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "mb-2 ml-[6.5rem] rounded-lg border border-dashed border-white/14 bg-control/20 px-3 py-2 text-xs font-medium text-text-muted transition",
+        isOver && "border-accent/70 bg-accent/12 text-text",
+      )}
+    >
+      Отпустите здесь, чтобы вынести блок на корневой уровень
+    </div>
+  );
+}
+
 type SortableNoteBlockProps = Readonly<{
   block: NoteBlock;
+  dropIntent: NoteDropIntent | null;
   isNested: boolean;
   isActionMenuOpen: boolean;
   isSlashMenuOpen: boolean;
@@ -1730,6 +1731,11 @@ type SortableNoteBlockProps = Readonly<{
   onDeleteBlock: (blockId: string) => void;
   onInput: (block: NoteBlock, element: HTMLElement) => void;
   onKeyDown: (event: KeyboardEvent<HTMLElement>, block: NoteBlock) => void;
+  onPasteMarkdown: (
+    block: NoteBlock,
+    text: string,
+    element: HTMLElement,
+  ) => boolean;
   onOpenActionMenu: (blockId: string) => void;
   onOpenTableCellMenu: (
     blockId: string,
@@ -1778,6 +1784,7 @@ type SortableNoteBlockProps = Readonly<{
 
 function SortableNoteBlock({
   block,
+  dropIntent,
   isNested,
   isActionMenuOpen,
   isSlashMenuOpen,
@@ -1790,6 +1797,7 @@ function SortableNoteBlock({
   onDeleteBlock,
   onInput,
   onKeyDown,
+  onPasteMarkdown,
   onOpenActionMenu,
   onOpenTableCellMenu,
   onCloseActionMenu,
@@ -1851,12 +1859,17 @@ function SortableNoteBlock({
           "group relative flex items-center gap-1 py-3",
           isNested && "ml-12 border-l border-white/10 pl-3",
           isDragging && "opacity-35",
+          dropIntent?.type === "nest" &&
+            "rounded-lg bg-accent/10 ring-1 ring-accent/45",
         )}
         onContextMenu={(event) => {
           event.preventDefault();
           onOpenActionMenu(block.id);
         }}
       >
+        {dropIntent?.type === "line" ? (
+          <span className="absolute -top-1 left-10 right-0 h-0.5 rounded-full bg-accent shadow-[0_0_12px_rgb(59_130_246/_70%)]" />
+        ) : null}
         <button
           aria-label="Добавить строку ниже"
           className="grid size-7 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
@@ -1912,12 +1925,17 @@ function SortableNoteBlock({
         "group relative flex items-start gap-1",
         isNested && "ml-12 border-l border-white/10 pl-3",
         isDragging && "opacity-35",
+        dropIntent?.type === "nest" &&
+          "rounded-lg bg-accent/10 ring-1 ring-accent/45",
       )}
       onContextMenu={(event) => {
         event.preventDefault();
         onOpenActionMenu(block.id);
       }}
     >
+      {dropIntent?.type === "line" ? (
+        <span className="absolute -top-1 left-10 right-0 h-0.5 rounded-full bg-accent shadow-[0_0_12px_rgb(59_130_246/_70%)]" />
+      ) : null}
       <button
         aria-label="Добавить строку ниже"
         className="mt-0.5 grid size-7 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/8 hover:text-text group-hover:opacity-80"
@@ -2096,6 +2114,9 @@ function SortableNoteBlock({
             onBlur={(element) => onBlur(block, element)}
             onInput={(element) => onInput(block, element)}
             onKeyDown={(event) => onKeyDown(event, block)}
+            onPasteMarkdown={(text, element) =>
+              onPasteMarkdown(block, text, element)
+            }
             onSelectionChange={(element) => onSelectionChange(block, element)}
           />
         )}
@@ -2146,6 +2167,10 @@ function NotesEditor({
   const [actionMenu, setActionMenu] = useState<BlockActionMenuState>(null);
   const [tableCellMenu, setTableCellMenu] = useState<TableCellMenuState>(null);
   const [inlineMenu, setInlineMenu] = useState<InlineFormatMenuState>(null);
+  const [activeDragBlockId, setActiveDragBlockId] = useState<string | null>(
+    null,
+  );
+  const [dropTarget, setDropTarget] = useState<NoteDropTarget>(null);
   const visibleCommands = filterBlockCommands(slashMenu?.query ?? "");
   const visibleBlocks = useMemo(() => getVisibleBlocks(blocks), [blocks]);
   const taskItems = useMemo(() => getBoardTaskItems(activeBoard), [activeBoard]);
@@ -2212,6 +2237,41 @@ function NotesEditor({
   const closeActionMenu = () => setActionMenu(null);
   const closeTableCellMenu = () => setTableCellMenu(null);
   const closeInlineMenu = () => setInlineMenu(null);
+
+  const getDropTarget = (
+    activeBlockId: string,
+    overId: string | null,
+  ): NoteDropTarget => {
+    if (!overId || activeBlockId === overId) {
+      return null;
+    }
+
+    const activeBlock = blocks.find((block) => block.id === activeBlockId);
+
+    if (!activeBlock) {
+      return null;
+    }
+
+    if (overId === NOTES_ROOT_DROP_ZONE_ID) {
+      return activeBlock.parentId ? { type: "root" } : null;
+    }
+
+    const overBlock = blocks.find((block) => block.id === overId);
+
+    if (!overBlock) {
+      return null;
+    }
+
+    if (isDescendantBlock(overBlock, activeBlock.id, blocks)) {
+      return null;
+    }
+
+    if (overBlock.type === "toggle" && activeBlock.parentId !== overBlock.id) {
+      return { blockId: overBlock.id, type: "nest" };
+    }
+
+    return { blockId: overBlock.id, type: "line" };
+  };
 
   const updateInlineMenu = (block: NoteBlock, element: HTMLElement) => {
     const selection = window.getSelection();
@@ -2721,6 +2781,79 @@ function NotesEditor({
     }
   };
 
+  const shouldParseMarkdownPaste = (text: string): boolean => {
+    const trimmed = text.trim();
+
+    if (!trimmed) {
+      return false;
+    }
+
+    return (
+      trimmed.includes("\n") ||
+      /^(#{1,4}\s|-\s|- \[[ xX]\]\s|\d+\.\s|>\s|```|---$|\|.+\|$)/.test(
+        trimmed,
+      )
+    );
+  };
+
+  const handleMarkdownPaste = (
+    block: NoteBlock,
+    text: string,
+    element: HTMLElement,
+  ): boolean => {
+    if (block.type === "code" || !shouldParseMarkdownPaste(text)) {
+      return false;
+    }
+
+    const pastedBlocks = parseMarkdownBlocks(text).map((pastedBlock) => ({
+      ...pastedBlock,
+      boardId: block.boardId,
+      parentId: pastedBlock.parentId ?? block.parentId,
+    }));
+
+    if (pastedBlocks.length === 0) {
+      return false;
+    }
+
+    const currentText = getTextFromEditable(element).trim();
+    const blockIndex = blocks.findIndex((current) => current.id === block.id);
+
+    if (blockIndex < 0) {
+      return false;
+    }
+
+    closeSlashMenu();
+    closeActionMenu();
+    closeTableCellMenu();
+    closeInlineMenu();
+
+    if (!currentText || currentText === "/") {
+      const [firstPastedBlock, ...restPastedBlocks] = pastedBlocks;
+
+      if (!firstPastedBlock) {
+        return false;
+      }
+
+      const nextBlocks = [...blocks];
+      nextBlocks[blockIndex] = {
+        ...firstPastedBlock,
+        id: block.id,
+        parentId: block.parentId,
+      };
+      nextBlocks.splice(blockIndex + 1, 0, ...restPastedBlocks);
+      clearEditableText(element);
+      focusBlock(restPastedBlocks.at(-1)?.id ?? block.id);
+      onChange(nextBlocks);
+      return true;
+    }
+
+    const nextBlocks = [...blocks];
+    nextBlocks.splice(blockIndex + 1, 0, ...pastedBlocks);
+    focusBlock(pastedBlocks.at(-1)?.id ?? block.id);
+    onChange(nextBlocks);
+    return true;
+  };
+
   const handleKeyDown = (
     event: KeyboardEvent<HTMLElement>,
     block: NoteBlock,
@@ -2834,11 +2967,32 @@ function NotesEditor({
     }
   };
 
+  const resetDragState = () => {
+    setActiveDragBlockId(null);
+    setDropTarget(null);
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragBlockId(String(event.active.id));
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const activeId = String(event.active.id);
+    const overId = event.over ? String(event.over.id) : null;
+    setDropTarget(getDropTarget(activeId, overId));
+  };
+
+  const handleDragCancel = () => {
+    resetDragState();
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : null;
+    const target = getDropTarget(activeId, overId);
+    resetDragState();
 
-    if (!overId || activeId === overId) {
+    if (!overId || activeId === overId || !target) {
       return;
     }
 
@@ -2853,10 +3007,42 @@ function NotesEditor({
     const newIndex = blocks.findIndex((block) => block.id === overId);
 
     if (!activeBlock || !overBlock || oldIndex < 0 || newIndex < 0) {
+      if (target.type === "root" && activeBlock && oldIndex >= 0) {
+        const withoutActive = blocks.filter((block) => block.id !== activeId);
+        const lastRootIndex = withoutActive.reduce(
+          (lastIndex, block, index) => (!block.parentId ? index : lastIndex),
+          -1,
+        );
+        const movedBlock = { ...activeBlock, parentId: undefined };
+        const nextBlocks = [...withoutActive];
+        nextBlocks.splice(lastRootIndex + 1, 0, movedBlock);
+        onChange(nextBlocks);
+      }
+
       return;
     }
 
-    if (overBlock.type === "toggle" && activeBlock.parentId !== overBlock.id) {
+    if (target.type === "root") {
+      const withoutActive = blocks.filter((block) => block.id !== activeId);
+      const lastRootIndex = withoutActive.reduce(
+        (lastIndex, block, index) => (!block.parentId ? index : lastIndex),
+        -1,
+      );
+      const movedBlock = {
+        ...activeBlock,
+        parentId: undefined,
+      };
+      const nextBlocks = [...withoutActive];
+      nextBlocks.splice(lastRootIndex + 1, 0, movedBlock);
+      onChange(nextBlocks);
+      return;
+    }
+
+    if (
+      target.type === "nest" &&
+      overBlock.type === "toggle" &&
+      activeBlock.parentId !== overBlock.id
+    ) {
       if (overBlock.parentId === activeBlock.id) {
         return;
       }
@@ -2903,19 +3089,35 @@ function NotesEditor({
     onChange(arrayMove([...blocks], oldIndex, newIndex));
   };
   const lastBlock = visibleBlocks[visibleBlocks.length - 1];
+  const activeDragBlock = activeDragBlockId
+    ? blocks.find((block) => block.id === activeDragBlockId)
+    : undefined;
+  const isDraggingNestedBlock = Boolean(activeDragBlock?.parentId);
 
   return (
     <div className="mx-auto min-h-full w-full max-w-3xl px-4 py-8 sm:px-8">
-      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragCancel={handleDragCancel}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragStart={handleDragStart}
+      >
         <SortableContext
           items={visibleBlocks.map((block) => block.id)}
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-1">
+            <RootDropZone isDraggingNestedBlock={isDraggingNestedBlock} />
             {visibleBlocks.map((block) => (
               <SortableNoteBlock
                 key={block.id}
                 block={block}
+                dropIntent={
+                  dropTarget?.type !== "root" && dropTarget?.blockId === block.id
+                    ? dropTarget
+                    : null
+                }
                 isNested={Boolean(block.parentId)}
                 isActionMenuOpen={actionMenu?.blockId === block.id}
                 isSlashMenuOpen={slashMenu?.blockId === block.id}
@@ -2936,6 +3138,7 @@ function NotesEditor({
                 onInput={handleInput}
                 onInsertAfter={insertBlockAfter}
                 onKeyDown={handleKeyDown}
+                onPasteMarkdown={handleMarkdownPaste}
                 onOpenActionMenu={(blockId) => {
                   closeSlashMenu();
                   closeTableCellMenu();
@@ -3018,6 +3221,38 @@ function NotesEditor({
   );
 }
 
+type NoteSnapshot = Readonly<Pick<Note, "blocks" | "title">>;
+
+type NoteHistoryState = Readonly<{
+  future: NoteSnapshot[];
+  noteId: string | null;
+  past: NoteSnapshot[];
+}>;
+
+function cloneNoteBlocks(blocks: readonly NoteBlock[]): NoteBlock[] {
+  return blocks.map((block) => ({
+    ...block,
+    tableCells: block.tableCells?.map((row) => [...row]),
+  }));
+}
+
+function createNoteSnapshot(note: Note): NoteSnapshot {
+  return {
+    blocks: cloneNoteBlocks(note.blocks),
+    title: note.title,
+  };
+}
+
+function areNoteSnapshotsEqual(
+  first: NoteSnapshot,
+  second: NoteSnapshot,
+): boolean {
+  return (
+    first.title === second.title &&
+    JSON.stringify(first.blocks) === JSON.stringify(second.blocks)
+  );
+}
+
 export function NotesPage() {
   const router = useRouter();
   const {
@@ -3037,6 +3272,22 @@ export function NotesPage() {
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const [isNotesDataOpen, setIsNotesDataOpen] = useState(false);
   const [isNotesReady, setIsNotesReady] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [noteSearchQuery, setNoteSearchQuery] = useState("");
+  const noteHistoryRef = useRef<NoteHistoryState>({
+    future: [],
+    noteId: null,
+    past: [],
+  });
+  const [historyCapabilities, setHistoryCapabilities] = useState({
+    canRedo: false,
+    canUndo: false,
+    noteId: null as string | null,
+  });
+  const openCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(true);
+  }, []);
+  useCommandPaletteShortcut(openCommandPalette);
   const activeBoardId = activeBoard?.id ?? null;
   const boardNotes = useMemo(
     () =>
@@ -3049,9 +3300,135 @@ export function NotesPage() {
     () => boardNotes.find((note) => note.id === activeNoteId) ?? boardNotes[0],
     [activeNoteId, boardNotes],
   );
+  const filteredBoardNotes = useMemo(() => {
+    const query = noteSearchQuery.trim().toLocaleLowerCase("ru-RU");
+
+    if (!query) {
+      return boardNotes;
+    }
+
+    return boardNotes.filter((note) => getNoteSearchText(note).includes(query));
+  }, [boardNotes, noteSearchQuery]);
   const deleteNote = deleteNoteId
     ? notes.find((note) => note.id === deleteNoteId)
     : undefined;
+  const bumpHistoryVersion = useCallback(() => {
+    const history = noteHistoryRef.current;
+
+    setHistoryCapabilities({
+      canRedo: history.future.length > 0,
+      canUndo: history.past.length > 0,
+      noteId: history.noteId,
+    });
+  }, []);
+  const applyNoteSnapshot = useCallback((noteId: string, snapshot: NoteSnapshot) => {
+    setNotes((currentNotes) =>
+      currentNotes.map((note) =>
+        note.id === noteId
+          ? {
+              ...note,
+              blocks: cloneNoteBlocks(snapshot.blocks),
+              title: snapshot.title,
+              updatedAt: Date.now(),
+            }
+          : note,
+      ),
+    );
+  }, []);
+  const recordActiveNoteHistory = useCallback(() => {
+    if (!activeNote) {
+      return;
+    }
+
+    const snapshot = createNoteSnapshot(activeNote);
+    const history = noteHistoryRef.current;
+    const past = history.noteId === activeNote.id ? history.past : [];
+    const lastSnapshot = past.at(-1);
+
+    if (lastSnapshot && areNoteSnapshotsEqual(lastSnapshot, snapshot)) {
+      return;
+    }
+
+    noteHistoryRef.current = {
+      future: [],
+      noteId: activeNote.id,
+      past: [...past, snapshot].slice(-50),
+    };
+    bumpHistoryVersion();
+  }, [activeNote, bumpHistoryVersion]);
+  const undoActiveNote = useCallback(() => {
+    if (!activeNote) {
+      return;
+    }
+
+    const history = noteHistoryRef.current;
+    const previousSnapshot = history.past.at(-1);
+
+    if (history.noteId !== activeNote.id || !previousSnapshot) {
+      return;
+    }
+
+    noteHistoryRef.current = {
+      future: [createNoteSnapshot(activeNote), ...history.future].slice(0, 50),
+      noteId: activeNote.id,
+      past: history.past.slice(0, -1),
+    };
+    applyNoteSnapshot(activeNote.id, previousSnapshot);
+    bumpHistoryVersion();
+  }, [activeNote, applyNoteSnapshot, bumpHistoryVersion]);
+  const redoActiveNote = useCallback(() => {
+    if (!activeNote) {
+      return;
+    }
+
+    const history = noteHistoryRef.current;
+    const nextSnapshot = history.future[0];
+
+    if (history.noteId !== activeNote.id || !nextSnapshot) {
+      return;
+    }
+
+    noteHistoryRef.current = {
+      future: history.future.slice(1),
+      noteId: activeNote.id,
+      past: [...history.past, createNoteSnapshot(activeNote)].slice(-50),
+    };
+    applyNoteSnapshot(activeNote.id, nextSnapshot);
+    bumpHistoryVersion();
+  }, [activeNote, applyNoteSnapshot, bumpHistoryVersion]);
+
+  useEffect(() => {
+    const handleHistoryShortcut = (event: globalThis.KeyboardEvent) => {
+      if (deleteNoteId || isCommandPaletteOpen || isNotesDataOpen) {
+        return;
+      }
+
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (event.shiftKey) {
+        redoActiveNote();
+        return;
+      }
+
+      undoActiveNote();
+    };
+
+    window.addEventListener("keydown", handleHistoryShortcut);
+
+    return () => {
+      window.removeEventListener("keydown", handleHistoryShortcut);
+    };
+  }, [
+    deleteNoteId,
+    isCommandPaletteOpen,
+    isNotesDataOpen,
+    redoActiveNote,
+    undoActiveNote,
+  ]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -3153,6 +3530,7 @@ export function NotesPage() {
   };
 
   const patchActiveNote = (patch: Partial<Pick<Note, "blocks" | "title">>) => {
+    recordActiveNoteHistory();
     setNotes((currentNotes) =>
       currentNotes.map((note) =>
         note.id === activeNote.id
@@ -3167,11 +3545,41 @@ export function NotesPage() {
     setNotes((currentNotes) => [note, ...currentNotes]);
     setActiveNoteId(note.id);
   };
+  const commandActions = [
+    ...getWorkspaceNavigationActions({
+      onOpenAnalytics: () => router.push(ANALYTICS_ROUTE),
+      onOpenBoard: () => openBoard(activeBoard.id),
+      onOpenCalendar: () => router.push(CALENDAR_ROUTE),
+      onOpenMyWork: () => router.push(MY_WORK_ROUTE),
+      onOpenNotes: () => router.push(NOTES_ROUTE),
+    }),
+    {
+      id: "notes-new-note",
+      label: "Новая заметка",
+      description: "Создать заметку в активной доске",
+      shortcut: "N",
+      icon: <Plus aria-hidden="true" size={18} />,
+      onSelect: addNote,
+    },
+    ...boardNotes.map((note) => ({
+      id: `note-${note.id}`,
+      label: note.title || "Без названия",
+      description: `Заметка · ${new Date(note.updatedAt).toLocaleDateString("ru-RU")}`,
+      icon: <FileText aria-hidden="true" size={18} />,
+      onSelect: () => setActiveNoteId(note.id),
+    })),
+  ];
+  const canUndoNote =
+    historyCapabilities.noteId === activeNote.id && historyCapabilities.canUndo;
+  const canRedoNote =
+    historyCapabilities.noteId === activeNote.id && historyCapabilities.canRedo;
 
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
       <WorkspaceHeader
         activeView="notes"
+        canRedo={canRedoNote}
+        canUndo={canUndoNote}
         dataToolsGroupLabel="Заметки"
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
@@ -3179,10 +3587,13 @@ export function NotesPage() {
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
+        onOpenCommands={openCommandPalette}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         onOpenWorkspaceData={() => setIsNotesDataOpen(true)}
+        onRedo={redoActiveNote}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
+        onUndo={undoActiveNote}
         workspaceDataLabel="Backup заметок"
       >
         <div className="flex flex-col items-center px-2 py-2 sm:px-3">
@@ -3244,34 +3655,57 @@ export function NotesPage() {
                 </Button>
               </div>
 
+              <label className="relative mt-3 block">
+                <span className="sr-only">Поиск заметок</span>
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+                  size={15}
+                />
+                <TextField
+                  className="h-10 rounded-lg pl-9"
+                  placeholder="Поиск заметок"
+                  value={noteSearchQuery}
+                  onChange={(event) =>
+                    setNoteSearchQuery(event.currentTarget.value)
+                  }
+                />
+              </label>
+
               <div className="mt-3 max-h-[15rem] space-y-1 overflow-y-auto lg:max-h-[calc(100dvh-12rem)]">
-                {boardNotes.map((note) => (
-                  <button
-                    key={note.id}
-                    className={cn(
-                      "flex min-h-14 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition",
-                      activeNote.id === note.id
-                        ? "bg-accent text-accent-foreground"
-                        : "text-text-muted hover:bg-control hover:text-text",
-                    )}
-                    type="button"
-                    onClick={() => setActiveNoteId(note.id)}
-                  >
-                    <FileText
-                      aria-hidden="true"
-                      className="shrink-0"
-                      size={17}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
-                        {note.title || "Без названия"}
+                {filteredBoardNotes.length > 0 ? (
+                  filteredBoardNotes.map((note) => (
+                    <button
+                      key={note.id}
+                      className={cn(
+                        "flex min-h-14 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition",
+                        activeNote.id === note.id
+                          ? "bg-accent text-accent-foreground"
+                          : "text-text-muted hover:bg-control hover:text-text",
+                      )}
+                      type="button"
+                      onClick={() => setActiveNoteId(note.id)}
+                    >
+                      <FileText
+                        aria-hidden="true"
+                        className="shrink-0"
+                        size={17}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {note.title || "Без названия"}
+                        </span>
+                        <span className="block truncate text-xs opacity-75">
+                          {new Date(note.updatedAt).toLocaleDateString("ru-RU")}
+                        </span>
                       </span>
-                      <span className="block truncate text-xs opacity-75">
-                        {new Date(note.updatedAt).toLocaleDateString("ru-RU")}
-                      </span>
-                    </span>
-                  </button>
-                ))}
+                    </button>
+                  ))
+                ) : (
+                  <p className="rounded-lg border border-dashed border-white/12 px-3 py-5 text-center text-sm text-text-muted">
+                    Ничего не найдено.
+                  </p>
+                )}
               </div>
             </aside>
 
@@ -3367,6 +3801,11 @@ export function NotesPage() {
           ]);
           setActiveNoteId(scopedNotes[0]?.id ?? null);
         }}
+      />
+      <CommandPalette
+        actions={commandActions}
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
       />
     </main>
   );
