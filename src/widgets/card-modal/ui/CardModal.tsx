@@ -32,6 +32,7 @@ type CardModalProps = Readonly<{
   checklists: readonly BoardChecklist[];
   checklistItems: Readonly<Record<string, BoardChecklistItem>>;
   comments: readonly BoardComment[];
+  linkedNotes: readonly LinkedNoteSummary[];
   lists: readonly BoardList[];
   listTitle: string;
   onAddAttachment: (attachment: BoardAttachment) => void;
@@ -48,11 +49,18 @@ type CardModalProps = Readonly<{
   onDuplicate: (cardId: string) => void;
   onMove: (cardId: string, destinationListId: string) => void;
   onMoveChecklistItem: (itemId: string, destinationIndex: number) => void;
+  onOpenLinkedNote: (noteId: string) => void;
   onRenameChecklist: (checklistId: string, title: string) => void;
   onRenameChecklistItem: (itemId: string, title: string) => void;
   onSave: (cardId: string, draft: CardDraft) => void;
   onToggleChecklistItem: (itemId: string) => void;
   onUpdateComment: (commentId: string, message: string) => void;
+}>;
+
+type LinkedNoteSummary = Readonly<{
+  id: string;
+  title: string;
+  updatedAt: number;
 }>;
 
 function createDraft(card: BoardCard): CardDraft {
@@ -76,6 +84,7 @@ export function CardModal({
   checklists,
   checklistItems,
   comments,
+  linkedNotes,
   lists,
   listTitle,
   onAddAttachment,
@@ -92,6 +101,7 @@ export function CardModal({
   onDuplicate,
   onMove,
   onMoveChecklistItem,
+  onOpenLinkedNote,
   onRenameChecklist,
   onRenameChecklistItem,
   onSave,
@@ -243,6 +253,42 @@ export function CardModal({
             onChangeCover={(cover) => setDraft((current) => ({ ...current, cover }))}
             onDeleteAttachment={onDeleteAttachment}
           />
+
+          {linkedNotes.length > 0 ? (
+            <Panel>
+              <h3 className="text-sm font-semibold text-text">
+                Связанные заметки
+              </h3>
+              <div className="mt-3 grid gap-2">
+                {linkedNotes.map((note) => (
+                  <button
+                    key={note.id}
+                    className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-control/35 px-3 py-2 text-left transition hover:border-accent/50 hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    type="button"
+                    onClick={() => {
+                      if (saveDraft()) {
+                        onOpenLinkedNote(note.id);
+                      }
+                    }}
+                  >
+                    <FileText
+                      aria-hidden="true"
+                      className="shrink-0 text-accent"
+                      size={17}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-text">
+                        {note.title}
+                      </span>
+                      <span className="block truncate text-xs text-text-muted">
+                        Обновлена {new Date(note.updatedAt).toLocaleDateString("ru-RU")}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </Panel>
+          ) : null}
 
           <CardCommentsEditor
             comments={comments}

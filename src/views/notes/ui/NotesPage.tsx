@@ -62,7 +62,12 @@ import {
 import { createPortal } from "react-dom";
 
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
-import type { Board, BoardCard } from "@/entities/board";
+import type { Board, BoardCard, BoardList } from "@/entities/board";
+import {
+  addCard,
+  getActiveBoardListIds,
+  isListAtWipLimit,
+} from "@/features/board-management";
 import {
   createNote,
   loadNotes,
@@ -215,6 +220,55 @@ function getBoardTaskItems(board: Board): NoteTaskItem[] {
   });
 }
 
+function getActiveTaskCreateTargets(board: Board): NoteTaskCreateTarget[] {
+  return getActiveBoardListIds(board).flatMap((listId) => {
+    const list = board.lists[listId];
+
+    if (!list) {
+      return [];
+    }
+
+    const isDisabled = isListAtWipLimit(list);
+
+    return [
+      {
+        disabledReason: isDisabled ? "Достигнут WIP-лимит" : undefined,
+        isDisabled,
+        listId: list.id,
+        listTitle: list.title,
+      },
+    ];
+  });
+}
+
+function isTaskCreateQuery(query: string): boolean {
+  const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
+
+  return /^(task|tasks|card|задач|карточ)/.test(normalizedQuery);
+}
+
+function getTaskTitleFromSlashText(text: string): string {
+  const query = text.startsWith("/") ? text.slice(1) : text;
+  const title = query
+    .replace(/^(task|tasks|card|задача|задачу|задачи|карточка|карточку)\s*/i, "")
+    .trim();
+
+  return title || "Новая задача";
+}
+
+function getCreatedCardFromListDiff(
+  previousList: BoardList,
+  nextList: BoardList,
+  cards: Readonly<Record<string, BoardCard>>,
+): BoardCard | null {
+  const previousCardIds = new Set(previousList.cardIds);
+  const createdCardId = nextList.cardIds.find(
+    (cardId) => !previousCardIds.has(cardId),
+  );
+
+  return createdCardId ? (cards[createdCardId] ?? null) : null;
+}
+
 function filterTaskItems(
   items: readonly NoteTaskItem[],
   query: string,
@@ -288,6 +342,13 @@ type NoteTaskItem = Readonly<{
   boardId: string;
   boardTitle: string;
   card: BoardCard;
+  listTitle: string;
+}>;
+
+type NoteTaskCreateTarget = Readonly<{
+  disabledReason?: string;
+  isDisabled: boolean;
+  listId: string;
   listTitle: string;
 }>;
 
@@ -879,6 +940,7 @@ type NotesEditorProps = Readonly<{
   activeBoard: Board;
   blocks: readonly NoteBlock[];
   onChange: (blocks: NoteBlock[]) => void;
+  onCreateTask: (listId: string, title: string) => NoteTaskItem | null;
   onOpenCard: (cardId: string) => void;
 }>;
 
@@ -1160,15 +1222,21 @@ function useViewportMenuStyle(
 function BlockCommandMenu({
   anchorRef,
   commands,
+  showTaskCreateSection,
+  taskCreateTargets,
   tasks,
   onClose,
+  onCreateTask,
   onSelect,
   onSelectTask,
 }: Readonly<{
   anchorRef: RefObject<HTMLDivElement | null>;
   commands: readonly BlockCommand[];
+  showTaskCreateSection: boolean;
+  taskCreateTargets: readonly NoteTaskCreateTarget[];
   tasks: readonly NoteTaskItem[];
   onClose: () => void;
+  onCreateTask: (target: NoteTaskCreateTarget) => void;
   onSelect: (command: BlockCommand) => void;
   onSelectTask: (task: NoteTaskItem) => void;
 }>) {
@@ -1256,6 +1324,62 @@ function BlockCommandMenu({
           </p>
         )}
       </div>
+      {showTaskCreateSection ? (
+        <div className="shrink-0 border-t border-white/10 p-1.5">
+          <div className="flex items-center justify-between gap-3 px-2 py-1.5">
+            <p className="text-xs font-semibold text-white/45">
+              Создать задачу
+            </p>
+            <span className="rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white/38">
+              {taskCreateTargets.length}
+            </span>
+          </div>
+          <div className="max-h-[6.75rem] overflow-x-hidden overflow-y-auto pr-1">
+            {taskCreateTargets.length > 0 ? (
+              <div className="grid min-w-0 gap-1">
+                {taskCreateTargets.map((target) => (
+                  <button
+                    key={target.listId}
+                    className={cn(
+                      "flex min-h-11 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-white/8 bg-white/4 px-2.5 py-2 text-left text-sm transition focus:border-accent/60 focus:outline-none",
+                      target.isDisabled
+                        ? "cursor-not-allowed opacity-45"
+                        : "hover:border-accent/45 hover:bg-white/10",
+                    )}
+                    disabled={target.isDisabled}
+                    role="menuitem"
+                    title={
+                      target.disabledReason
+                        ? `${target.listTitle}: ${target.disabledReason}`
+                        : `Создать задачу в «${target.listTitle}»`
+                    }
+                    type="button"
+                    onClick={() => onCreateTask(target)}
+                  >
+                    <Plus
+                      aria-hidden="true"
+                      className="shrink-0 text-accent"
+                      size={16}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block max-w-full truncate font-semibold text-white/90">
+                        {target.listTitle}
+                      </span>
+                      <span className="block max-w-full truncate text-xs text-white/42">
+                        {target.disabledReason ?? "Из текущей строки"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="px-2.5 py-4 text-center text-sm text-white/45">
+                Нет доступных списков
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
       <div className="shrink-0 border-t border-white/10 p-1.5">
         <div className="flex items-center justify-between gap-3 px-2 py-1.5">
           <p className="text-xs font-semibold text-white/45">Задачи доски</p>
@@ -1725,6 +1849,8 @@ type SortableNoteBlockProps = Readonly<{
   openTableCellMenu: TableCellMenuState;
   menuCommands: readonly BlockCommand[];
   numberedListNumber: number | undefined;
+  showTaskCreateSection: boolean;
+  taskCreateTargets: readonly NoteTaskCreateTarget[];
   taskItems: readonly NoteTaskItem[];
   onBlur: (block: NoteBlock, element: HTMLElement) => void;
   onCloseTableCellMenu: () => void;
@@ -1757,6 +1883,7 @@ type SortableNoteBlockProps = Readonly<{
     blockId: string,
     patch: Pick<NoteBlock, "backgroundColor" | "textColor">,
   ) => void;
+  onCreateTask: (block: NoteBlock, target: NoteTaskCreateTarget) => void;
   onSelectCommand: (block: NoteBlock, command: BlockCommand) => void;
   onSelectTask: (block: NoteBlock, task: NoteTaskItem) => void;
   onOpenLinkedCard: (block: NoteBlock) => void;
@@ -1791,6 +1918,8 @@ function SortableNoteBlock({
   openTableCellMenu,
   menuCommands,
   numberedListNumber,
+  showTaskCreateSection,
+  taskCreateTargets,
   taskItems,
   onBlur,
   onCloseTableCellMenu,
@@ -1807,6 +1936,7 @@ function SortableNoteBlock({
   onRegisterTableCell,
   onSelectionChange,
   onSetBlockColor,
+  onCreateTask,
   onSelectCommand,
   onSelectTask,
   onOpenLinkedCard,
@@ -2126,8 +2256,11 @@ function SortableNoteBlock({
         <BlockCommandMenu
           anchorRef={blockElementRef}
           commands={menuCommands}
+          showTaskCreateSection={showTaskCreateSection}
+          taskCreateTargets={taskCreateTargets}
           tasks={filterTaskItems(taskItems, block.text.startsWith("/") ? block.text.slice(1) : "")}
           onClose={onCloseSlashMenu}
+          onCreateTask={(target) => onCreateTask(block, target)}
           onSelect={(command) => onSelectCommand(block, command)}
           onSelectTask={(task) => onSelectTask(block, task)}
         />
@@ -2153,6 +2286,7 @@ function NotesEditor({
   activeBoard,
   blocks,
   onChange,
+  onCreateTask,
   onOpenCard,
 }: NotesEditorProps) {
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -2172,6 +2306,9 @@ function NotesEditor({
   );
   const [dropTarget, setDropTarget] = useState<NoteDropTarget>(null);
   const visibleCommands = filterBlockCommands(slashMenu?.query ?? "");
+  const visibleTaskCreateTargets = isTaskCreateQuery(slashMenu?.query ?? "")
+    ? getActiveTaskCreateTargets(activeBoard)
+    : [];
   const visibleBlocks = useMemo(() => getVisibleBlocks(blocks), [blocks]);
   const taskItems = useMemo(() => getBoardTaskItems(activeBoard), [activeBoard]);
   const numberedListNumbers = useMemo(
@@ -2664,6 +2801,26 @@ function NotesEditor({
     closeInlineMenu();
   };
 
+  const applyTaskCreate = (
+    block: NoteBlock,
+    target: NoteTaskCreateTarget,
+  ) => {
+    if (target.isDisabled) {
+      return;
+    }
+
+    const element = blockRefs.current.get(block.id);
+    const currentText = element ? getTextFromEditable(element) : block.text;
+    const taskTitle = getTaskTitleFromSlashText(currentText);
+    const task = onCreateTask(target.listId, taskTitle);
+
+    if (!task) {
+      return;
+    }
+
+    applyTaskLink(block, task);
+  };
+
   const handleShortcut = (
     block: NoteBlock,
     text: string,
@@ -2884,6 +3041,16 @@ function NotesEditor({
     }
 
     if (event.key === "Enter" && isCurrentMenuOpen) {
+      const taskCreateTarget = visibleTaskCreateTargets.find(
+        (target) => !target.isDisabled,
+      );
+
+      if (taskCreateTarget) {
+        event.preventDefault();
+        applyTaskCreate(block, taskCreateTarget);
+        return;
+      }
+
       const command = visibleCommands[0];
 
       if (command) {
@@ -3124,6 +3291,8 @@ function NotesEditor({
                 openTableCellMenu={tableCellMenu}
                 menuCommands={visibleCommands}
                 numberedListNumber={numberedListNumbers.get(block.id)}
+                showTaskCreateSection={isTaskCreateQuery(slashMenu?.query ?? "")}
+                taskCreateTargets={visibleTaskCreateTargets}
                 taskItems={taskItems}
                 onBlur={(currentBlock, element) =>
                   updateBlock(currentBlock.id, {
@@ -3170,6 +3339,7 @@ function NotesEditor({
                 onSetBlockColor={(blockId, patch) =>
                   updateBlock(blockId, patch)
                 }
+                onCreateTask={applyTaskCreate}
                 onSelectionChange={(currentBlock, element) => {
                   if (currentBlock.type === "code") {
                     closeInlineMenu();
@@ -3265,6 +3435,7 @@ export function NotesPage() {
     createProject,
     deleteProject,
     selectProject,
+    updateActiveBoard,
   } = useBoardWorkspace();
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -3433,8 +3604,11 @@ export function NotesPage() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const loadedNotes = loadNotes();
+      const requestedNoteId = new URLSearchParams(window.location.search).get(
+        "note",
+      );
       setNotes(loadedNotes);
-      setActiveNoteId(loadedNotes[0]?.id ?? null);
+      setActiveNoteId(requestedNoteId ?? loadedNotes[0]?.id ?? null);
       setIsNotesReady(true);
     }, 0);
 
@@ -3544,6 +3718,47 @@ export function NotesPage() {
     const note = createNote(activeBoard.id);
     setNotes((currentNotes) => [note, ...currentNotes]);
     setActiveNoteId(note.id);
+  };
+
+  const createTaskFromNote = (
+    listId: string,
+    title: string,
+  ): NoteTaskItem | null => {
+    let createdTask: NoteTaskItem | null = null;
+
+    updateActiveBoard((board) => {
+      const previousList = board.lists[listId];
+
+      if (!previousList || previousList.isArchived) {
+        return board;
+      }
+
+      const nextBoard = addCard(board, listId, title);
+      const nextList = nextBoard.lists[listId];
+
+      if (nextBoard === board || !nextList) {
+        return board;
+      }
+
+      const card = getCreatedCardFromListDiff(
+        previousList,
+        nextList,
+        nextBoard.cards,
+      );
+
+      if (card) {
+        createdTask = {
+          boardId: nextBoard.id,
+          boardTitle: nextBoard.title,
+          card,
+          listTitle: nextList.title,
+        };
+      }
+
+      return nextBoard;
+    }, "immediate");
+
+    return createdTask;
   };
   const commandActions = [
     ...getWorkspaceNavigationActions({
@@ -3740,6 +3955,7 @@ export function NotesPage() {
                 activeBoard={activeBoard}
                 blocks={activeNote.blocks}
                 onChange={(blocks) => patchActiveNote({ blocks })}
+                onCreateTask={createTaskFromNote}
                 onOpenCard={(cardId) => {
                   selectProject(activeBoard.id);
                   router.push(getBoardRoute(activeBoard.id, cardId));

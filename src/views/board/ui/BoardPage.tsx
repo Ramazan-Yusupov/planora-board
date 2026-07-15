@@ -60,7 +60,11 @@ import {
   type CardFilters,
 } from "@/features/filter-cards";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
-import { replaceStoredNotes } from "@/features/manage-notes";
+import {
+  loadNotes,
+  replaceStoredNotes,
+  type Note,
+} from "@/features/manage-notes";
 import {
   addAttachmentToCard,
   removeAttachmentFromCard,
@@ -141,6 +145,12 @@ type ToastDraft = Readonly<{
   tone?: ToastTone;
 }>;
 
+type LinkedNoteSummary = Readonly<{
+  id: string;
+  title: string;
+  updatedAt: number;
+}>;
+
 function ActiveFilterChip({ label, onClear }: ActiveFilterChipProps) {
   return (
     <span className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-white/15 bg-slate-950/30 px-2.5 text-xs font-medium text-white/85 backdrop-blur-sm">
@@ -169,6 +179,29 @@ function isMobileViewport(): boolean {
     typeof window !== "undefined" &&
     window.matchMedia("(max-width: 1023px)").matches
   );
+}
+
+function getLinkedNotesForCard(
+  notes: readonly Note[],
+  boardId: string,
+  cardId: string,
+): LinkedNoteSummary[] {
+  return notes
+    .filter(
+      (note) =>
+        note.boardId === boardId &&
+        note.blocks.some(
+          (block) =>
+            block.type === "linked-card" &&
+            block.linkedCardId === cardId &&
+            (!block.linkedBoardId || block.linkedBoardId === boardId),
+        ),
+    )
+    .map((note) => ({
+      id: note.id,
+      title: note.title || "Без названия",
+      updatedAt: note.updatedAt,
+    }));
 }
 
 export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
@@ -211,6 +244,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const [cardFilters, setCardFilters] = useState<CardFilters>({
     ...DEFAULT_CARD_FILTERS,
   });
+  const [notesSnapshot, setNotesSnapshot] = useState<Note[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const toastIdRef = useRef(0);
@@ -275,6 +309,14 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     };
   }, []);
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setNotesSnapshot(loadNotes());
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
   useBoardKeyboardShortcuts({
     searchInputRef,
     onOpenCommandPalette: () => setIsCommandPaletteOpen(true),
@@ -315,6 +357,9 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         const comment = activeBoard.comments[commentId];
         return comment ? [comment] : [];
       })
+    : [];
+  const selectedCardLinkedNotes = selectedCard
+    ? getLinkedNotesForCard(notesSnapshot, activeBoard.id, selectedCard.id)
     : [];
   const resolvedAppearance = resolveBoardAppearance(activeBoard.appearance);
   const boardLabels = getOrderedBoardLabels(activeBoard);
@@ -391,6 +436,13 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const openMyWork = () => {
     closePanels();
     router.push(MY_WORK_ROUTE);
+  };
+
+  const openLinkedNote = (noteId: string) => {
+    setIsInitialCardDismissed(true);
+    setSelectedCardId(null);
+    closePanels();
+    router.push(`${NOTES_ROUTE}?note=${encodeURIComponent(noteId)}`);
   };
 
   const openCard = (cardId: string) => {
@@ -1109,6 +1161,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           checklists={getCardChecklists(selectedCard, activeBoard.checklists)}
           checklistItems={activeBoard.checklistItems}
           comments={selectedCardComments}
+          linkedNotes={selectedCardLinkedNotes}
           lists={activeLists}
           listTitle={selectedListTitle}
           onAddAttachment={(attachment) =>
@@ -1189,6 +1242,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               "immediate",
             )
           }
+          onOpenLinkedNote={openLinkedNote}
           onDuplicate={(cardId) => {
             const duplicatedCardTitle =
               activeBoard.cards[cardId]?.title ?? "Карточка";
@@ -1299,6 +1353,9 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onDisconnectFolder={disconnectWorkspaceFolder}
         onImport={({ workspace: nextWorkspace, notes }) => {
           replaceStoredNotes(notes);
+          if (notes) {
+            setNotesSnapshot([...notes]);
+          }
           replaceWorkspace(nextWorkspace);
           const nextBoardId =
             nextWorkspace.activeBoardId ?? nextWorkspace.boards[0]?.id;
