@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
+  PenTool,
 } from "lucide-react";
 
 import type { CommandPaletteAction } from "../ui/CommandPalette";
@@ -14,6 +15,7 @@ type GetWorkspaceNavigationActionsOptions = Readonly<{
   onOpenAnalytics: () => void;
   onOpenBoard: () => void;
   onOpenCalendar: () => void;
+  onOpenDraw: () => void;
   onOpenMyWork: () => void;
   onOpenNotes: () => void;
 }>;
@@ -22,6 +24,7 @@ export function getWorkspaceNavigationActions({
   onOpenAnalytics,
   onOpenBoard,
   onOpenCalendar,
+  onOpenDraw,
   onOpenMyWork,
   onOpenNotes,
 }: GetWorkspaceNavigationActionsOptions): CommandPaletteAction[] {
@@ -46,6 +49,13 @@ export function getWorkspaceNavigationActions({
       description: "Открыть фокус по срокам и активным задачам",
       icon: <ClipboardList aria-hidden="true" size={18} />,
       onSelect: onOpenMyWork,
+    },
+    {
+      id: "workspace-draw",
+      label: "DrawTool",
+      description: "Открыть изолированную страницу для схем и canvas",
+      icon: <PenTool aria-hidden="true" size={18} />,
+      onSelect: onOpenDraw,
     },
     {
       id: "workspace-calendar",

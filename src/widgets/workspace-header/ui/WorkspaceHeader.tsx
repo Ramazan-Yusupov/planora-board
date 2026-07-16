@@ -17,6 +17,7 @@ import {
   Redo2,
   ShieldCheck,
   Settings2,
+  PenTool,
   Undo2,
   AlignCenter,
 } from "lucide-react";
@@ -38,6 +39,7 @@ export type WorkspaceView =
   | "board"
   | "calendar"
   | "analytics"
+  | "draw"
   | "my-work"
   | "notes";
 
@@ -61,6 +63,7 @@ type WorkspaceHeaderProps = Readonly<{
   onOpenBoard: () => void;
   onOpenAnalytics?: () => void;
   onOpenCalendar: () => void;
+  onOpenDraw?: () => void;
   onOpenMyWork?: () => void;
   onOpenNotes?: () => void;
   onOpenCommands?: () => void;
@@ -186,6 +189,7 @@ export function WorkspaceHeader({
   onOpenBoard,
   onOpenAnalytics,
   onOpenCalendar,
+  onOpenDraw,
   onOpenMyWork,
   onOpenNotes,
   onOpenCommands,
@@ -256,6 +260,16 @@ export function WorkspaceHeader({
         id: "notes",
         label: "Заметки",
         onSelect: onOpenNotes,
+      });
+    }
+
+    if (onOpenDraw) {
+      navigationActions.push({
+        active: activeView === "draw",
+        icon: <PenTool aria-hidden="true" size={18} />,
+        id: "draw",
+        label: "DrawTool",
+        onSelect: onOpenDraw,
       });
     }
 
@@ -397,6 +411,7 @@ export function WorkspaceHeader({
     onOpenAnalytics,
     onOpenBoard,
     onOpenCalendar,
+    onOpenDraw,
     onOpenCommands,
     onOpenHealthCheck,
     onOpenMyWork,
@@ -652,6 +667,24 @@ export function WorkspaceHeader({
                   onClick={onOpenMyWork}
                 >
                   <ClipboardList aria-hidden="true" size={18} />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+
+            {onOpenDraw ? (
+              <Tooltip label="DrawTool">
+                <IconButton
+                  aria-pressed={activeView === "draw"}
+                  className={cn(
+                    activeView === "draw"
+                      ? "bg-accent text-accent-foreground"
+                      : desktopIconClass,
+                  )}
+                  label="DrawTool"
+                  size="sm"
+                  onClick={onOpenDraw}
+                >
+                  <PenTool aria-hidden="true" size={18} />
                 </IconButton>
               </Tooltip>
             ) : null}

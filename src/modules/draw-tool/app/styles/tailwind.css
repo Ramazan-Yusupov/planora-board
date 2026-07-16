@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-canvas: var(--app-color-canvas);
+  --color-surface: var(--app-color-surface);
+  --color-panel: var(--app-color-panel);
+  --color-surface-muted: var(--app-color-surface-muted);
+  --color-control: var(--app-color-control);
+  --color-control-active: var(--app-color-control-active);
+
+  --color-text: var(--app-color-text);
+  --color-text-muted: var(--app-color-text-muted);
+
+  --color-border: var(--app-color-border);
+  --color-accent: var(--app-color-accent);
+
+  --shadow-panel: var(--app-shadow-panel);
+  --shadow-float: var(--app-shadow-float);
+}
+

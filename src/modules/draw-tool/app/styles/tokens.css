@@ -1,0 +1,29 @@
+:root {
+  color-scheme: dark;
+
+  --app-color-canvas: #0e1520;
+  --app-color-surface: #1b2532;
+  --app-color-panel: #17202c;
+  --app-color-surface-muted: #263347;
+  --app-color-control: #222e3f;
+  --app-color-control-active: #3d6da8;
+
+  --app-color-text: #f7f9fd;
+  --app-color-text-muted: #9caec7;
+
+  --app-color-border: #34445b;
+  --app-color-accent: #6ba9ff;
+
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --app-shadow-panel: 0 16px 40px rgb(0 0 0 / 30%);
+  --app-shadow-float: 0 26px 72px rgb(0 0 0 / 46%);
+
+  --z-canvas: 0;
+  --z-overlay: 10;
+  --z-panel: 20;
+  --z-modal: 30;
+}
+

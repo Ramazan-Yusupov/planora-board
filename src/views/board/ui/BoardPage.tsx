@@ -99,6 +99,7 @@ import {
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
+  DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
   getBoardRoute,
@@ -315,6 +316,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     getBoardRoute(activeBoard?.id ?? boardId),
     NOTES_ROUTE,
     CALENDAR_ROUTE,
+    DRAW_ROUTE,
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
   ]);
@@ -514,6 +516,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     router.push(NOTES_ROUTE);
   };
 
+  const openDraw = () => {
+    closePanels();
+    router.push(DRAW_ROUTE);
+  };
+
   const openMyWork = () => {
     closePanels();
     router.push(MY_WORK_ROUTE);
@@ -557,6 +564,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     onOpenAnalytics: openAnalytics,
     onOpenAppearance: () => setIsAppearanceOpen(true),
     onOpenCalendar: openCalendar,
+    onOpenDraw: openDraw,
     onOpenMyWork: openMyWork,
     onOpenNotes: openNotes,
     onOpenFilters: () => setIsFiltersOpen(true),
@@ -588,6 +596,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onOpenAnalytics={openAnalytics}
         onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
         onOpenCalendar={openCalendar}
+        onOpenDraw={openDraw}
         onOpenMyWork={openMyWork}
         onOpenNotes={openNotes}
         onOpenCommands={() => setIsCommandPaletteOpen(true)}

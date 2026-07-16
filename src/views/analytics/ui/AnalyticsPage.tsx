@@ -20,6 +20,7 @@ import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
+  DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
   getBoardRoute,
@@ -511,6 +512,7 @@ export function AnalyticsPage() {
     activeBoard ? getBoardRoute(activeBoard.id) : null,
     NOTES_ROUTE,
     CALENDAR_ROUTE,
+    DRAW_ROUTE,
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
   ]);
@@ -564,6 +566,7 @@ export function AnalyticsPage() {
       onOpenAnalytics: () => router.push(ANALYTICS_ROUTE),
       onOpenBoard: () => openBoard(activeBoard.id),
       onOpenCalendar: () => router.push(CALENDAR_ROUTE),
+      onOpenDraw: () => router.push(DRAW_ROUTE),
       onOpenMyWork: () => router.push(MY_WORK_ROUTE),
       onOpenNotes: () => router.push(NOTES_ROUTE),
     }),
@@ -581,6 +584,7 @@ export function AnalyticsPage() {
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
         onOpenCommands={openCommandPalette}
+        onOpenDraw={() => router.push(DRAW_ROUTE)}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
         showProjectsButton={false}

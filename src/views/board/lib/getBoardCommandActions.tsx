@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   ListPlus,
   Palette,
+  PenTool,
   Plus,
   ShieldCheck,
 } from "lucide-react";
@@ -26,6 +27,7 @@ type GetBoardCommandActionsOptions = Readonly<{
   onOpenAnalytics: () => void;
   onOpenAppearance: () => void;
   onOpenCalendar: () => void;
+  onOpenDraw: () => void;
   onOpenMyWork: () => void;
   onOpenNotes: () => void;
   onOpenFilters: () => void;
@@ -44,6 +46,7 @@ export function getBoardCommandActions({
   onOpenAnalytics,
   onOpenAppearance,
   onOpenCalendar,
+  onOpenDraw,
   onOpenMyWork,
   onOpenNotes,
   onOpenFilters,
@@ -137,6 +140,14 @@ export function getBoardCommandActions({
       group: "Навигация",
       icon: <FileText aria-hidden="true" size={18} />,
       onSelect: onOpenNotes,
+    },
+    {
+      id: "draw",
+      label: "DrawTool",
+      description: "Открыть canvas-инструмент в отдельной странице",
+      group: "Навигация",
+      icon: <PenTool aria-hidden="true" size={18} />,
+      onSelect: onOpenDraw,
     },
     {
       id: "filters",

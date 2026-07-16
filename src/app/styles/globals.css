@@ -4,7 +4,9 @@
   color-scheme: dark;
   --app-canvas: oklch(0.15 0.014 255);
   --app-panel: oklch(0.205 0.018 255);
+  --app-surface: oklch(0.23 0.022 255);
   --app-control: oklch(0.265 0.02 255);
+  --app-control-active: oklch(0.47 0.105 250);
   --app-control-hover: oklch(0.31 0.024 255);
   --app-surface-muted: oklch(0.24 0.018 255);
   --app-text: oklch(0.96 0.008 255);
@@ -23,7 +25,9 @@
 @theme inline {
   --color-canvas: var(--app-canvas);
   --color-panel: var(--app-panel);
+  --color-surface: var(--app-surface);
   --color-control: var(--app-control);
+  --color-control-active: var(--app-control-active);
   --color-control-hover: var(--app-control-hover);
   --color-surface-muted: var(--app-surface-muted);
   --color-text: var(--app-text);
@@ -71,6 +75,98 @@
 
 .animate-planora-surface-in {
   animation: planora-surface-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes drawtool-projects-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawtool-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.drawtool-root {
+  --app-color-canvas: #0e1520;
+  --app-color-surface: #1b2532;
+  --app-color-panel: #17202c;
+  --app-color-surface-muted: #263347;
+  --app-color-control: #222e3f;
+  --app-color-control-active: #3d6da8;
+  --app-color-text: #f7f9fd;
+  --app-color-text-muted: #9caec7;
+  --app-color-border: #34445b;
+  --app-color-accent: #6ba9ff;
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --z-canvas: 0;
+  --z-overlay: 10;
+  --z-panel: 20;
+  --z-modal: 30;
+  background:
+    radial-gradient(54rem 42rem at 18% -18%, rgb(83 143 255 / 8%), transparent 64%),
+    var(--app-color-canvas);
+  color: var(--app-color-text);
+  overscroll-behavior: none;
+}
+
+.drawtool-range {
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--app-color-control);
+}
+
+.drawtool-range::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  appearance: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--app-color-accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+}
+
+.drawtool-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--app-color-accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+}
+
+.drawtool-toolbar-scroll {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.drawtool-toolbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.drawtool-projects-sidebar {
+  animation: drawtool-projects-enter 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.drawtool-surface-in {
+  animation: drawtool-surface-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 @layer base {
