@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertTriangle, FileText, Plus } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -23,6 +22,7 @@ import {
 } from "@/shared/config/routes";
 import { usePrefetchRoutes } from "@/shared/lib";
 import { Button, ConfirmDialog, TextField } from "@/shared/ui";
+import { CommandPalette } from "@/widgets/command-palette";
 import { getWorkspaceNavigationActions } from "@/widgets/command-palette/lib/getWorkspaceNavigationActions";
 import { useCommandPaletteShortcut } from "@/widgets/command-palette/lib/useCommandPaletteShortcut";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
@@ -35,18 +35,10 @@ import {
 } from "../lib/notesEditorModel";
 import { useNoteHistory } from "../lib/useNoteHistory";
 import { NotesEditor } from "./NotesEditor";
+import { NotesDataModal } from "./NotesDataModal";
 import { NotesLoadingState } from "./NotesLoadingState";
 import { NotesSidebar } from "./NotesSidebar";
 import { NoteSwitcher } from "./NoteSwitcher";
-
-const CommandPalette = dynamic(() =>
-  import("@/widgets/command-palette/ui/CommandPalette").then(
-    (mod) => mod.CommandPalette,
-  ),
-);
-const NotesDataModal = dynamic(() =>
-  import("./NotesDataModal").then((mod) => mod.NotesDataModal),
-);
 
 export function NotesPage() {
   const router = useRouter();

@@ -11,6 +11,8 @@ import { sceneStore } from "@/modules/draw-tool/entities/scene";
 import type { serializeScene } from "@/modules/draw-tool/entities/scene";
 import { selectionStore } from "@/modules/draw-tool/entities/selection";
 import { viewportStore } from "@/modules/draw-tool/entities/viewport";
+import type { PlanoraTaskItem } from "@/modules/draw-tool/planora-adapter";
+import { createPlanoraTaskElement } from "@/modules/draw-tool/planora-adapter/model/taskCardElement";
 import {
   downloadFile,
   exportToJson,
@@ -327,6 +329,17 @@ export const boardActions = {
       width: 340,
       height: 240,
     });
+    historyStore.begin();
+    sceneStore.setElements([...sceneStore.get().elements, element]);
+    selectionStore.setElementIds([element.id]);
+    historyStore.commit();
+    return true;
+  },
+
+  insertPlanoraTaskCard(task: PlanoraTaskItem) {
+    const point = getInsertionPoint();
+    const element = createPlanoraTaskElement(task, point);
+
     historyStore.begin();
     sceneStore.setElements([...sceneStore.get().elements, element]);
     selectionStore.setElementIds([element.id]);

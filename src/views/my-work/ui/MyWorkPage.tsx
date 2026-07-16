@@ -17,7 +17,6 @@ import {
   FolderKanban,
   ListChecks,
 } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
@@ -41,16 +40,11 @@ import {
   getBoardRoute,
 } from "@/shared/config/routes";
 import { cn, usePrefetchRoutes } from "@/shared/lib";
+import { CommandPalette } from "@/widgets/command-palette";
 import { getWorkspaceNavigationActions } from "@/widgets/command-palette/lib/getWorkspaceNavigationActions";
 import { useCommandPaletteShortcut } from "@/widgets/command-palette/lib/useCommandPaletteShortcut";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
-
-const CommandPalette = dynamic(() =>
-  import("@/widgets/command-palette/ui/CommandPalette").then(
-    (mod) => mod.CommandPalette,
-  ),
-);
 
 type MyWorkItem = Readonly<{
   board: Board;

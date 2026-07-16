@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertTriangle, Search, X } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -112,55 +111,28 @@ import {
   type ToastMessage,
   type ToastTone,
 } from "@/shared/ui";
+import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
+import { BoardToolsSidebar } from "@/widgets/board-tools";
+import { CardArchiveModal } from "@/widgets/card-archive";
+import { CardFiltersSidebar } from "@/widgets/card-filters";
+import { CardModal } from "@/widgets/card-modal";
+import {
+  CommandPalette,
+  QuickCreateCardDialog,
+  QuickCreateListDialog,
+} from "@/widgets/command-palette";
 import { ListActionsDialog } from "@/widgets/list-actions";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
+import { WorkspaceCenterModal } from "@/widgets/workspace-center";
+import { WorkspaceDataModal } from "@/widgets/workspace-data";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
+import { WorkspaceHealthModal } from "@/widgets/workspace-health";
 
 import { getBoardCommandActions } from "../lib/getBoardCommandActions";
 import { useBoardKeyboardShortcuts } from "../lib/useBoardKeyboardShortcuts";
 import { useWorkspaceCenterActions } from "../lib/useWorkspaceCenterActions";
 import { BoardLoadingState } from "./BoardLoadingState";
-
-const BoardAppearanceSidebar = dynamic(() =>
-  import("@/widgets/board-appearance").then((mod) => mod.BoardAppearanceSidebar),
-);
-const BoardToolsSidebar = dynamic(() =>
-  import("@/widgets/board-tools").then((mod) => mod.BoardToolsSidebar),
-);
-const CardArchiveModal = dynamic(() =>
-  import("@/widgets/card-archive").then((mod) => mod.CardArchiveModal),
-);
-const CardFiltersSidebar = dynamic(() =>
-  import("@/widgets/card-filters").then((mod) => mod.CardFiltersSidebar),
-);
-const CardModal = dynamic(() =>
-  import("@/widgets/card-modal").then((mod) => mod.CardModal),
-);
-const CommandPalette = dynamic(() =>
-  import("@/widgets/command-palette/ui/CommandPalette").then(
-    (mod) => mod.CommandPalette,
-  ),
-);
-const QuickCreateCardDialog = dynamic(() =>
-  import("@/widgets/command-palette/ui/QuickCreateCardDialog").then(
-    (mod) => mod.QuickCreateCardDialog,
-  ),
-);
-const QuickCreateListDialog = dynamic(() =>
-  import("@/widgets/command-palette/ui/QuickCreateListDialog").then(
-    (mod) => mod.QuickCreateListDialog,
-  ),
-);
-const WorkspaceCenterModal = dynamic(() =>
-  import("@/widgets/workspace-center").then((mod) => mod.WorkspaceCenterModal),
-);
-const WorkspaceDataModal = dynamic(() =>
-  import("@/widgets/workspace-data").then((mod) => mod.WorkspaceDataModal),
-);
-const WorkspaceHealthModal = dynamic(() =>
-  import("@/widgets/workspace-health").then((mod) => mod.WorkspaceHealthModal),
-);
 
 type BoardPageProps = Readonly<{
   boardId: string;
@@ -234,7 +206,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const router = useRouter();
   const {
     workspace,
-    activeBoard,
+    activeBoard: workspaceActiveBoard,
     isReady,
     persistenceState,
     storageError,
@@ -277,6 +249,9 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const toastIdRef = useRef(0);
   const toastTimersRef = useRef<Map<string, number>>(new Map());
+  const routeBoard =
+    workspace?.boards.find((board) => board.id === boardId) ?? null;
+  const activeBoard = routeBoard ?? workspaceActiveBoard;
 
   const dismissToast = useCallback((toastId: string) => {
     const timerId = toastTimersRef.current.get(toastId);
@@ -335,10 +310,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       return;
     }
 
-    if (activeBoard.id !== boardId) {
+    if (workspaceActiveBoard?.id !== boardId) {
       selectProject(boardId);
     }
-  }, [activeBoard, boardId, isReady, router, selectProject, workspace]);
+  }, [
+    activeBoard,
+    boardId,
+    isReady,
+    router,
+    selectProject,
+    workspace,
+    workspaceActiveBoard,
+  ]);
 
   useEffect(() => {
     const timers = toastTimersRef.current;
@@ -370,10 +353,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     onUndo: undo,
   });
 
-  const isRequestedBoardReady =
-    isReady && Boolean(workspace) && activeBoard?.id === boardId;
-
-  if (!isRequestedBoardReady || !workspace || !activeBoard) {
+  if (!isReady || !workspace || !activeBoard) {
     return <BoardLoadingState />;
   }
 

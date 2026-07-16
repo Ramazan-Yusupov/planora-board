@@ -25,11 +25,18 @@ export function useAutoSave() {
         void saveScene();
       }, 800);
     }, 240);
+    const flush = () => {
+      persist.flush();
+      saveSceneToLocalStorage(sceneStore.get().elements);
+      void saveScene();
+    };
 
     const unsubscribe = sceneStore.subscribe(persist);
+    window.addEventListener("pagehide", flush);
 
     return () => {
-      persist.flush();
+      window.removeEventListener("pagehide", flush);
+      flush();
 
       if (pendingSaveHandle !== null) {
         cancelIdleCallback(pendingSaveHandle);

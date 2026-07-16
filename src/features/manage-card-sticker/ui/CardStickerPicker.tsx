@@ -24,11 +24,7 @@ import { Button } from "@/shared/ui";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
   ssr: false,
-  loading: () => (
-    <div className="grid h-72 place-items-center rounded-xl border border-white/10 bg-control/30 px-4 text-sm text-text-muted">
-      Загружаем коллекцию стикеров…
-    </div>
-  ),
+  loading: () => null,
 });
 
 type CardStickerPickerProps = Readonly<{

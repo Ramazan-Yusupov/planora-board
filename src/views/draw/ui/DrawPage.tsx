@@ -3,10 +3,15 @@
 import { AlertTriangle } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
 import { AppProviders as DrawToolProviders } from "@/modules/draw-tool/app/providers/AppProviders";
+import {
+  PlanoraAdapterProvider,
+  PlanoraTaskSync,
+  type PlanoraTaskItem,
+} from "@/modules/draw-tool/planora-adapter";
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
@@ -65,6 +70,46 @@ export function DrawPage() {
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
   ]);
+  const planoraTasks = useMemo<PlanoraTaskItem[]>(() => {
+    if (!activeBoard) {
+      return [];
+    }
+
+    return Object.values(activeBoard.cards)
+      .filter((card) => {
+        const list = activeBoard.lists[card.listId];
+
+        return !card.isArchived && list && !list.isArchived;
+      })
+      .map((card) => {
+        const list = activeBoard.lists[card.listId];
+        const statusLabel =
+          activeBoard.cardStatusLabels[card.status] ||
+          activeBoard.cardStatuses.find((status) => status.id === card.status)
+            ?.name;
+        const priorityLabel =
+          activeBoard.cardPriorityLabels[card.priority] ||
+          activeBoard.cardPriorities.find(
+            (priority) => priority.id === card.priority,
+          )?.name;
+
+        return {
+          id: card.id,
+          boardId: activeBoard.id,
+          boardTitle: activeBoard.title,
+          listId: card.listId,
+          listTitle: list?.title ?? "Список",
+          title: card.title,
+          statusLabel: statusLabel === "Без статуса" ? undefined : statusLabel,
+          priorityLabel:
+            priorityLabel === "Без приоритета" ? undefined : priorityLabel,
+          dueDate: card.dueDate,
+        };
+      })
+      .sort((firstTask, secondTask) =>
+        firstTask.title.localeCompare(secondTask.title, "ru-RU"),
+      );
+  }, [activeBoard]);
 
   if (!isReady || !workspace || !activeBoard) {
     return (
@@ -146,9 +191,15 @@ export function DrawPage() {
       ) : null}
 
       <section className="drawtool-root min-h-0 flex-1 overflow-hidden">
-        <DrawToolProviders>
-          <DrawToolBoardPage />
-        </DrawToolProviders>
+        <PlanoraAdapterProvider
+          tasks={planoraTasks}
+          onOpenTask={(task) => router.push(getBoardRoute(task.boardId, task.id))}
+        >
+          <PlanoraTaskSync />
+          <DrawToolProviders>
+            <DrawToolBoardPage />
+          </DrawToolProviders>
+        </PlanoraAdapterProvider>
       </section>
     </main>
   );

@@ -15,7 +15,7 @@ import {
   DEFAULT_CARD_FILTERS,
   type CardFilters,
 } from "@/features/filter-cards";
-import { IconButton } from "@/shared/ui";
+import { IconButton, Select } from "@/shared/ui";
 
 type CardFiltersSidebarProps = Readonly<{
   filters: CardFilters;
@@ -138,9 +138,9 @@ export function CardFiltersSidebar({
               <Rows3 aria-hidden="true" size={17} />
               Статус
             </label>
-            <select
+            <Select
               id={statusId}
-              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              className="mt-2 h-11"
               value={filters.status}
               onChange={(event) =>
                 patchFilters({
@@ -153,7 +153,7 @@ export function CardFiltersSidebar({
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div>
@@ -164,9 +164,9 @@ export function CardFiltersSidebar({
               <Flag aria-hidden="true" size={17} />
               Приоритет
             </label>
-            <select
+            <Select
               id={priorityId}
-              className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+              className="mt-2 h-11"
               value={filters.priority}
               onChange={(event) =>
                 patchFilters({
@@ -179,7 +179,7 @@ export function CardFiltersSidebar({
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -191,9 +191,9 @@ export function CardFiltersSidebar({
             <CalendarDays aria-hidden="true" size={17} />
             Срок
           </label>
-          <select
+          <Select
             id={dueDateId}
-            className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+            className="mt-2 h-11"
             value={filters.dueDate}
             onChange={(event) =>
               patchFilters({
@@ -206,7 +206,7 @@ export function CardFiltersSidebar({
                 {option.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="mt-6">
@@ -217,9 +217,9 @@ export function CardFiltersSidebar({
             <ListFilter aria-hidden="true" size={17} />
             Список
           </label>
-          <select
+          <Select
             id={listId}
-            className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+            className="mt-2 h-11"
             value={filters.listId}
             onChange={(event) => patchFilters({ listId: event.target.value })}
           >
@@ -229,7 +229,7 @@ export function CardFiltersSidebar({
                 {list.title}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <button

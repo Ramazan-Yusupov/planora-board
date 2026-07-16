@@ -40,7 +40,7 @@ import {
   type CalendarItem,
 } from "@/features/view-calendar";
 import { cn } from "@/shared/lib";
-import { Button, IconButton } from "@/shared/ui";
+import { Button, IconButton, Select } from "@/shared/ui";
 
 type CalendarViewProps = Readonly<{
   boards: readonly Board[];
@@ -300,8 +300,7 @@ export function CalendarView({
 
           <label className="min-w-[min(100%,11rem)] flex-1 text-sm text-text-muted xl:w-48 xl:flex-none">
             <span className="sr-only">Фильтр по проекту</span>
-            <select
-              className="h-10 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text"
+            <Select
               value={selectedBoardId ?? ""}
               onChange={(event) => onSelectBoard(event.target.value || null)}
             >
@@ -310,7 +309,7 @@ export function CalendarView({
                   {board.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
 

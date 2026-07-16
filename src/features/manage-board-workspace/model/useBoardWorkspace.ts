@@ -144,19 +144,32 @@ function resetHistory(): HistoryState<BoardWorkspace> {
   return createHistory();
 }
 
+let sharedWorkspaceSnapshot: BoardWorkspace | null = null;
+let sharedWorkspaceStorage: WorkspaceFolderStorageInfo | null = null;
+let sharedWorkspaceError: string | null = null;
+let sharedWorkspaceVersion = 0;
+let sharedHydrationPromise: Promise<HydratedWorkspaceResult> | null = null;
+
 export function useBoardWorkspace(): UseBoardWorkspaceResult {
-  const [workspace, setWorkspace] = useState<BoardWorkspace | null>(null);
-  const [isReady, setIsReady] = useState(false);
+  const [workspace, setWorkspace] = useState<BoardWorkspace | null>(
+    sharedWorkspaceSnapshot,
+  );
+  const [isReady, setIsReady] = useState(Boolean(sharedWorkspaceSnapshot));
   const [persistenceState, setPersistenceState] =
-    useState<BoardPersistenceState>("loading");
-  const [storageError, setStorageError] = useState<string | null>(null);
+    useState<BoardPersistenceState>(
+      sharedWorkspaceSnapshot ? "saved" : "loading",
+    );
+  const [storageError, setStorageError] =
+    useState<string | null>(sharedWorkspaceError);
   const [workspaceStorage, setWorkspaceStorage] =
-    useState<WorkspaceFolderStorageInfo>(createBrowserStorageInfo);
+    useState<WorkspaceFolderStorageInfo>(
+      () => sharedWorkspaceStorage ?? createBrowserStorageInfo(),
+    );
   const [isWorkspaceStorageBusy, setIsWorkspaceStorageBusy] = useState(false);
   const [historyState, setHistoryState] = useState<HistoryState<BoardWorkspace>>(
     createHistory,
   );
-  const workspaceRef = useRef<BoardWorkspace | null>(null);
+  const workspaceRef = useRef<BoardWorkspace | null>(sharedWorkspaceSnapshot);
   const historyRef = useRef<HistoryState<BoardWorkspace>>(createHistory());
   const pendingChangeRef = useRef<PendingWorkspaceChange | null>(null);
   const pendingAttachmentBlobDeletesRef = useRef<Set<string>>(new Set());
@@ -166,6 +179,7 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
     null,
   );
   const isMountedRef = useRef(true);
+  const hasInitialSharedSnapshotRef = useRef(Boolean(sharedWorkspaceSnapshot));
 
   const updateHistoryState = useCallback(
     (nextHistory: HistoryState<BoardWorkspace>) => {
@@ -216,17 +230,21 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
         writeVersion === latestWriteRef.current &&
         pendingChangeRef.current === null
       ) {
+        sharedWorkspaceError = null;
         setPersistenceState("saved");
         setStorageError(null);
       }
     } catch (error) {
+      const nextError = getPersistenceError(error);
+      sharedWorkspaceError = nextError;
+
       if (
         isMountedRef.current &&
         writeVersion === latestWriteRef.current &&
         pendingChangeRef.current === null
       ) {
         setPersistenceState("error");
-        setStorageError(getPersistenceError(error));
+        setStorageError(nextError);
       }
     }
   }, []);
@@ -285,6 +303,8 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
       }
 
       workspaceRef.current = nextWorkspace;
+      sharedWorkspaceSnapshot = nextWorkspace;
+      sharedWorkspaceVersion += 1;
       setWorkspace(nextWorkspace);
       schedulePersistence(change, saveMode);
     },
@@ -293,9 +313,15 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
 
   useEffect(() => {
     isMountedRef.current = true;
+    const handlePageHide = () => {
+      void flushPendingChanges();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
 
     return () => {
       isMountedRef.current = false;
+      window.removeEventListener("pagehide", handlePageHide);
 
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
@@ -308,9 +334,17 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
 
   useEffect(() => {
     let isDisposed = false;
+    const hydrationStartVersion = sharedWorkspaceVersion;
 
-    if (!hydrationPromiseRef.current) {
-      hydrationPromiseRef.current = (async (): Promise<HydratedWorkspaceResult> => {
+    if (hasInitialSharedSnapshotRef.current) {
+      workspaceRef.current = sharedWorkspaceSnapshot;
+      return () => {
+        isDisposed = true;
+      };
+    }
+
+    if (!sharedHydrationPromise) {
+      sharedHydrationPromise = (async (): Promise<HydratedWorkspaceResult> => {
         try {
           const cachedWorkspace = await loadBoardWorkspace();
           const folderHandle = await loadPersistedWorkspaceFolderHandle();
@@ -368,16 +402,38 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
       })();
     }
 
-    void hydrationPromiseRef.current.then((result) => {
+    hydrationPromiseRef.current = sharedHydrationPromise;
+
+    void sharedHydrationPromise.then((result) => {
       if (isDisposed) {
         return;
       }
 
-      workspaceRef.current = result.workspace;
-      setWorkspace(result.workspace);
-      setWorkspaceStorage(result.storageInfo);
-      setStorageError(result.error);
-      setPersistenceState(result.error ? "error" : "saved");
+      const shouldKeepSharedSnapshot =
+        sharedWorkspaceSnapshot &&
+        sharedWorkspaceVersion !== hydrationStartVersion;
+      const nextWorkspace = shouldKeepSharedSnapshot
+        ? sharedWorkspaceSnapshot
+        : result.workspace;
+      const nextStorageInfo = shouldKeepSharedSnapshot
+        ? sharedWorkspaceStorage ?? result.storageInfo
+        : result.storageInfo;
+      const nextError = shouldKeepSharedSnapshot
+        ? sharedWorkspaceError
+        : result.error;
+
+      if (!shouldKeepSharedSnapshot) {
+        sharedWorkspaceSnapshot = result.workspace;
+        sharedWorkspaceStorage = result.storageInfo;
+        sharedWorkspaceError = result.error;
+        sharedWorkspaceVersion += 1;
+      }
+
+      workspaceRef.current = nextWorkspace;
+      setWorkspace(nextWorkspace);
+      setWorkspaceStorage(nextStorageInfo);
+      setStorageError(nextError);
+      setPersistenceState(nextError ? "error" : "saved");
       setIsReady(true);
     });
 
@@ -401,8 +457,10 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
       folderHandle = await pickWorkspaceFolder();
     } catch (error) {
       if (!isAbortError(error)) {
+        const nextError = getPersistenceError(error);
+        sharedWorkspaceError = nextError;
         setPersistenceState("error");
-        setStorageError(getPersistenceError(error));
+        setStorageError(nextError);
       }
       return;
     }
@@ -437,16 +495,23 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
           getWorkspacePersistenceChange(currentWorkspace, nextWorkspace),
         );
         workspaceRef.current = nextWorkspace;
+        sharedWorkspaceSnapshot = nextWorkspace;
+        sharedWorkspaceVersion += 1;
         setWorkspace(nextWorkspace);
         updateHistoryState(resetHistory());
       }
 
-      setWorkspaceStorage(toWorkspaceStorageInfo(folderHandle, "granted"));
+      const nextStorageInfo = toWorkspaceStorageInfo(folderHandle, "granted");
+      sharedWorkspaceStorage = nextStorageInfo;
+      sharedWorkspaceError = null;
+      setWorkspaceStorage(nextStorageInfo);
       setPersistenceState("saved");
     } catch (error) {
       if (!isAbortError(error)) {
+        const nextError = getPersistenceError(error);
+        sharedWorkspaceError = nextError;
         setPersistenceState("error");
-        setStorageError(getPersistenceError(error));
+        setStorageError(nextError);
       }
     } finally {
       if (isMountedRef.current) {
@@ -462,12 +527,17 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
       await flushPendingChanges();
       clearActiveFolderWorkspace();
       await clearPersistedWorkspaceFolderHandle();
-      setWorkspaceStorage(createBrowserStorageInfo());
+      const nextStorageInfo = createBrowserStorageInfo();
+      sharedWorkspaceStorage = nextStorageInfo;
+      sharedWorkspaceError = null;
+      setWorkspaceStorage(nextStorageInfo);
       setStorageError(null);
       setPersistenceState("saved");
     } catch (error) {
+      const nextError = getPersistenceError(error);
+      sharedWorkspaceError = nextError;
       setPersistenceState("error");
-      setStorageError(getPersistenceError(error));
+      setStorageError(nextError);
     } finally {
       if (isMountedRef.current) {
         setIsWorkspaceStorageBusy(false);
@@ -489,8 +559,10 @@ export function useBoardWorkspace(): UseBoardWorkspaceResult {
       setStorageError(null);
       setPersistenceState("saved");
     } catch (error) {
+      const nextError = getPersistenceError(error);
+      sharedWorkspaceError = nextError;
       setPersistenceState("error");
-      setStorageError(getPersistenceError(error));
+      setStorageError(nextError);
     } finally {
       if (isMountedRef.current) {
         setIsWorkspaceStorageBusy(false);

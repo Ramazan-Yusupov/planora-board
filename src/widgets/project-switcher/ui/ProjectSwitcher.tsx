@@ -23,7 +23,7 @@ import {
   type BoardProjectTemplateId,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
-import { ConfirmDialog, useKeyboardListNavigation } from "@/shared/ui";
+import { ConfirmDialog, Select, useKeyboardListNavigation } from "@/shared/ui";
 
 type ProjectSwitcherProps = Readonly<{
   activeBoard: Board;
@@ -354,8 +354,8 @@ export function ProjectSwitcher({
                   value={newTitle}
                   onChange={(event) => setNewTitle(event.target.value)}
                 />
-                <select
-                  className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-control/45 px-3 text-sm text-text outline-none transition focus:border-accent/55 focus:ring-2 focus:ring-accent/20"
+                <Select
+                  className="mt-2"
                   value={templateId}
                   onChange={(event) =>
                     setTemplateId(event.target.value as BoardProjectTemplateId)
@@ -366,7 +366,7 @@ export function ProjectSwitcher({
                       {template.name}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <div className="mt-2 flex gap-2">
                   <button
                     className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-accent-foreground transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45"

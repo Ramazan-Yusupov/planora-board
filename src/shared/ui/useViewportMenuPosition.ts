@@ -8,6 +8,7 @@ import {
 } from "react";
 
 type ViewportMenuAlign = "start" | "end";
+type ViewportMenuPlacement = "auto" | "bottom";
 
 type ViewportMenuPoint = Readonly<{
   x: number;
@@ -21,6 +22,7 @@ type UseViewportMenuPositionOptions = Readonly<{
   margin?: number;
   maxHeight: number;
   menuRef: RefObject<HTMLElement | null>;
+  placement?: ViewportMenuPlacement;
   placementKey?: number | string;
   point?: ViewportMenuPoint;
   retryCount?: number;
@@ -31,6 +33,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function getMeasuredMenuHeight(
+  menuRef: RefObject<HTMLElement | null>,
+  fallbackHeight: number,
+): number {
+  const menuRect = menuRef.current?.getBoundingClientRect();
+
+  return menuRect?.height ? Math.min(menuRect.height, fallbackHeight) : fallbackHeight;
+}
+
 export function useViewportMenuPosition({
   align = "start",
   anchorRef,
@@ -38,6 +49,7 @@ export function useViewportMenuPosition({
   margin = 8,
   maxHeight,
   menuRef,
+  placement = "auto",
   placementKey = 0,
   point,
   retryCount = 8,
@@ -100,16 +112,28 @@ export function useViewportMenuPosition({
       attempts = 0;
       const anchorRect = anchor.getBoundingClientRect();
       const preferredTop = anchorRect.bottom + gap;
+      const availableBelow = window.innerHeight - preferredTop - margin;
+      const availableAbove = anchorRect.top - gap - margin;
+      const measuredHeight = getMeasuredMenuHeight(menuRef, nextMaxHeight);
+      const shouldOpenBelow =
+        placement === "bottom" ||
+        availableBelow >= measuredHeight ||
+        availableBelow >= availableAbove;
+      const preferredMaxHeight = Math.max(
+        96,
+        Math.min(maxHeight, shouldOpenBelow ? availableBelow : availableAbove),
+      );
+      const positionedHeight = Math.min(measuredHeight, preferredMaxHeight);
       const top =
-        preferredTop + nextMaxHeight <= window.innerHeight - margin
+        shouldOpenBelow
           ? preferredTop
-          : Math.max(margin, anchorRect.top - nextMaxHeight - gap);
+          : Math.max(margin, anchorRect.top - positionedHeight - gap);
       const preferredLeft =
         align === "end" ? anchorRect.right - menuWidth : anchorRect.left;
 
       setStyle({
         left: clamp(preferredLeft, margin, window.innerWidth - menuWidth - margin),
-        maxHeight: nextMaxHeight,
+        maxHeight: preferredMaxHeight,
         top,
         width: menuWidth,
       });
@@ -143,6 +167,7 @@ export function useViewportMenuPosition({
     margin,
     maxHeight,
     menuRef,
+    placement,
     placementKey,
     point,
     retryCount,

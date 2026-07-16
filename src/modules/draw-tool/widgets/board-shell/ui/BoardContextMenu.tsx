@@ -8,6 +8,7 @@ import {
   AlignVerticalDistributeCenter,
   Copy,
   Download,
+  ExternalLink,
   FileJson,
   Focus,
   Group,
@@ -24,6 +25,7 @@ import { boardActions } from "@/modules/draw-tool/features/board-actions";
 import { componentLibraryDialogStore } from "@/modules/draw-tool/features/component-library";
 import { Divider, Popover } from "@/modules/draw-tool/shared/ui";
 import { deleteSelectedElements } from "@/modules/draw-tool/features/delete-elements";
+import { usePlanoraAdapter } from "@/modules/draw-tool/planora-adapter";
 import { sceneStore } from "@/modules/draw-tool/entities/scene";
 import { selectionStore } from "@/modules/draw-tool/entities/selection";
 import {
@@ -61,6 +63,15 @@ export function BoardContextMenu({
   const selectedElements = scene.elements.filter((element) =>
     selection.elementIds.includes(element.id),
   );
+  const { onOpenTask, tasks: planoraTasks } = usePlanoraAdapter();
+  const targetElement = targetElementId
+    ? scene.elements.find((element) => element.id === targetElementId)
+    : selectedElements.length === 1
+      ? selectedElements[0]
+      : undefined;
+  const linkedTask = targetElement?.metadata?.cardId
+    ? planoraTasks.find((task) => task.id === targetElement.metadata?.cardId)
+    : undefined;
   const {
     hasGroupSelection,
     hasGroupedSelection,
@@ -155,6 +166,12 @@ export function BoardContextMenu({
             <span>{targetIsLocked ? "Unlock" : "Lock"}</span>
           </BoardContextMenuAction>
         )}
+        {linkedTask && onOpenTask ? (
+          <BoardContextMenuAction onClick={() => run(() => onOpenTask(linkedTask))}>
+            <ExternalLink size={16} />
+            <span>Открыть задачу в Board</span>
+          </BoardContextMenuAction>
+        ) : null}
 
         {showAlignActions && <Divider className="my-1.5" />}
 

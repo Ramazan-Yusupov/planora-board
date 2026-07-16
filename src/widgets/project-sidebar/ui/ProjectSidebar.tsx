@@ -16,7 +16,7 @@ import {
   type BoardProjectTemplateId,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
-import { Button, ConfirmDialog, IconButton } from "@/shared/ui";
+import { Button, ConfirmDialog, IconButton, Select } from "@/shared/ui";
 
 type ProjectSidebarProps = Readonly<{
   boards: Board[];
@@ -188,9 +188,9 @@ export function ProjectSidebar({
                 >
                   Шаблон доски
                 </label>
-                <select
+                <Select
                   id="new-project-template"
-                  className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-panel px-3 text-sm text-text"
+                  className="mt-1"
                   value={templateId}
                   onChange={(event) =>
                     setTemplateId(
@@ -203,7 +203,7 @@ export function ProjectSidebar({
                       {template.name}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <div className="mt-2 flex gap-2">
                   <Button disabled={!canCreateProject} size="sm" type="submit">
                     Создать
