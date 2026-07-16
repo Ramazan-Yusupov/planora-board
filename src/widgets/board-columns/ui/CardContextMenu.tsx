@@ -11,7 +11,14 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
 
 import {
   CARD_PRIORITY_OPTIONS,
@@ -27,7 +34,7 @@ import {
   type CardStatus,
 } from "@/entities/board";
 import { cn, createId } from "@/shared/lib";
-import { useViewportMenuPosition } from "@/shared/ui";
+import { useKeyboardListNavigation, useViewportMenuPosition } from "@/shared/ui";
 
 type CardContextMenuPosition = Readonly<{
   x: number;
@@ -88,18 +95,23 @@ function MenuButton({
   active,
   children,
   danger,
+  isKeyboardActive,
+  itemProps,
   onClick,
 }: Readonly<{
   active?: boolean;
   children: ReactNode;
   danger?: boolean;
+  isKeyboardActive?: boolean;
+  itemProps?: ButtonHTMLAttributes<HTMLButtonElement>;
   onClick: () => void;
 }>) {
   return (
     <button
+      {...itemProps}
       className={cn(
         "flex min-h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition",
-        active
+        active || isKeyboardActive
           ? "bg-accent text-accent-foreground"
           : "text-text-muted hover:bg-control hover:text-text",
         danger && "text-red-300 hover:bg-red-500/10 hover:text-red-100",
@@ -117,6 +129,19 @@ type MenuOption = Readonly<{
   label: string;
   color: string;
 }>;
+
+type CardContextMenuAction = Readonly<{
+  id: string;
+  onSelect: () => void;
+}>;
+
+function isFormFieldTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  );
+}
 
 export function CardContextMenu({
   card,
@@ -149,30 +174,165 @@ export function CardContextMenu({
     width: 464,
   });
   const boardLabels = Object.values(labels);
-  const menuStatusOptions: MenuOption[] = [
-    ...CARD_STATUS_OPTIONS.map((option) => ({
-      value: option.value,
-      label: statusLabels[option.value] ?? option.label,
-      color: option.color,
-    })),
-    ...statusOptions.map((option) => ({
-      value: option.id,
-      label: option.name,
-      color: option.color,
-    })),
-  ];
-  const menuPriorityOptions: MenuOption[] = [
-    ...CARD_PRIORITY_OPTIONS.map((option) => ({
-      value: option.value,
-      label: priorityLabels[option.value] ?? option.label,
-      color: option.color,
-    })),
-    ...priorityOptions.map((option) => ({
-      value: option.id,
-      label: option.name,
-      color: option.color,
-    })),
-  ];
+  const menuStatusOptions = useMemo<MenuOption[]>(
+    () => [
+      ...CARD_STATUS_OPTIONS.map((option) => ({
+        value: option.value,
+        label: statusLabels[option.value] ?? option.label,
+        color: option.color,
+      })),
+      ...statusOptions.map((option) => ({
+        value: option.id,
+        label: option.name,
+        color: option.color,
+      })),
+    ],
+    [statusLabels, statusOptions],
+  );
+  const menuPriorityOptions = useMemo<MenuOption[]>(
+    () => [
+      ...CARD_PRIORITY_OPTIONS.map((option) => ({
+        value: option.value,
+        label: priorityLabels[option.value] ?? option.label,
+        color: option.color,
+      })),
+      ...priorityOptions.map((option) => ({
+        value: option.id,
+        label: option.name,
+        color: option.color,
+      })),
+    ],
+    [priorityLabels, priorityOptions],
+  );
+  const save = useCallback(
+    (patch: Partial<CardDraft>) => {
+      onSave(card.id, createDraft(card, patch));
+    },
+    [card, onSave],
+  );
+  const toggleLabel = useCallback(
+    (labelId: string) => {
+      const labelIds = card.labelIds.includes(labelId)
+        ? card.labelIds.filter((currentLabelId) => currentLabelId !== labelId)
+        : [...card.labelIds, labelId];
+
+      save({ labelIds });
+    },
+    [card.labelIds, save],
+  );
+  const setCover = useCallback(
+    (cover: CardCover | undefined) => {
+      save({ cover });
+    },
+    [save],
+  );
+  const addCustomFieldFromTemplate = useCallback(
+    (template: BoardCustomFieldTemplate) => {
+      const existingField = card.customFields.find(
+        (field) => field.name === template.name,
+      );
+      const nextFields = existingField
+        ? card.customFields.filter((field) => field.id !== existingField.id)
+        : [
+            ...card.customFields,
+            {
+              id: createId("card-field"),
+              name: template.name,
+              value: "",
+              createdAt: template.createdAt,
+              updatedAt: template.updatedAt,
+            },
+          ];
+
+      save({ customFields: nextFields });
+    },
+    [card.customFields, save],
+  );
+  const menuCoverColors = coverColors;
+  const menuActions = useMemo<readonly CardContextMenuAction[]>(
+    () => [
+      ...menuStatusOptions.map((option) => ({
+        id: `status-${option.value}`,
+        onSelect: () => save({ status: option.value }),
+      })),
+      ...menuPriorityOptions.map((option) => ({
+        id: `priority-${option.value}`,
+        onSelect: () => save({ priority: option.value }),
+      })),
+      ...boardLabels.map((label) => ({
+        id: `label-${label.id}`,
+        onSelect: () => toggleLabel(label.id),
+      })),
+      {
+        id: "cover-none",
+        onSelect: () => setCover(undefined),
+      },
+      ...menuCoverColors.map((color) => ({
+        id: `cover-${color}`,
+        onSelect: () => setCover({ type: "color" as const, color }),
+      })),
+      ...customFieldTemplates.map((template) => ({
+        id: `field-${template.id}`,
+        onSelect: () => addCustomFieldFromTemplate(template),
+      })),
+      ...checklistTemplates.map((template) => ({
+        id: `checklist-${template.id}`,
+        onSelect: () => onCreateChecklist(card.id, template.title),
+      })),
+      {
+        id: "open",
+        onSelect: () => onOpen(card.id),
+      },
+      {
+        id: "duplicate",
+        onSelect: () => onDuplicate(card.id),
+      },
+      {
+        id: "archive",
+        onSelect: () => onArchive(card.id),
+      },
+      {
+        id: "delete",
+        onSelect: () => onDelete(card.id),
+      },
+    ],
+    [
+      addCustomFieldFromTemplate,
+      boardLabels,
+      card.id,
+      checklistTemplates,
+      customFieldTemplates,
+      menuCoverColors,
+      menuPriorityOptions,
+      menuStatusOptions,
+      onArchive,
+      onCreateChecklist,
+      onDelete,
+      onDuplicate,
+      onOpen,
+      save,
+      setCover,
+      toggleLabel,
+    ],
+  );
+  const {
+    activeIndex,
+    activeItemId,
+    getItemProps,
+    handleKeyDown: handleMenuKeyDown,
+  } = useKeyboardListNavigation({
+    count: menuActions.length,
+    getItemId: (index) => `card-context-action-${menuActions[index]?.id ?? index}`,
+    onClose,
+    onSelect: (index) => menuActions[index]?.onSelect(),
+  });
+  const statusOffset = 0;
+  const priorityOffset = statusOffset + menuStatusOptions.length;
+  const labelOffset = priorityOffset + menuPriorityOptions.length;
+  const coverOffset = labelOffset + boardLabels.length;
+  const customFieldOffset = coverOffset + 1 + menuCoverColors.length;
+  const checklistOffset = customFieldOffset + customFieldTemplates.length;
+  const actionsOffset = checklistOffset + checklistTemplates.length;
 
   useLayoutEffect(() => {
     const closeOnPointerDown = (event: PointerEvent) => {
@@ -183,63 +343,51 @@ export function CardContextMenu({
       onClose();
     };
 
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
+    const handleNavigationKeyDown = (event: KeyboardEvent) => {
+      if (isFormFieldTarget(event.target) && event.key !== "Escape") {
+        return;
+      }
+
+      if (
+        event.key === "ArrowDown" ||
+        event.key === "ArrowUp" ||
+        event.key === "PageDown" ||
+        event.key === "PageUp" ||
+        event.key === "Home" ||
+        event.key === "End" ||
+        event.key === "Enter" ||
+        event.key === "Escape"
+      ) {
+        handleMenuKeyDown(event);
       }
     };
 
     window.addEventListener("pointerdown", closeOnPointerDown);
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleNavigationKeyDown);
     window.addEventListener("resize", onClose);
 
     return () => {
       window.removeEventListener("pointerdown", closeOnPointerDown);
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", handleNavigationKeyDown);
       window.removeEventListener("resize", onClose);
     };
-  }, [onClose]);
-
-  const save = (patch: Partial<CardDraft>) => {
-    onSave(card.id, createDraft(card, patch));
-  };
-
-  const toggleLabel = (labelId: string) => {
-    const labelIds = card.labelIds.includes(labelId)
-      ? card.labelIds.filter((currentLabelId) => currentLabelId !== labelId)
-      : [...card.labelIds, labelId];
-
-    save({ labelIds });
-  };
-
-  const setCover = (cover: CardCover | undefined) => {
-    save({ cover });
-  };
-  const addCustomFieldFromTemplate = (template: BoardCustomFieldTemplate) => {
-    const existingField = card.customFields.find((field) => field.name === template.name);
-    const nextFields = existingField
-      ? card.customFields.filter((field) => field.id !== existingField.id)
-      : [
-          ...card.customFields,
-          {
-            id: createId("card-field"),
-            name: template.name,
-            value: "",
-            createdAt: template.createdAt,
-            updatedAt: template.updatedAt,
-          },
-        ];
-
-    save({ customFields: nextFields });
-  };
-  const menuCoverColors = coverColors;
+  }, [handleMenuKeyDown, onClose]);
 
   return (
     <div
       ref={menuRef}
+      aria-activedescendant={activeItemId}
       className="fixed z-[80] grid max-h-[min(80dvh,42rem)] w-[min(94vw,29rem)] gap-3 overflow-y-auto rounded-xl border border-white/10 bg-panel/98 p-3 text-text shadow-float backdrop-blur-2xl"
       role="menu"
       style={menuStyle}
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (isFormFieldTarget(event.target) && event.key !== "Escape") {
+          return;
+        }
+
+        handleMenuKeyDown(event);
+      }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -259,10 +407,15 @@ export function CardContextMenu({
 
       <MenuSection title="Статус">
         <div className="grid grid-cols-2 gap-1.5">
-          {menuStatusOptions.map((option) => (
+          {menuStatusOptions.map((option, optionIndex) => {
+            const itemIndex = statusOffset + optionIndex;
+
+            return (
             <MenuButton
               key={option.value}
               active={card.status === option.value}
+              isKeyboardActive={activeIndex === itemIndex}
+              itemProps={getItemProps(itemIndex)}
               onClick={() => save({ status: option.value })}
             >
               <Rows3
@@ -273,16 +426,22 @@ export function CardContextMenu({
               />
               <span className="min-w-0 flex-1 truncate">{option.label}</span>
             </MenuButton>
-          ))}
+            );
+          })}
         </div>
       </MenuSection>
 
       <MenuSection title="Приоритет">
         <div className="grid grid-cols-2 gap-1.5">
-          {menuPriorityOptions.map((option) => (
+          {menuPriorityOptions.map((option, optionIndex) => {
+            const itemIndex = priorityOffset + optionIndex;
+
+            return (
             <MenuButton
               key={option.value}
               active={card.priority === option.value}
+              isKeyboardActive={activeIndex === itemIndex}
+              itemProps={getItemProps(itemIndex)}
               onClick={() => save({ priority: option.value })}
             >
               <Flag
@@ -293,7 +452,8 @@ export function CardContextMenu({
               />
               <span className="min-w-0 flex-1 truncate">{option.label}</span>
             </MenuButton>
-          ))}
+            );
+          })}
         </div>
       </MenuSection>
 
@@ -333,10 +493,15 @@ export function CardContextMenu({
       <MenuSection title="Метки">
         {boardLabels.length > 0 ? (
           <div className="grid gap-1.5">
-            {boardLabels.map((label) => (
+            {boardLabels.map((label, labelIndex) => {
+              const itemIndex = labelOffset + labelIndex;
+
+              return (
               <MenuButton
                 key={label.id}
                 active={card.labelIds.includes(label.id)}
+                isKeyboardActive={activeIndex === itemIndex}
+                itemProps={getItemProps(itemIndex)}
                 onClick={() => toggleLabel(label.id)}
               >
                 <span
@@ -346,7 +511,8 @@ export function CardContextMenu({
                 />
                 <span className="min-w-0 flex-1 truncate">{label.name}</span>
               </MenuButton>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="rounded-lg border border-dashed border-white/12 px-3 py-3 text-center text-xs text-text-muted">
@@ -358,9 +524,10 @@ export function CardContextMenu({
       <MenuSection title="Обложка">
         <div className="grid grid-cols-[repeat(8,minmax(0,1fr))] gap-1.5">
           <button
+            {...getItemProps(coverOffset)}
             className={cn(
               "grid aspect-square place-items-center rounded-lg border border-white/10 bg-control/60 text-text-muted transition hover:bg-control-hover hover:text-text",
-              !card.cover && "ring-2 ring-accent",
+              (!card.cover || activeIndex === coverOffset) && "ring-2 ring-accent",
             )}
             title="Без обложки"
             type="button"
@@ -368,13 +535,17 @@ export function CardContextMenu({
           >
             <CircleOff aria-hidden="true" size={15} />
           </button>
-          {menuCoverColors.map((color) => (
+          {menuCoverColors.map((color, colorIndex) => {
+            const itemIndex = coverOffset + 1 + colorIndex;
+
+            return (
             <button
               key={color}
+              {...getItemProps(itemIndex)}
               className={cn(
                 "aspect-square rounded-lg border border-white/10 transition hover:scale-105",
-                card.cover?.type === "color" &&
-                  card.cover.color === color &&
+                ((card.cover?.type === "color" && card.cover.color === color) ||
+                  activeIndex === itemIndex) &&
                   "ring-2 ring-white",
               )}
               style={{ backgroundColor: color }}
@@ -382,20 +553,24 @@ export function CardContextMenu({
               type="button"
               onClick={() => setCover({ type: "color", color })}
             />
-          ))}
+            );
+          })}
         </div>
       </MenuSection>
 
       {customFieldTemplates.length > 0 ? (
         <MenuSection title="Доп. поля">
           <div className="grid gap-1.5">
-            {customFieldTemplates.map((template) => {
+            {customFieldTemplates.map((template, templateIndex) => {
               const isActive = card.customFields.some((field) => field.name === template.name);
+              const itemIndex = customFieldOffset + templateIndex;
 
               return (
                 <MenuButton
                   key={template.id}
                   active={isActive}
+                  isKeyboardActive={activeIndex === itemIndex}
+                  itemProps={getItemProps(itemIndex)}
                   onClick={() => addCustomFieldFromTemplate(template)}
                 >
                   <Rows3 aria-hidden="true" className="shrink-0" size={15} />
@@ -410,34 +585,57 @@ export function CardContextMenu({
       {checklistTemplates.length > 0 ? (
         <MenuSection title="Чек-листы">
           <div className="grid gap-1.5">
-            {checklistTemplates.map((template) => (
+            {checklistTemplates.map((template, templateIndex) => {
+              const itemIndex = checklistOffset + templateIndex;
+
+              return (
               <MenuButton
                 key={template.id}
+                isKeyboardActive={activeIndex === itemIndex}
+                itemProps={getItemProps(itemIndex)}
                 onClick={() => onCreateChecklist(card.id, template.title)}
               >
                 <Rows3 aria-hidden="true" className="shrink-0" size={15} />
                 <span className="min-w-0 flex-1 truncate">{template.title}</span>
               </MenuButton>
-            ))}
+              );
+            })}
           </div>
         </MenuSection>
       ) : null}
 
       <MenuSection title="Действия">
         <div className="grid gap-1.5">
-          <MenuButton onClick={() => onOpen(card.id)}>
+          <MenuButton
+            isKeyboardActive={activeIndex === actionsOffset}
+            itemProps={getItemProps(actionsOffset)}
+            onClick={() => onOpen(card.id)}
+          >
             <ExternalLink aria-hidden="true" size={15} />
             Открыть редактирование
           </MenuButton>
-          <MenuButton onClick={() => onDuplicate(card.id)}>
+          <MenuButton
+            isKeyboardActive={activeIndex === actionsOffset + 1}
+            itemProps={getItemProps(actionsOffset + 1)}
+            onClick={() => onDuplicate(card.id)}
+          >
             <Copy aria-hidden="true" size={15} />
             Создать копию
           </MenuButton>
-          <MenuButton onClick={() => onArchive(card.id)}>
+          <MenuButton
+            isKeyboardActive={activeIndex === actionsOffset + 2}
+            itemProps={getItemProps(actionsOffset + 2)}
+            onClick={() => onArchive(card.id)}
+          >
             <Archive aria-hidden="true" size={15} />
             Архивировать
           </MenuButton>
-          <MenuButton danger onClick={() => onDelete(card.id)}>
+          <MenuButton
+            danger
+            isKeyboardActive={activeIndex === actionsOffset + 3}
+            itemProps={getItemProps(actionsOffset + 3)}
+            onClick={() => onDelete(card.id)}
+          >
             <Trash2 aria-hidden="true" size={15} />
             Удалить
           </MenuButton>

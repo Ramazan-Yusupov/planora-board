@@ -17,8 +17,9 @@ import {
   FolderKanban,
   ListChecks,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   CARD_PRIORITY_OPTIONS,
@@ -38,14 +39,17 @@ import {
   NOTES_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
-import { cn } from "@/shared/lib";
-import {
-  CommandPalette,
-  getWorkspaceNavigationActions,
-  useCommandPaletteShortcut,
-} from "@/widgets/command-palette";
+import { cn, usePrefetchRoutes } from "@/shared/lib";
+import { getWorkspaceNavigationActions } from "@/widgets/command-palette/lib/getWorkspaceNavigationActions";
+import { useCommandPaletteShortcut } from "@/widgets/command-palette/lib/useCommandPaletteShortcut";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
+
+const CommandPalette = dynamic(() =>
+  import("@/widgets/command-palette/ui/CommandPalette").then(
+    (mod) => mod.CommandPalette,
+  ),
+);
 
 type MyWorkItem = Readonly<{
   board: Board;
@@ -456,6 +460,13 @@ export function MyWorkPage() {
     () => (activeBoard ? buildGroups(getActiveItems([activeBoard])) : []),
     [activeBoard],
   );
+  usePrefetchRoutes([
+    activeBoard ? getBoardRoute(activeBoard.id) : null,
+    NOTES_ROUTE,
+    CALENDAR_ROUTE,
+    MY_WORK_ROUTE,
+    ANALYTICS_ROUTE,
+  ]);
 
   if (!isReady || !workspace || !activeBoard) {
     return <MyWorkLoadingState />;
@@ -673,11 +684,13 @@ export function MyWorkPage() {
           </div>
         </section>
       </div>
-      <CommandPalette
-        actions={commandActions}
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-      />
+      {isCommandPaletteOpen ? (
+        <CommandPalette
+          actions={commandActions}
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+        />
+      ) : null}
     </main>
   );
 }

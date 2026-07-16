@@ -1,0 +1,113 @@
+"use client";
+
+import {
+  Activity,
+  Bot,
+  Command,
+  PackageOpen,
+  Plug,
+  ShieldCheck,
+  Workflow,
+} from "lucide-react";
+import { useState } from "react";
+
+import type { Board } from "@/entities/board";
+import type { Note } from "@/features/manage-notes";
+import type {
+  BoardWorkflowTemplateId,
+  NoteTemplateId,
+} from "@/features/workspace-templates";
+import type { WorkspaceHealthReport } from "@/features/workspace-health";
+import { Modal, ToolSurfaceHeader } from "@/shared/ui";
+
+import {
+  ActivityTab,
+  IntegrationsTab,
+  MarketplaceTab,
+  PreflightTab,
+  RolesTab,
+  WorkflowsTab,
+} from "./WorkspaceCenterSections";
+import {
+  WorkspaceCenterTabs,
+  type WorkspaceCenterTab,
+  type WorkspaceCenterTabItem,
+} from "./WorkspaceCenterTabs";
+
+type WorkspaceCenterModalProps = Readonly<{
+  activeBoard: Board;
+  healthReport: WorkspaceHealthReport;
+  isOpen: boolean;
+  notes: readonly Note[];
+  onApplyWorkflowTemplate: (templateId: BoardWorkflowTemplateId) => void;
+  onClose: () => void;
+  onCreateNoteTemplate: (templateId: NoteTemplateId) => void;
+  onOpenHealthCheck: () => void;
+  onOpenWorkspaceData: () => void;
+}>;
+
+const tabs: readonly WorkspaceCenterTabItem[] = [
+  { id: "workflows", icon: <Workflow aria-hidden="true" size={16} />, label: "Workflows" },
+  { id: "preflight", icon: <ShieldCheck aria-hidden="true" size={16} />, label: "Preflight" },
+  { id: "roles", icon: <Bot aria-hidden="true" size={16} />, label: "Роли" },
+  { id: "integrations", icon: <Plug aria-hidden="true" size={16} />, label: "Интеграции" },
+  { id: "activity", icon: <Activity aria-hidden="true" size={16} />, label: "Monitor" },
+  { id: "marketplace", icon: <PackageOpen aria-hidden="true" size={16} />, label: "Templates" },
+];
+
+export function WorkspaceCenterModal({
+  activeBoard,
+  healthReport,
+  isOpen,
+  notes,
+  onApplyWorkflowTemplate,
+  onClose,
+  onCreateNoteTemplate,
+  onOpenHealthCheck,
+  onOpenWorkspaceData,
+}: WorkspaceCenterModalProps) {
+  const [activeTab, setActiveTab] = useState<WorkspaceCenterTab>("workflows");
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <Modal title="Workspace Center" onClose={onClose} zIndexClassName="z-[82]">
+      <div className="space-y-4">
+        <section className="rounded-2xl border border-white/10 bg-control/20 p-3">
+          <ToolSurfaceHeader
+            description="Шаблоны, проверки, роли, интеграции и быстрые сценарии для текущего проекта."
+            icon={<Command aria-hidden="true" size={20} />}
+            title="Центр рабочих инструментов"
+          />
+        </section>
+
+        <WorkspaceCenterTabs
+          activeTab={activeTab}
+          tabs={tabs}
+          onSelect={setActiveTab}
+        />
+
+        {activeTab === "workflows" ? (
+          <WorkflowsTab onApplyWorkflowTemplate={onApplyWorkflowTemplate} />
+        ) : null}
+        {activeTab === "preflight" ? (
+          <PreflightTab
+            healthReport={healthReport}
+            onOpenHealthCheck={onOpenHealthCheck}
+            onOpenWorkspaceData={onOpenWorkspaceData}
+          />
+        ) : null}
+        {activeTab === "roles" ? <RolesTab /> : null}
+        {activeTab === "integrations" ? <IntegrationsTab /> : null}
+        {activeTab === "activity" ? (
+          <ActivityTab activeBoard={activeBoard} notes={notes} />
+        ) : null}
+        {activeTab === "marketplace" ? (
+          <MarketplaceTab onCreateNoteTemplate={onCreateNoteTemplate} />
+        ) : null}
+      </div>
+    </Modal>
+  );
+}

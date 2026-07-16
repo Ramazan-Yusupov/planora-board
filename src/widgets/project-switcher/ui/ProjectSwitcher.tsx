@@ -9,7 +9,9 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -21,7 +23,7 @@ import {
   type BoardProjectTemplateId,
 } from "@/entities/board";
 import { cn } from "@/shared/lib";
-import { ConfirmDialog } from "@/shared/ui";
+import { ConfirmDialog, useKeyboardListNavigation } from "@/shared/ui";
 
 type ProjectSwitcherProps = Readonly<{
   activeBoard: Board;
@@ -38,6 +40,14 @@ function getActiveCardCount(board: Board): number {
   return Object.values(board.cards).filter(
     (card) => !card.isArchived && !board.lists[card.listId]?.isArchived,
   ).length;
+}
+
+function isFormFieldTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  );
 }
 
 export function ProjectSwitcher({
@@ -66,6 +76,31 @@ export function ProjectSwitcher({
     renameDraft.boardId === activeBoard.id
       ? renameDraft.title
       : activeBoard.title;
+  const boardIds = useMemo(() => boards.map((board) => board.id), [boards]);
+  const selectBoardFromMenu = useCallback(
+    (index: number) => {
+      const boardId = boardIds[index];
+
+      if (!boardId) {
+        return;
+      }
+
+      onSelectBoard(boardId);
+      onOpenChange(false);
+    },
+    [boardIds, onOpenChange, onSelectBoard],
+  );
+  const {
+    activeIndex,
+    activeItemId,
+    getItemProps,
+    handleKeyDown: handleMenuKeyDown,
+  } = useKeyboardListNavigation({
+    count: boards.length,
+    getItemId: (index) => `project-switcher-board-${boardIds[index] ?? index}`,
+    onClose: () => onOpenChange(false),
+    onSelect: selectBoardFromMenu,
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -78,20 +113,33 @@ export function ProjectSwitcher({
       }
     };
 
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onOpenChange(false);
+    const handleNavigationKeyDown = (event: KeyboardEvent) => {
+      if (isFormFieldTarget(event.target) && event.key !== "Escape") {
+        return;
+      }
+
+      if (
+        event.key === "ArrowDown" ||
+        event.key === "ArrowUp" ||
+        event.key === "PageDown" ||
+        event.key === "PageUp" ||
+        event.key === "Home" ||
+        event.key === "End" ||
+        event.key === "Enter" ||
+        event.key === "Escape"
+      ) {
+        handleMenuKeyDown(event);
       }
     };
 
     document.addEventListener("pointerdown", closeOnPointerDown);
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", handleNavigationKeyDown);
 
     return () => {
       document.removeEventListener("pointerdown", closeOnPointerDown);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", handleNavigationKeyDown);
     };
-  }, [isOpen, onOpenChange]);
+  }, [handleMenuKeyDown, isOpen, onOpenChange]);
 
   const createProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -164,9 +212,12 @@ export function ProjectSwitcher({
 
         {isOpen ? (
           <div
+            aria-activedescendant={activeItemId}
             aria-label="Проекты"
             className="absolute left-1/2 top-[calc(100%+0.5rem)] z-70 w-[min(92vw,25rem)] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-panel/98 p-2 shadow-2xl backdrop-blur-xl"
             role="menu"
+            tabIndex={-1}
+            onKeyDown={handleMenuKeyDown}
           >
             <div className="flex items-center justify-between gap-3 px-2 py-2">
               <div>
@@ -191,21 +242,23 @@ export function ProjectSwitcher({
             </div>
 
             <div className="max-h-[15rem] overflow-y-auto px-1 py-1">
-              {boards.map((board) => {
+              {boards.map((board, boardIndex) => {
                 const isActive = board.id === activeBoard.id;
+                const isKeyboardActive = activeIndex === boardIndex;
 
                 return (
                   <div
                     key={board.id}
                     className={cn(
                       "group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 transition",
-                      isActive
+                      isActive || isKeyboardActive
                         ? "bg-accent/15 text-text"
                         : "text-text-muted hover:bg-control hover:text-text",
                     )}
                     role="none"
                   >
                     <button
+                      {...getItemProps(boardIndex)}
                       aria-current={isActive ? "page" : undefined}
                       className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none"
                       role="menuitem"

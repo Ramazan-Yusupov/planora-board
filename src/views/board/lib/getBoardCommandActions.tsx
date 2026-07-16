@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarDays,
   ClipboardList,
+  Command,
   FileSearch,
   FileText,
   Filter,
@@ -12,6 +13,7 @@ import {
   ListPlus,
   Palette,
   Plus,
+  ShieldCheck,
 } from "lucide-react";
 
 import type { Board } from "@/entities/board";
@@ -27,7 +29,9 @@ type GetBoardCommandActionsOptions = Readonly<{
   onOpenMyWork: () => void;
   onOpenNotes: () => void;
   onOpenFilters: () => void;
+  onOpenHealthCheck: () => void;
   onOpenProjects: () => void;
+  onOpenWorkspaceCenter: () => void;
   onOpenCard: (cardId: string) => void;
   onOpenQuickCreateCard: () => void;
   onOpenQuickCreateList: () => void;
@@ -43,7 +47,9 @@ export function getBoardCommandActions({
   onOpenMyWork,
   onOpenNotes,
   onOpenFilters,
+  onOpenHealthCheck,
   onOpenProjects,
+  onOpenWorkspaceCenter,
   onOpenCard,
   onOpenQuickCreateCard,
   onOpenQuickCreateList,
@@ -65,6 +71,7 @@ export function getBoardCommandActions({
         id: `card-${card.id}`,
         label: card.title,
         description: `${listTitle}${dueDate}`,
+        group: "Карточки",
         icon: <FileSearch aria-hidden="true" size={18} />,
         onSelect: () => onOpenCard(card.id),
       };
@@ -75,6 +82,7 @@ export function getBoardCommandActions({
       id: "new-card",
       label: "Новая карточка",
       description: "Создать задачу в выбранном списке",
+      group: "Создание",
       shortcut: "N",
       icon: <Plus aria-hidden="true" size={18} />,
       onSelect: onOpenQuickCreateCard,
@@ -84,6 +92,7 @@ export function getBoardCommandActions({
       id: "new-list",
       label: "Новый список",
       description: "Добавить колонку на текущую доску",
+      group: "Создание",
       shortcut: "L",
       icon: <ListPlus aria-hidden="true" size={18} />,
       onSelect: onOpenQuickCreateList,
@@ -92,6 +101,7 @@ export function getBoardCommandActions({
       id: "projects",
       label: "Проекты",
       description: "Открыть список проектов",
+      group: "Навигация",
       shortcut: "B",
       icon: <LayoutDashboard aria-hidden="true" size={18} />,
       onSelect: onOpenProjects,
@@ -100,6 +110,7 @@ export function getBoardCommandActions({
       id: "calendar",
       label: "Календарь",
       description: "Открыть задачи по срокам",
+      group: "Навигация",
       icon: <CalendarDays aria-hidden="true" size={18} />,
       onSelect: onOpenCalendar,
     },
@@ -107,6 +118,7 @@ export function getBoardCommandActions({
       id: "my-work",
       label: "Мои задачи",
       description: "Открыть просроченные и ближайшие задачи",
+      group: "Навигация",
       icon: <ClipboardList aria-hidden="true" size={18} />,
       onSelect: onOpenMyWork,
     },
@@ -114,6 +126,7 @@ export function getBoardCommandActions({
       id: "analytics",
       label: "Аналитика",
       description: "Открыть сводку по задачам и прогрессу",
+      group: "Навигация",
       icon: <BarChart3 aria-hidden="true" size={18} />,
       onSelect: onOpenAnalytics,
     },
@@ -121,6 +134,7 @@ export function getBoardCommandActions({
       id: "notes",
       label: "Заметки",
       description: "Открыть локальные markdown-заметки",
+      group: "Навигация",
       icon: <FileText aria-hidden="true" size={18} />,
       onSelect: onOpenNotes,
     },
@@ -128,13 +142,31 @@ export function getBoardCommandActions({
       id: "filters",
       label: "Фильтры",
       description: "Открыть поиск и фильтры карточек",
+      group: "Инструменты",
       icon: <Filter aria-hidden="true" size={18} />,
       onSelect: onOpenFilters,
+    },
+    {
+      id: "workspace-center",
+      label: "Workspace Center",
+      description: "Открыть workflows, templates, integrations и preflight",
+      group: "Инструменты",
+      icon: <Command aria-hidden="true" size={18} />,
+      onSelect: onOpenWorkspaceCenter,
+    },
+    {
+      id: "health-check",
+      label: "Диагностика workspace",
+      description: "Проверить схему проектов, заметки и связи",
+      group: "Инструменты",
+      icon: <ShieldCheck aria-hidden="true" size={18} />,
+      onSelect: onOpenHealthCheck,
     },
     {
       id: "archive",
       label: "Архив",
       description: "Открыть архив карточек и списков",
+      group: "Инструменты",
       icon: <Archive aria-hidden="true" size={18} />,
       onSelect: onOpenArchive,
     },
@@ -142,6 +174,7 @@ export function getBoardCommandActions({
       id: "appearance",
       label: "Оформление",
       description: "Изменить фон и цвет карточек",
+      group: "Инструменты",
       icon: <Palette aria-hidden="true" size={18} />,
       onSelect: onOpenAppearance,
     },

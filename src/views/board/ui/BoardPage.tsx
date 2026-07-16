@@ -1,8 +1,9 @@
 "use client";
 
 import { AlertTriangle, Search, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   getCardAttachments,
@@ -65,6 +66,7 @@ import {
   replaceStoredNotes,
   type Note,
 } from "@/features/manage-notes";
+import { evaluateWorkspaceHealth } from "@/features/workspace-health";
 import {
   addAttachmentToCard,
   removeAttachmentFromCard,
@@ -101,6 +103,7 @@ import {
   NOTES_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
+import { usePrefetchRoutes } from "@/shared/lib";
 import {
   IconButton,
   TextField,
@@ -108,25 +111,55 @@ import {
   type ToastMessage,
   type ToastTone,
 } from "@/shared/ui";
-import { BoardAppearanceSidebar } from "@/widgets/board-appearance";
 import { BoardColumns } from "@/widgets/board-columns";
-import { BoardToolsSidebar } from "@/widgets/board-tools";
-import { CardArchiveModal } from "@/widgets/card-archive";
-import { CardFiltersSidebar } from "@/widgets/card-filters";
-import { CardModal } from "@/widgets/card-modal";
-import {
-  CommandPalette,
-  QuickCreateCardDialog,
-  QuickCreateListDialog,
-} from "@/widgets/command-palette";
 import { ListActionsDialog } from "@/widgets/list-actions";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
-import { WorkspaceDataModal } from "@/widgets/workspace-data";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
 import { getBoardCommandActions } from "../lib/getBoardCommandActions";
 import { useBoardKeyboardShortcuts } from "../lib/useBoardKeyboardShortcuts";
+import { useWorkspaceCenterActions } from "../lib/useWorkspaceCenterActions";
 import { BoardLoadingState } from "./BoardLoadingState";
+
+const BoardAppearanceSidebar = dynamic(() =>
+  import("@/widgets/board-appearance").then((mod) => mod.BoardAppearanceSidebar),
+);
+const BoardToolsSidebar = dynamic(() =>
+  import("@/widgets/board-tools").then((mod) => mod.BoardToolsSidebar),
+);
+const CardArchiveModal = dynamic(() =>
+  import("@/widgets/card-archive").then((mod) => mod.CardArchiveModal),
+);
+const CardFiltersSidebar = dynamic(() =>
+  import("@/widgets/card-filters").then((mod) => mod.CardFiltersSidebar),
+);
+const CardModal = dynamic(() =>
+  import("@/widgets/card-modal").then((mod) => mod.CardModal),
+);
+const CommandPalette = dynamic(() =>
+  import("@/widgets/command-palette/ui/CommandPalette").then(
+    (mod) => mod.CommandPalette,
+  ),
+);
+const QuickCreateCardDialog = dynamic(() =>
+  import("@/widgets/command-palette/ui/QuickCreateCardDialog").then(
+    (mod) => mod.QuickCreateCardDialog,
+  ),
+);
+const QuickCreateListDialog = dynamic(() =>
+  import("@/widgets/command-palette/ui/QuickCreateListDialog").then(
+    (mod) => mod.QuickCreateListDialog,
+  ),
+);
+const WorkspaceCenterModal = dynamic(() =>
+  import("@/widgets/workspace-center").then((mod) => mod.WorkspaceCenterModal),
+);
+const WorkspaceDataModal = dynamic(() =>
+  import("@/widgets/workspace-data").then((mod) => mod.WorkspaceDataModal),
+);
+const WorkspaceHealthModal = dynamic(() =>
+  import("@/widgets/workspace-health").then((mod) => mod.WorkspaceHealthModal),
+);
 
 type BoardPageProps = Readonly<{
   boardId: string;
@@ -230,6 +263,8 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [isQuickCreateListOpen, setIsQuickCreateListOpen] = useState(false);
   const [isWorkspaceDataOpen, setIsWorkspaceDataOpen] = useState(false);
+  const [isWorkspaceCenterOpen, setIsWorkspaceCenterOpen] = useState(false);
+  const [isWorkspaceHealthOpen, setIsWorkspaceHealthOpen] = useState(false);
   const [listActionsListId, setListActionsListId] = useState<string | null>(
     null,
   );
@@ -269,6 +304,20 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     },
     [dismissToast],
   );
+
+  const workspaceCenterActions = useWorkspaceCenterActions({
+    activeBoardId: activeBoard?.id ?? boardId,
+    setNotesSnapshot,
+    showToast,
+    updateActiveBoard,
+  });
+  usePrefetchRoutes([
+    getBoardRoute(activeBoard?.id ?? boardId),
+    NOTES_ROUTE,
+    CALENDAR_ROUTE,
+    MY_WORK_ROUTE,
+    ANALYTICS_ROUTE,
+  ]);
 
   useEffect(() => {
     if (!isReady || !workspace || !activeBoard) {
@@ -367,6 +416,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     0,
   );
   const activeFiltersCount = getActiveCardFiltersCount(cardFilters);
+  const workspaceHealthReport = evaluateWorkspaceHealth({
+    notes: notesSnapshot,
+    workspace,
+  });
   const isFiltering = hasActiveCardFilters(cardFilters);
   const selectedListForActions = listActionsListId
     ? (activeBoard.lists[listActionsListId] ?? null)
@@ -466,6 +519,24 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     router.push(MY_WORK_ROUTE);
   };
 
+  const openWorkspaceHealth = () => {
+    setNotesSnapshot(loadNotes());
+    closePanels();
+    setIsArchiveOpen(false);
+    setIsWorkspaceDataOpen(false);
+    setIsWorkspaceCenterOpen(false);
+    setIsWorkspaceHealthOpen(true);
+  };
+
+  const openWorkspaceCenter = () => {
+    setNotesSnapshot(loadNotes());
+    closePanels();
+    setIsArchiveOpen(false);
+    setIsWorkspaceDataOpen(false);
+    setIsWorkspaceHealthOpen(false);
+    setIsWorkspaceCenterOpen(true);
+  };
+
   const openLinkedNote = (noteId: string) => {
     setIsInitialCardDismissed(true);
     setSelectedCardId(null);
@@ -489,7 +560,9 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     onOpenMyWork: openMyWork,
     onOpenNotes: openNotes,
     onOpenFilters: () => setIsFiltersOpen(true),
+    onOpenHealthCheck: openWorkspaceHealth,
     onOpenProjects: () => setIsProjectsOpen(true),
+    onOpenWorkspaceCenter: openWorkspaceCenter,
     onOpenCard: openCard,
     onOpenQuickCreateCard: () => setIsQuickCreateOpen(true),
     onOpenQuickCreateList: () => setIsQuickCreateListOpen(true),
@@ -502,9 +575,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         activeView="board"
         canRedo={canRedo}
         canUndo={canUndo}
+        healthCheckIssuesCount={workspaceHealthReport.issues.length}
         isAppearanceOpen={isAppearanceOpen}
         isArchiveOpen={isArchiveOpen}
         isFiltersOpen={isFiltersOpen}
+        isHealthCheckOpen={isWorkspaceHealthOpen}
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
         isBoardToolsOpen={isBoardToolsOpen}
@@ -516,6 +591,8 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onOpenMyWork={openMyWork}
         onOpenNotes={openNotes}
         onOpenCommands={() => setIsCommandPaletteOpen(true)}
+        onOpenHealthCheck={openWorkspaceHealth}
+        onOpenWorkspaceCenter={openWorkspaceCenter}
         onOpenWorkspaceData={() => setIsWorkspaceDataOpen(true)}
         onRedo={redo}
         onToggleBoardTools={() => {
@@ -578,9 +655,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           />
         ) : null}
 
-        <BoardToolsSidebar
-          board={activeBoard}
-          isOpen={isBoardToolsOpen}
+        {isBoardToolsOpen ? (
+          <BoardToolsSidebar
+            board={activeBoard}
+            isOpen={isBoardToolsOpen}
           onClose={() => setIsBoardToolsOpen(false)}
           onCreatePriorityOption={(name, color) =>
             updateActiveBoard(
@@ -708,13 +786,14 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
               "immediate",
             )
           }
-          onUpdateStatusLabel={(status, label) =>
-            updateActiveBoard(
-              (board) => updateCardStatusLabel(board, status, label),
-              "immediate",
-            )
-          }
-        />
+            onUpdateStatusLabel={(status, label) =>
+              updateActiveBoard(
+                (board) => updateCardStatusLabel(board, status, label),
+                "immediate",
+              )
+            }
+          />
+        ) : null}
 
         <section className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
           {storageError ? (
@@ -1008,25 +1087,29 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           </section>
         </section>
 
-        <BoardAppearanceSidebar
-          board={activeBoard}
-          isOpen={isAppearanceOpen}
-          onChange={(appearance) =>
-            updateActiveBoard((board) =>
-              updateBoardAppearance(board, appearance),
-            )
-          }
-          onClose={() => setIsAppearanceOpen(false)}
-        />
+        {isAppearanceOpen ? (
+          <BoardAppearanceSidebar
+            board={activeBoard}
+            isOpen={isAppearanceOpen}
+            onChange={(appearance) =>
+              updateActiveBoard((board) =>
+                updateBoardAppearance(board, appearance),
+              )
+            }
+            onClose={() => setIsAppearanceOpen(false)}
+          />
+        ) : null}
 
-        <CardFiltersSidebar
-          filters={cardFilters}
-          isOpen={isFiltersOpen}
-          labels={boardLabels}
-          lists={activeLists}
-          onChange={setCardFilters}
-          onClose={() => setIsFiltersOpen(false)}
-        />
+        {isFiltersOpen ? (
+          <CardFiltersSidebar
+            filters={cardFilters}
+            isOpen={isFiltersOpen}
+            labels={boardLabels}
+            lists={activeLists}
+            onChange={setCardFilters}
+            onClose={() => setIsFiltersOpen(false)}
+          />
+        ) : null}
       </div>
 
       {isArchiveOpen ? (
@@ -1293,70 +1376,103 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         />
       ) : null}
 
-      <QuickCreateCardDialog
-        isOpen={isQuickCreateOpen}
-        lists={activeLists}
-        onClose={() => setIsQuickCreateOpen(false)}
-        onCreate={(listId, title) => {
-          updateActiveBoard(
-            (board) => addCard(board, listId, title),
-            "immediate",
-          );
-          showToast({
-            title: "Карточка создана",
-            description: activeBoard.lists[listId]?.title ?? title,
-            tone: "success",
-          });
-        }}
-      />
+      {isQuickCreateOpen ? (
+        <QuickCreateCardDialog
+          isOpen={isQuickCreateOpen}
+          lists={activeLists}
+          onClose={() => setIsQuickCreateOpen(false)}
+          onCreate={(listId, title) => {
+            updateActiveBoard(
+              (board) => addCard(board, listId, title),
+              "immediate",
+            );
+            showToast({
+              title: "Карточка создана",
+              description: activeBoard.lists[listId]?.title ?? title,
+              tone: "success",
+            });
+          }}
+        />
+      ) : null}
 
-      <QuickCreateListDialog
-        isOpen={isQuickCreateListOpen}
-        onClose={() => setIsQuickCreateListOpen(false)}
-        onCreate={(title) => {
-          updateActiveBoard((board) => addList(board, title), "immediate");
-          showToast({
-            title: "Список создан",
-            description: title,
-            tone: "success",
-          });
-        }}
-      />
+      {isQuickCreateListOpen ? (
+        <QuickCreateListDialog
+          isOpen={isQuickCreateListOpen}
+          onClose={() => setIsQuickCreateListOpen(false)}
+          onCreate={(title) => {
+            updateActiveBoard((board) => addList(board, title), "immediate");
+            showToast({
+              title: "Список создан",
+              description: title,
+              tone: "success",
+            });
+          }}
+        />
+      ) : null}
 
-      <CommandPalette
-        actions={commandActions}
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-      />
+      {isCommandPaletteOpen ? (
+        <CommandPalette
+          actions={commandActions}
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+        />
+      ) : null}
 
-      <WorkspaceDataModal
-        activeBoard={activeBoard}
-        isOpen={isWorkspaceDataOpen}
-        isWorkspaceStorageBusy={isWorkspaceStorageBusy}
-        workspace={workspace}
-        workspaceStorage={workspaceStorage}
-        onClose={() => setIsWorkspaceDataOpen(false)}
-        onConnectFolder={connectWorkspaceFolder}
-        onCreateFolderBackup={createFolderBackup}
-        onDisconnectFolder={disconnectWorkspaceFolder}
-        onImport={({ workspace: nextWorkspace, notes }) => {
-          replaceStoredNotes(notes);
-          if (notes) {
-            setNotesSnapshot([...notes]);
-          }
-          replaceWorkspace(nextWorkspace);
-          const nextBoardId =
-            nextWorkspace.activeBoardId ?? nextWorkspace.boards[0]?.id;
-          if (nextBoardId) {
-            router.replace(getBoardRoute(nextBoardId));
-          }
-          showToast({
-            title: "Workspace импортирован",
-            description: `${nextWorkspace.boards.length} проектов`,
-            tone: "success",
-          });
-        }}
-      />
+      {isWorkspaceDataOpen ? (
+        <WorkspaceDataModal
+          activeBoard={activeBoard}
+          isOpen={isWorkspaceDataOpen}
+          isWorkspaceStorageBusy={isWorkspaceStorageBusy}
+          workspace={workspace}
+          workspaceStorage={workspaceStorage}
+          onClose={() => setIsWorkspaceDataOpen(false)}
+          onConnectFolder={connectWorkspaceFolder}
+          onCreateFolderBackup={createFolderBackup}
+          onDisconnectFolder={disconnectWorkspaceFolder}
+          onImport={({ workspace: nextWorkspace, notes }) => {
+            replaceStoredNotes(notes);
+            if (notes) {
+              setNotesSnapshot([...notes]);
+            }
+            replaceWorkspace(nextWorkspace);
+            const nextBoardId =
+              nextWorkspace.activeBoardId ?? nextWorkspace.boards[0]?.id;
+            if (nextBoardId) {
+              router.replace(getBoardRoute(nextBoardId));
+            }
+            showToast({
+              title: "Workspace импортирован",
+              description: `${nextWorkspace.boards.length} проектов`,
+              tone: "success",
+            });
+          }}
+        />
+      ) : null}
+
+      {isWorkspaceCenterOpen ? (
+        <WorkspaceCenterModal
+          activeBoard={activeBoard}
+          healthReport={workspaceHealthReport}
+          isOpen={isWorkspaceCenterOpen}
+          notes={notesSnapshot}
+          onApplyWorkflowTemplate={workspaceCenterActions.applyWorkflowTemplate}
+          onClose={() => setIsWorkspaceCenterOpen(false)}
+          onCreateNoteTemplate={workspaceCenterActions.createNoteTemplate}
+          onOpenHealthCheck={openWorkspaceHealth}
+          onOpenWorkspaceData={() => {
+            setIsWorkspaceCenterOpen(false);
+            setIsWorkspaceDataOpen(true);
+          }}
+        />
+      ) : null}
+
+      {isWorkspaceHealthOpen ? (
+        <WorkspaceHealthModal
+          isOpen={isWorkspaceHealthOpen}
+          report={workspaceHealthReport}
+          onClose={() => setIsWorkspaceHealthOpen(false)}
+        />
+      ) : null}
 
       <ToastViewport toasts={toasts} onDismiss={dismissToast} />
     </main>
