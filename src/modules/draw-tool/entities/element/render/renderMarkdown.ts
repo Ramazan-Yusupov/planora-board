@@ -1,3 +1,4 @@
+import { getLineDash } from "@/modules/draw-tool/shared/lib/canvas/getLineDash";
 import { drawRoundedRectPath } from "./drawRoundedRectPath";
 import type { MarkdownElement } from "../model/types";
 
@@ -40,7 +41,9 @@ export function renderMarkdown(
   context.fill();
   context.strokeStyle = style.strokeColor;
   context.lineWidth = style.strokeWidth;
+  context.setLineDash(getLineDash(style.strokeStyle, style.strokeWidth));
   context.stroke();
+  context.setLineDash([]);
 
   context.fillStyle = "rgb(30 41 59 / 82%)";
   drawRoundedRectPath(context, x, y, width, headerHeight, radius);

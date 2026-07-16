@@ -1,3 +1,4 @@
+import { getLineDash } from "@/modules/draw-tool/shared/lib/canvas/getLineDash";
 import type { AdvancedElement } from "../model/types";
 import { drawRoundedRectPath } from "./drawRoundedRectPath";
 import { renderAdvancedContent } from "./renderAdvancedContent";
@@ -22,6 +23,9 @@ function drawPanel(
   context.globalAlpha = element.style.opacity;
   context.lineWidth = element.style.strokeWidth;
   context.strokeStyle = element.style.strokeColor;
+  context.setLineDash(
+    getLineDash(element.style.strokeStyle, element.style.strokeWidth),
+  );
   context.fillStyle =
     element.style.fillStyle === "solid"
       ? element.style.backgroundColor

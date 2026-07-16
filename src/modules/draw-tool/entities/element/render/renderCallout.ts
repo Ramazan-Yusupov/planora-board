@@ -1,3 +1,4 @@
+import { getLineDash } from "@/modules/draw-tool/shared/lib/canvas/getLineDash";
 import { getElementBounds } from "../lib/getElementBounds";
 import { getRelationAnchor } from "../lib/getRelationAnchor";
 import { TEXT_ELEMENT_PADDING, TEXT_LINE_HEIGHT_RATIO } from "../lib/getTextSize";
@@ -13,10 +14,10 @@ export function renderCallout(context: CanvasRenderingContext2D, element: Callou
   context.globalAlpha = style.opacity;
   context.lineWidth = Math.max(1.5, style.strokeWidth);
   context.strokeStyle = style.strokeColor;
+  context.setLineDash(getLineDash(style.strokeStyle, style.strokeWidth));
 
   if (target) {
     const start = getRelationAnchor(element, target);
-    context.setLineDash([5, 4]);
     context.beginPath();
     context.moveTo(start.x, start.y);
     context.lineTo(target.x, target.y);
@@ -28,6 +29,7 @@ export function renderCallout(context: CanvasRenderingContext2D, element: Callou
     context.fill();
   }
 
+  context.setLineDash(getLineDash(style.strokeStyle, style.strokeWidth));
   context.fillStyle = style.backgroundColor === "transparent" ? "#172554" : style.backgroundColor;
   drawRoundedRectPath(context, bounds.x, bounds.y, bounds.width, bounds.height, 12);
   context.fill();

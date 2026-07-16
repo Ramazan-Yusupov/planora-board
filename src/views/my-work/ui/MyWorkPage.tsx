@@ -31,6 +31,7 @@ import {
 } from "@/entities/board";
 import { updateCard } from "@/features/board-management";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import { loadNotes, type Note } from "@/features/manage-notes";
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
@@ -40,7 +41,10 @@ import {
   getBoardRoute,
 } from "@/shared/config/routes";
 import { cn, usePrefetchRoutes } from "@/shared/lib";
-import { CommandPalette } from "@/widgets/command-palette";
+import {
+  CommandPalette,
+  getWorkspaceSearchActions,
+} from "@/widgets/command-palette";
 import { getWorkspaceNavigationActions } from "@/widgets/command-palette/lib/getWorkspaceNavigationActions";
 import { useCommandPaletteShortcut } from "@/widgets/command-palette/lib/useCommandPaletteShortcut";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
@@ -447,7 +451,9 @@ export function MyWorkPage() {
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [activeDragItem, setActiveDragItem] = useState<MyWorkItem | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [notesSnapshot, setNotesSnapshot] = useState<Note[]>([]);
   const openCommandPalette = useCallback(() => {
+    setNotesSnapshot(loadNotes());
     setIsCommandPaletteOpen(true);
   }, []);
   useCommandPaletteShortcut(openCommandPalette);
@@ -488,6 +494,19 @@ export function MyWorkPage() {
     setIsProjectsOpen(false);
     router.push(getBoardRoute(boardId));
   };
+  const openWorkspaceCard = (boardId: string, cardId: string) => {
+    selectProject(boardId);
+    setIsProjectsOpen(false);
+    router.push(getBoardRoute(boardId, cardId));
+  };
+  const openWorkspaceNote = (note: Note) => {
+    if (note.boardId) {
+      selectProject(note.boardId);
+    }
+
+    setIsProjectsOpen(false);
+    router.push(`${NOTES_ROUTE}?note=${encodeURIComponent(note.id)}`);
+  };
   const selectProjectFromHeader = (boardId: string) => {
     selectProject(boardId);
     setIsProjectsOpen(false);
@@ -523,6 +542,14 @@ export function MyWorkPage() {
       onOpenNotes: () => router.push(NOTES_ROUTE),
     }),
     ...myWorkTaskActions,
+    ...getWorkspaceSearchActions({
+      activeBoardId: activeBoard.id,
+      notes: notesSnapshot,
+      workspace,
+      onOpenBoard: openBoard,
+      onOpenCard: openWorkspaceCard,
+      onOpenNote: openWorkspaceNote,
+    }),
   ];
 
   const handleDragEnd = (event: DragEndEvent) => {

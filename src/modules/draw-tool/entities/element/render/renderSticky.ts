@@ -1,3 +1,4 @@
+import { getLineDash } from "@/modules/draw-tool/shared/lib/canvas/getLineDash";
 import { getElementBounds } from "../lib/getElementBounds";
 import { TEXT_ELEMENT_PADDING, TEXT_LINE_HEIGHT_RATIO } from "../lib/getTextSize";
 import type { StickyElement } from "../model/types";
@@ -12,6 +13,7 @@ export function renderSticky(context: CanvasRenderingContext2D, element: StickyE
   context.globalAlpha = style.opacity;
   context.lineWidth = style.strokeWidth;
   context.strokeStyle = style.strokeColor;
+  context.setLineDash(getLineDash(style.strokeStyle, style.strokeWidth));
   context.fillStyle = style.backgroundColor === "transparent" ? "#fde68a" : style.backgroundColor;
   drawRoundedRectPath(context, bounds.x, bounds.y, bounds.width, bounds.height, 12);
   context.fill();

@@ -1,3 +1,4 @@
+import { getLineDash } from "@/modules/draw-tool/shared/lib/canvas/getLineDash";
 import { getElementBounds } from "../lib/getElementBounds";
 import type { TableElement } from "../model/types";
 import { drawRoundedRectPath } from "./drawRoundedRectPath";
@@ -13,6 +14,7 @@ export function renderTable(context: CanvasRenderingContext2D, element: TableEle
   context.fillStyle = style.backgroundColor === "transparent" ? "#0f172a" : style.backgroundColor;
   context.strokeStyle = style.strokeColor;
   context.lineWidth = style.strokeWidth;
+  context.setLineDash(getLineDash(style.strokeStyle, style.strokeWidth));
   drawRoundedRectPath(context, bounds.x, bounds.y, bounds.width, bounds.height, style.cornerStyle === "rounded" ? 10 : 0);
   context.fill();
   context.stroke();

@@ -22,7 +22,10 @@ import {
 } from "@/shared/config/routes";
 import { usePrefetchRoutes } from "@/shared/lib";
 import { Button, ConfirmDialog, TextField } from "@/shared/ui";
-import { CommandPalette } from "@/widgets/command-palette";
+import {
+  CommandPalette,
+  getWorkspaceSearchActions,
+} from "@/widgets/command-palette";
 import { getWorkspaceNavigationActions } from "@/widgets/command-palette/lib/getWorkspaceNavigationActions";
 import { useCommandPaletteShortcut } from "@/widgets/command-palette/lib/useCommandPaletteShortcut";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
@@ -285,6 +288,18 @@ export function NotesPage() {
 
     return createdTask;
   };
+  const openWorkspaceCard = (boardId: string, cardId: string) => {
+    selectProject(boardId);
+    router.push(getBoardRoute(boardId, cardId));
+  };
+  const openWorkspaceNote = (note: Note) => {
+    if (note.boardId) {
+      selectProject(note.boardId);
+    }
+
+    setActiveNoteId(note.id);
+    router.push(`${NOTES_ROUTE}?note=${encodeURIComponent(note.id)}`);
+  };
   const commandActions = [
     ...getWorkspaceNavigationActions({
       onOpenAnalytics: () => router.push(ANALYTICS_ROUTE),
@@ -302,6 +317,14 @@ export function NotesPage() {
       icon: <Plus aria-hidden="true" size={18} />,
       onSelect: addNote,
     },
+    ...getWorkspaceSearchActions({
+      activeBoardId: activeBoard.id,
+      notes,
+      workspace,
+      onOpenBoard: openBoard,
+      onOpenCard: openWorkspaceCard,
+      onOpenNote: openWorkspaceNote,
+    }),
     ...boardNotes.map((note) => ({
       id: `note-${note.id}`,
       label: note.title || "Без названия",

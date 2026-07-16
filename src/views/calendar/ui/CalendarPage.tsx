@@ -11,6 +11,7 @@ import {
 import { type BoardCard, type CardDraft } from "@/entities/board";
 import { updateCard } from "@/features/board-management";
 import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import { loadNotes, type Note } from "@/features/manage-notes";
 import {
   getCalendarItems,
   getMonthStart,
@@ -27,7 +28,10 @@ import {
 } from "@/shared/config/routes";
 import { usePrefetchRoutes } from "@/shared/lib";
 import { CalendarView } from "@/widgets/calendar-view";
-import { CommandPalette } from "@/widgets/command-palette";
+import {
+  CommandPalette,
+  getWorkspaceSearchActions,
+} from "@/widgets/command-palette";
 import { getWorkspaceNavigationActions } from "@/widgets/command-palette/lib/getWorkspaceNavigationActions";
 import { useCommandPaletteShortcut } from "@/widgets/command-palette/lib/useCommandPaletteShortcut";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
@@ -98,7 +102,9 @@ export function CalendarPage() {
   });
   const [monthOffset, setMonthOffset] = useState(0);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [notesSnapshot, setNotesSnapshot] = useState<Note[]>([]);
   const openCommandPalette = useCallback(() => {
+    setNotesSnapshot(loadNotes());
     setIsCommandPaletteOpen(true);
   }, []);
   useCommandPaletteShortcut(openCommandPalette);
@@ -162,6 +168,17 @@ export function CalendarPage() {
     selectProject(item.boardId);
     router.push(getBoardRoute(item.boardId, item.card.id));
   };
+  const openWorkspaceCard = (boardId: string, cardId: string) => {
+    selectProject(boardId);
+    router.push(getBoardRoute(boardId, cardId));
+  };
+  const openWorkspaceNote = (note: Note) => {
+    if (note.boardId) {
+      selectProject(note.boardId);
+    }
+
+    router.push(`${NOTES_ROUTE}?note=${encodeURIComponent(note.id)}`);
+  };
   const calendarTaskActions = Array.from(
     getCalendarItems(workspace.boards, selectedCalendarBoardId).entries(),
   ).flatMap(([dateKey, items]) =>
@@ -183,6 +200,14 @@ export function CalendarPage() {
       onOpenNotes: () => router.push(NOTES_ROUTE),
     }),
     ...calendarTaskActions,
+    ...getWorkspaceSearchActions({
+      activeBoardId: activeBoard.id,
+      notes: notesSnapshot,
+      workspace,
+      onOpenBoard: openBoard,
+      onOpenCard: openWorkspaceCard,
+      onOpenNote: openWorkspaceNote,
+    }),
   ];
 
   const selectCalendarBoard = (boardId: string | null) => {

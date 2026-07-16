@@ -67,11 +67,6 @@ export function getPlanoraTaskElementPatch(
     return {
       body: nextBody,
       metadata: nextMetadata,
-      style: {
-        ...element.style,
-        strokeColor: "#fb7185",
-        backgroundColor: "#1f1117",
-      },
     };
   }
 
@@ -88,20 +83,10 @@ export function getPlanoraTaskElementPatch(
     priority: task.priorityLabel ?? "",
     syncState: "active",
   };
-  const nextStyle = {
-    ...element.style,
-    strokeColor: "#93c5fd",
-    backgroundColor: "#111827",
-    fillStyle: "solid" as const,
-    cornerStyle: "rounded" as const,
-    strokeWidth: 3,
-  };
-
   if (
     element.title === nextTitle &&
     element.body.join("\n") === nextBody.join("\n") &&
-    JSON.stringify(element.metadata ?? {}) === JSON.stringify(nextMetadata) &&
-    JSON.stringify(element.style) === JSON.stringify(nextStyle)
+    JSON.stringify(element.metadata ?? {}) === JSON.stringify(nextMetadata)
   ) {
     return null;
   }
@@ -109,7 +94,6 @@ export function getPlanoraTaskElementPatch(
   return {
     body: nextBody,
     metadata: nextMetadata,
-    style: nextStyle,
     tags: ["planora-task", task.boardTitle, task.listTitle],
     title: nextTitle,
   };

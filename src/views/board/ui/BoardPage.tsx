@@ -119,6 +119,7 @@ import { CardFiltersSidebar } from "@/widgets/card-filters";
 import { CardModal } from "@/widgets/card-modal";
 import {
   CommandPalette,
+  getWorkspaceSearchActions,
   QuickCreateCardDialog,
   QuickCreateListDialog,
 } from "@/widgets/command-palette";
@@ -343,9 +344,14 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     return () => window.clearTimeout(timeoutId);
   }, []);
 
+  const openCommandPalette = useCallback(() => {
+    setNotesSnapshot(loadNotes());
+    setIsCommandPaletteOpen(true);
+  }, []);
+
   useBoardKeyboardShortcuts({
     searchInputRef,
-    onOpenCommandPalette: () => setIsCommandPaletteOpen(true),
+    onOpenCommandPalette: openCommandPalette,
     onOpenProjects: () => setIsProjectsOpen((current) => !current),
     onOpenQuickCreateCard: () => setIsQuickCreateOpen(true),
     onOpenQuickCreateList: () => setIsQuickCreateListOpen(true),
@@ -537,24 +543,59 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setSelectedCardId(cardId);
   };
 
-  const commandActions = getBoardCommandActions({
-    board: activeBoard,
-    activeListsCount: activeLists.length,
-    onOpenArchive: () => setIsArchiveOpen(true),
-    onOpenAnalytics: openAnalytics,
-    onOpenAppearance: () => setIsAppearanceOpen(true),
-    onOpenCalendar: openCalendar,
-    onOpenDraw: openDraw,
-    onOpenMyWork: openMyWork,
-    onOpenNotes: openNotes,
-    onOpenFilters: () => setIsFiltersOpen(true),
-    onOpenHealthCheck: openWorkspaceHealth,
-    onOpenProjects: () => setIsProjectsOpen(true),
-    onOpenWorkspaceCenter: openWorkspaceCenter,
-    onOpenCard: openCard,
-    onOpenQuickCreateCard: () => setIsQuickCreateOpen(true),
-    onOpenQuickCreateList: () => setIsQuickCreateListOpen(true),
-  });
+  const openWorkspaceBoard = (nextBoardId: string) => {
+    selectProject(nextBoardId);
+    closePanels();
+    router.push(getBoardRoute(nextBoardId));
+  };
+
+  const openWorkspaceCard = (nextBoardId: string, cardId: string) => {
+    selectProject(nextBoardId);
+    closePanels();
+
+    if (nextBoardId === activeBoard.id) {
+      setIsInitialCardDismissed(true);
+      setSelectedCardId(cardId);
+      return;
+    }
+
+    router.push(getBoardRoute(nextBoardId, cardId));
+  };
+
+  const commandActions = [
+    ...getBoardCommandActions({
+      board: activeBoard,
+      activeListsCount: activeLists.length,
+      onOpenArchive: () => setIsArchiveOpen(true),
+      onOpenAnalytics: openAnalytics,
+      onOpenAppearance: () => setIsAppearanceOpen(true),
+      onOpenCalendar: openCalendar,
+      onOpenDraw: openDraw,
+      onOpenMyWork: openMyWork,
+      onOpenNotes: openNotes,
+      onOpenFilters: () => setIsFiltersOpen(true),
+      onOpenHealthCheck: openWorkspaceHealth,
+      onOpenProjects: () => setIsProjectsOpen(true),
+      onOpenWorkspaceCenter: openWorkspaceCenter,
+      onOpenCard: openCard,
+      onOpenQuickCreateCard: () => setIsQuickCreateOpen(true),
+      onOpenQuickCreateList: () => setIsQuickCreateListOpen(true),
+    }),
+    ...getWorkspaceSearchActions({
+      activeBoardId: activeBoard.id,
+      notes: notesSnapshot,
+      workspace,
+      onOpenBoard: openWorkspaceBoard,
+      onOpenCard: openWorkspaceCard,
+      onOpenNote: (note) => {
+        if (note.boardId) {
+          selectProject(note.boardId);
+        }
+
+        openLinkedNote(note.id);
+      },
+    }),
+  ];
 
   return (
     <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
@@ -579,7 +620,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onOpenDraw={openDraw}
         onOpenMyWork={openMyWork}
         onOpenNotes={openNotes}
-        onOpenCommands={() => setIsCommandPaletteOpen(true)}
+        onOpenCommands={openCommandPalette}
         onOpenHealthCheck={openWorkspaceHealth}
         onOpenWorkspaceCenter={openWorkspaceCenter}
         onOpenWorkspaceData={() => setIsWorkspaceDataOpen(true)}

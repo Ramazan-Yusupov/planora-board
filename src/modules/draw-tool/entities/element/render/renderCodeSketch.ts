@@ -1,3 +1,4 @@
+import { getLineDash } from "@/modules/draw-tool/shared/lib/canvas/getLineDash";
 import { getElementBounds } from "../lib/getElementBounds";
 import type { CodeSketchElement } from "../model/types";
 import { drawRoundedRectPath } from "./drawRoundedRectPath";
@@ -44,6 +45,7 @@ export function renderCodeSketch(
   context.globalAlpha = style.opacity;
   context.lineWidth = style.strokeWidth;
   context.strokeStyle = style.strokeColor;
+  context.setLineDash(getLineDash(style.strokeStyle, style.strokeWidth));
   context.fillStyle =
     style.fillStyle === "solid" && style.backgroundColor !== "transparent"
       ? style.backgroundColor

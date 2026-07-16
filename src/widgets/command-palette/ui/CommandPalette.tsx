@@ -13,6 +13,7 @@ export type CommandPaletteAction = Readonly<{
   description: string;
   group?: string;
   shortcut?: string;
+  keywords?: string;
   icon: ReactNode;
   onSelect: () => void;
   disabled?: boolean;
@@ -34,7 +35,9 @@ export function CommandPalette({ actions, isOpen, onClose }: CommandPaletteProps
     }
 
     return actions.filter((action) =>
-      `${action.label} ${action.description}`.toLocaleLowerCase("ru-RU").includes(normalizedQuery),
+      `${action.label} ${action.description} ${action.keywords ?? ""}`
+        .toLocaleLowerCase("ru-RU")
+        .includes(normalizedQuery),
     );
   }, [actions, query]);
   const visibleGroups = useMemo(() => {
