@@ -3,7 +3,6 @@
 import {
   closestCenter,
   DndContext,
-  useDroppable,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -16,33 +15,18 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Bold,
   ChevronRight,
   Check,
-  Code2,
   GripVertical,
-  Italic,
   MoreHorizontal,
   Plus,
-  Strikethrough,
-  Trash2,
-  Underline,
 } from "lucide-react";
 import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent,
-  type MouseEvent,
-  type RefCallback,
-  type RefObject,
-  type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 
 import type { Board } from "@/entities/board";
 import {
@@ -50,23 +34,19 @@ import {
   type NoteBlock,
 } from "@/features/manage-notes";
 import { cn } from "@/shared/lib";
-import { useKeyboardListNavigation, useViewportMenuPosition } from "@/shared/ui";
 
 import {
   NOTES_ROOT_DROP_ZONE_ID,
   DEFAULT_TABLE_COLUMN_COUNT,
   applyInlineFormat,
-  backgroundColorOptions,
   basicBlockCommands,
   clearEditableText,
   createBlock,
-  escapeInlineHtml,
   filterTaskItems,
   getActiveInlineFormats,
   getActiveTaskCreateTargets,
   getBlockClassName,
   getBlockColorClassName,
-  getBlockInlineHtml,
   getBlockStyle,
   getBoardTaskItems,
   getInlineFormatShortcut,
@@ -81,9 +61,6 @@ import {
   isDescendantBlock,
   isSelectionInsideElement,
   isTaskCreateQuery,
-  placeCaretAtEnd,
-  sanitizeInlineHtml,
-  textColorOptions,
   type BlockCommand,
   type InlineFormat,
   type NoteDropIntent,
@@ -91,6 +68,16 @@ import {
   type NoteTaskCreateTarget,
   type NoteTaskItem,
 } from "../lib/notesEditorModel";
+import { useNotesEditorFocus } from "../lib/useNotesEditorFocus";
+import { NotesBlockActionMenu } from "./NotesBlockActionMenu";
+import { NotesBlockCommandMenu } from "./NotesBlockCommandMenu";
+import { NotesEditableBlock } from "./NotesEditableBlock";
+import {
+  NotesInlineFormatBubble,
+  type InlineFormatMenuState,
+} from "./NotesInlineFormatBubble";
+import { NotesRootDropZone } from "./NotesRootDropZone";
+import { NotesTableCell, type TableCellAction } from "./NotesTableCell";
 type NotesEditorProps = Readonly<{
   activeBoard: Board;
   blocks: readonly NoteBlock[];
@@ -98,193 +85,6 @@ type NotesEditorProps = Readonly<{
   onCreateTask: (listId: string, title: string) => NoteTaskItem | null;
   onOpenCard: (cardId: string) => void;
 }>;
-
-type EditableBlockProps = Readonly<{
-  block: NoteBlock;
-  className: string;
-  registerElement: RefCallback<HTMLElement>;
-  style?: CSSProperties;
-  onBlur: (element: HTMLElement) => void;
-  onInput: (element: HTMLElement) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
-  onPasteMarkdown: (text: string, element: HTMLElement) => boolean;
-  onSelectionChange: (element: HTMLElement) => void;
-}>;
-
-function EditableBlock({
-  block,
-  className,
-  registerElement,
-  style,
-  onBlur,
-  onInput,
-  onKeyDown,
-  onPasteMarkdown,
-  onSelectionChange,
-}: EditableBlockProps) {
-  const elementRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const element = elementRef.current;
-
-    if (!element || document.activeElement === element) {
-      return;
-    }
-
-    const html = getBlockInlineHtml(block);
-
-    if (sanitizeInlineHtml(element.innerHTML) !== html) {
-      element.innerHTML = html;
-    }
-  }, [block]);
-
-  return (
-    <div
-      ref={(element) => {
-        elementRef.current = element;
-        registerElement(element);
-
-        if (element && document.activeElement !== element) {
-          element.innerHTML = getBlockInlineHtml(block);
-        }
-      }}
-      className={cn(
-        className,
-        "cursor-text [&_code]:rounded [&_code]:border [&_code]:border-white/10 [&_code]:bg-white/8 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.92em] [&_code]:text-sky-100",
-      )}
-      contentEditable
-      data-placeholder="Напишите что-нибудь или введите ###, ---, -"
-      role="textbox"
-      style={style}
-      suppressContentEditableWarning
-      onBlur={(event) => onBlur(event.currentTarget)}
-      onInput={(event) => onInput(event.currentTarget)}
-      onKeyDown={onKeyDown}
-      onKeyUp={(event) => onSelectionChange(event.currentTarget)}
-      onMouseUp={(event) => onSelectionChange(event.currentTarget)}
-      onPaste={(event) => {
-        const text = event.clipboardData.getData("text/plain");
-
-        if (onPasteMarkdown(text, event.currentTarget)) {
-          event.preventDefault();
-          return;
-        }
-
-        event.preventDefault();
-        document.execCommand("insertHTML", false, escapeInlineHtml(text));
-        onInput(event.currentTarget);
-      }}
-    />
-  );
-}
-
-type EditableTableCellProps = Readonly<{
-  blockId: string;
-  canDeleteColumn: boolean;
-  canDeleteRow: boolean;
-  cellIndex: number;
-  className?: string;
-  isHeader: boolean;
-  isMenuOpen: boolean;
-  placeholder: string;
-  rowIndex: number;
-  tableHasHeaderRow: boolean;
-  value: string;
-  onChange: (value: string) => void;
-  onCloseMenu: () => void;
-  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
-  onOpenMenu: () => void;
-  onRegisterElement: (element: HTMLElement | null) => void;
-  onTableAction: (action: TableCellAction) => void;
-}>;
-
-function EditableTableCell({
-  blockId,
-  canDeleteColumn,
-  canDeleteRow,
-  cellIndex,
-  className,
-  isHeader,
-  isMenuOpen,
-  placeholder,
-  rowIndex,
-  tableHasHeaderRow,
-  value,
-  onChange,
-  onCloseMenu,
-  onKeyDown,
-  onOpenMenu,
-  onRegisterElement,
-  onTableAction,
-}: EditableTableCellProps) {
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const elementRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const element = elementRef.current;
-
-    if (!element || document.activeElement === element) {
-      return;
-    }
-
-    if (element.textContent !== value) {
-      element.textContent = value;
-    }
-  }, [value]);
-
-  return (
-    <div
-      ref={wrapperRef}
-      className={cn("group/cell relative min-h-9", className)}
-      onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        onOpenMenu();
-      }}
-    >
-      <div
-        ref={(element) => {
-          elementRef.current = element;
-          onRegisterElement(element);
-
-          if (element && document.activeElement !== element) {
-            element.textContent = value;
-          }
-        }}
-        className={cn(
-          "min-h-9 px-3 py-2 pr-8 outline-none empty:before:text-text-muted/55 empty:before:content-[attr(data-placeholder)] focus:bg-white/5",
-          isHeader && "font-medium text-white",
-        )}
-        contentEditable
-        data-placeholder={placeholder}
-        data-table-block-id={blockId}
-        data-table-cell-index={cellIndex}
-        data-table-row-index={rowIndex}
-        role="textbox"
-        suppressContentEditableWarning
-        onInput={(event) => onChange(getTextFromEditable(event.currentTarget))}
-        onKeyDown={onKeyDown}
-      />
-      <button
-        aria-label="Открыть меню ячейки"
-        className="absolute right-1 top-1 grid size-6 place-items-center rounded-md text-text-muted opacity-0 transition hover:bg-white/10 hover:text-text focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent/60 group-hover/cell:opacity-80 group-focus-within/cell:opacity-80"
-        type="button"
-        onClick={onOpenMenu}
-      >
-        <MoreHorizontal aria-hidden="true" size={14} />
-      </button>
-      {isMenuOpen ? (
-        <TableCellActionMenu
-          anchorRef={wrapperRef}
-          canDeleteColumn={canDeleteColumn}
-          canDeleteRow={canDeleteRow}
-          hasHeaderRow={tableHasHeaderRow}
-          onAction={onTableAction}
-          onClose={onCloseMenu}
-        />
-      ) : null}
-    </div>
-  );
-}
 
 type SlashMenuState = Readonly<{
   blockId: string;
@@ -299,22 +99,6 @@ type TableCellMenuState = Readonly<{
   blockId: string;
   cellIndex: number;
   rowIndex: number;
-}> | null;
-
-type TableCellAction =
-  | "insert-row-above"
-  | "insert-row-below"
-  | "delete-row"
-  | "insert-column-left"
-  | "insert-column-right"
-  | "delete-column"
-  | "toggle-header-row";
-
-type InlineFormatMenuState = Readonly<{
-  blockId: string;
-  left: number;
-  top: number;
-  activeFormats: ReadonlySet<InlineFormat>;
 }> | null;
 
 function filterBlockCommands(query: string): readonly BlockCommand[] {
@@ -336,779 +120,6 @@ function filterBlockCommands(query: string): readonly BlockCommand[] {
 
     return haystack.includes(normalizedQuery);
   });
-}
-
-function useViewportMenuStyle(
-  menuRef: RefObject<HTMLDivElement | null>,
-  maxHeight = 352,
-  placementKey = 0,
-): CSSProperties {
-  const [style, setStyle] = useState<CSSProperties>({});
-
-  useLayoutEffect(() => {
-    const menu = menuRef.current;
-
-    if (!menu) {
-      return;
-    }
-
-    const margin = 8;
-    const rect = menu.getBoundingClientRect();
-    const availableHeight = window.innerHeight - margin * 2;
-    const nextMaxHeight = Math.min(maxHeight, availableHeight);
-    const overflowBottom = rect.bottom - (window.innerHeight - margin);
-    const overflowTopAfterShift = rect.top - Math.max(0, overflowBottom);
-    const shiftY =
-      overflowBottom > 0
-        ? -Math.min(overflowBottom, Math.max(0, overflowTopAfterShift - margin))
-        : 0;
-
-    setStyle({
-      maxHeight: nextMaxHeight,
-      transform: shiftY ? `translateY(${shiftY}px)` : undefined,
-    });
-  }, [maxHeight, menuRef, placementKey]);
-
-  return style;
-}
-
-type BlockCommandMenuItem =
-  | Readonly<{
-      command: BlockCommand;
-      id: string;
-      type: "command";
-    }>
-  | Readonly<{
-      id: string;
-      target: NoteTaskCreateTarget;
-      type: "create-task";
-    }>
-  | Readonly<{
-      id: string;
-      task: NoteTaskItem;
-      type: "task";
-    }>;
-
-function BlockCommandMenu({
-  anchorRef,
-  commands,
-  showTaskCreateSection,
-  taskCreateTargets,
-  tasks,
-  onClose,
-  onCreateTask,
-  onSelect,
-  onSelectTask,
-}: Readonly<{
-  anchorRef: RefObject<HTMLDivElement | null>;
-  commands: readonly BlockCommand[];
-  showTaskCreateSection: boolean;
-  taskCreateTargets: readonly NoteTaskCreateTarget[];
-  tasks: readonly NoteTaskItem[];
-  onClose: () => void;
-  onCreateTask: (target: NoteTaskCreateTarget) => void;
-  onSelect: (command: BlockCommand) => void;
-  onSelectTask: (task: NoteTaskItem) => void;
-}>) {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const { style: menuStyle } = useViewportMenuPosition({
-    anchorRef,
-    maxHeight: 440,
-    menuRef,
-    width: 352,
-  });
-  const menuItems = useMemo<readonly BlockCommandMenuItem[]>(
-    () => [
-      ...commands.map((command) => ({
-        command,
-        id: `command-${command.id}`,
-        type: "command" as const,
-      })),
-      ...(showTaskCreateSection
-        ? taskCreateTargets.map((target) => ({
-            id: `create-task-${target.listId}`,
-            target,
-            type: "create-task" as const,
-          }))
-        : []),
-      ...tasks.map((task) => ({
-        id: `task-${task.boardId}-${task.card.id}`,
-        task,
-        type: "task" as const,
-      })),
-    ],
-    [commands, showTaskCreateSection, taskCreateTargets, tasks],
-  );
-  const activateMenuItem = useCallback(
-    (index: number) => {
-      const item = menuItems[index];
-
-      if (!item) {
-        return;
-      }
-
-      if (item.type === "command") {
-        onSelect(item.command);
-        return;
-      }
-
-      if (item.type === "create-task") {
-        if (!item.target.isDisabled) {
-          onCreateTask(item.target);
-        }
-        return;
-      }
-
-      onSelectTask(item.task);
-    },
-    [menuItems, onCreateTask, onSelect, onSelectTask],
-  );
-  const isMenuItemDisabled = useCallback(
-    (index: number) => {
-      const item = menuItems[index];
-
-      return item?.type === "create-task" ? item.target.isDisabled : false;
-    },
-    [menuItems],
-  );
-  const {
-    activeIndex,
-    activeItemId,
-    getItemProps,
-    handleKeyDown: handleMenuKeyDown,
-  } = useKeyboardListNavigation({
-    count: menuItems.length,
-    getItemId: (index) => `notes-slash-menu-${menuItems[index]?.id ?? index}`,
-    isItemDisabled: isMenuItemDisabled,
-    onClose,
-    onSelect: activateMenuItem,
-  });
-
-  useLayoutEffect(() => {
-    const closeOnPointerDown = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-
-      onClose();
-    };
-
-    const handleNavigationKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (
-        event.key === "ArrowDown" ||
-        event.key === "ArrowUp" ||
-        event.key === "PageDown" ||
-        event.key === "PageUp" ||
-        event.key === "Home" ||
-        event.key === "End" ||
-        event.key === "Enter" ||
-        event.key === "Escape"
-      ) {
-        handleMenuKeyDown(event);
-      }
-    };
-
-    window.addEventListener("pointerdown", closeOnPointerDown);
-    window.addEventListener("keydown", handleNavigationKeyDown);
-
-    return () => {
-      window.removeEventListener("pointerdown", closeOnPointerDown);
-      window.removeEventListener("keydown", handleNavigationKeyDown);
-    };
-  }, [handleMenuKeyDown, onClose]);
-
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      aria-activedescendant={activeItemId}
-      className="flex flex-col overflow-hidden rounded-lg border border-white/12 bg-[#242424] text-white shadow-2xl"
-      role="menu"
-      style={{
-        ...menuStyle,
-        zIndex: 85,
-      }}
-      tabIndex={-1}
-      onKeyDown={handleMenuKeyDown}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      <div className="min-h-24 flex-1 overflow-y-auto p-1.5">
-        <p className="px-2 py-1.5 text-xs font-semibold text-white/45">
-          Basic blocks
-        </p>
-        {commands.length > 0 ? (
-          commands.map((command, commandIndex) => (
-            <button
-              key={command.id}
-              {...getItemProps(commandIndex)}
-              className={cn(
-                "flex min-h-10 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition hover:bg-white/10 focus:bg-white/10 focus:outline-none",
-                activeIndex === commandIndex && "bg-white/10",
-              )}
-              role="menuitem"
-              type="button"
-              onClick={() => onSelect(command)}
-            >
-              <span className="grid size-6 shrink-0 place-items-center text-white/78">
-                {command.icon}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium text-white/90">
-                  {command.title}
-                </span>
-                <span className="block truncate text-xs text-white/42">
-                  {command.description}
-                </span>
-              </span>
-              {command.shortcut ? (
-                <span className="shrink-0 font-mono text-xs text-white/32">
-                  {command.shortcut}
-                </span>
-              ) : null}
-            </button>
-          ))
-        ) : (
-          <p className="px-2.5 py-6 text-center text-sm text-white/45">
-            Ничего не найдено
-          </p>
-        )}
-      </div>
-      {showTaskCreateSection ? (
-        <div className="shrink-0 border-t border-white/10 p-1.5">
-          <div className="flex items-center justify-between gap-3 px-2 py-1.5">
-            <p className="text-xs font-semibold text-white/45">
-              Создать задачу
-            </p>
-            <span className="rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white/38">
-              {taskCreateTargets.length}
-            </span>
-          </div>
-          <div className="max-h-[6.75rem] overflow-x-hidden overflow-y-auto pr-1">
-            {taskCreateTargets.length > 0 ? (
-              <div className="grid min-w-0 gap-1">
-                {taskCreateTargets.map((target, targetIndex) => {
-                  const itemIndex = commands.length + targetIndex;
-
-                  return (
-                  <button
-                    key={target.listId}
-                    {...getItemProps(itemIndex)}
-                    className={cn(
-                      "flex min-h-11 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-white/8 bg-white/4 px-2.5 py-2 text-left text-sm transition focus:border-accent/60 focus:outline-none",
-                      target.isDisabled
-                        ? "cursor-not-allowed opacity-45"
-                        : "hover:border-accent/45 hover:bg-white/10",
-                      activeIndex === itemIndex &&
-                        !target.isDisabled &&
-                        "border-accent/45 bg-white/10",
-                    )}
-                    disabled={target.isDisabled}
-                    role="menuitem"
-                    title={
-                      target.disabledReason
-                        ? `${target.listTitle}: ${target.disabledReason}`
-                        : `Создать задачу в «${target.listTitle}»`
-                    }
-                    type="button"
-                    onClick={() => onCreateTask(target)}
-                  >
-                    <Plus
-                      aria-hidden="true"
-                      className="shrink-0 text-accent"
-                      size={16}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block max-w-full truncate font-semibold text-white/90">
-                        {target.listTitle}
-                      </span>
-                      <span className="block max-w-full truncate text-xs text-white/42">
-                        {target.disabledReason ?? "Из текущей строки"}
-                      </span>
-                    </span>
-                  </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="px-2.5 py-4 text-center text-sm text-white/45">
-                Нет доступных списков
-              </p>
-            )}
-          </div>
-        </div>
-      ) : null}
-      <div className="shrink-0 border-t border-white/10 p-1.5">
-        <div className="flex items-center justify-between gap-3 px-2 py-1.5">
-          <p className="text-xs font-semibold text-white/45">Задачи доски</p>
-          <span className="rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white/38">
-            {tasks.length}
-          </span>
-        </div>
-        <div className="max-h-[6.75rem] overflow-x-hidden overflow-y-auto pr-1">
-          {tasks.length > 0 ? (
-            <div className="grid min-w-0 gap-1">
-              {tasks.map((task, taskIndex) => {
-                const itemIndex =
-                  commands.length +
-                  (showTaskCreateSection ? taskCreateTargets.length : 0) +
-                  taskIndex;
-
-                return (
-                <button
-                  key={`${task.boardId}-${task.card.id}`}
-                  {...getItemProps(itemIndex)}
-                  className={cn(
-                    "flex min-h-11 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-white/8 bg-white/4 px-2.5 py-2 text-left text-sm transition hover:border-accent/45 hover:bg-white/10 focus:border-accent/60 focus:outline-none",
-                    activeIndex === itemIndex && "border-accent/45 bg-white/10",
-                  )}
-                  role="menuitem"
-                  title={`${task.boardTitle}: ${task.card.title}`}
-                  type="button"
-                  onClick={() => onSelectTask(task)}
-                >
-                  {task.card.sticker ? (
-                    <span
-                      aria-hidden="true"
-                      className="shrink-0 text-base leading-none"
-                    >
-                      {task.card.sticker}
-                    </span>
-                  ) : (
-                    <span className="size-2 shrink-0 rounded-full bg-accent" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block max-w-full truncate font-semibold text-white/90">
-                      {task.card.title}
-                    </span>
-                    <span className="block max-w-full truncate text-xs text-white/42">
-                      {task.listTitle}
-                      {task.card.dueDate ? ` · ${task.card.dueDate}` : ""}
-                    </span>
-                  </span>
-                </button>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="px-2.5 py-4 text-center text-sm text-white/45">
-              В этой доске нет задач
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="flex min-h-10 items-center justify-between border-t border-white/10 px-3 text-sm">
-        <button
-          className="font-medium text-white/85 transition hover:text-white"
-          type="button"
-          onClick={onClose}
-        >
-          Close menu
-        </button>
-        <span className="text-xs text-white/35">esc</span>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function BlockActionMenu({
-  block,
-  onClose,
-  onDelete,
-  onSetBackgroundColor,
-  onSetTextColor,
-}: Readonly<{
-  block: NoteBlock;
-  onClose: () => void;
-  onDelete: () => void;
-  onSetBackgroundColor: (color: string | undefined) => void;
-  onSetTextColor: (color: string | undefined) => void;
-}>) {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const viewportStyle = useViewportMenuStyle(menuRef, 304);
-  const canChangeColors = block.type !== "linked-card" && block.type !== "table";
-
-  useLayoutEffect(() => {
-    const closeOnPointerDown = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-
-      onClose();
-    };
-
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("pointerdown", closeOnPointerDown);
-    window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", onClose);
-
-    return () => {
-      window.removeEventListener("pointerdown", closeOnPointerDown);
-      window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      ref={menuRef}
-      className="absolute left-8 top-9 z-40 w-[min(18rem,calc(100vw-3rem))] overflow-y-auto rounded-lg border border-white/12 bg-[#242424] p-1.5 text-white shadow-2xl"
-      role="menu"
-      style={viewportStyle}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      <button
-        className="flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium text-red-200 transition hover:bg-red-500/12"
-        role="menuitem"
-        type="button"
-        onClick={() => {
-          onDelete();
-          onClose();
-        }}
-      >
-        <Trash2 aria-hidden="true" size={15} />
-        Удалить
-      </button>
-
-      {canChangeColors ? (
-        <>
-          <div className="mt-1 border-t border-white/10 pt-2">
-            <p className="px-2 py-1 text-xs font-semibold text-white/45">
-              Цвет текста
-            </p>
-            <div className="grid gap-1">
-              {textColorOptions.map((option) => {
-                const value = option.id === "default" ? undefined : option.id;
-                const isActive = (block.textColor ?? "default") === option.id;
-
-                return (
-                  <button
-                    key={option.id}
-                    className={cn(
-                      "flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10",
-                      isActive && "bg-white/10 text-white",
-                    )}
-                    role="menuitem"
-                    type="button"
-                    onClick={() => onSetTextColor(value)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "size-3 rounded-full",
-                        option.swatchClassName,
-                      )}
-                    />
-                    <span className="min-w-0 flex-1 truncate">
-                      {option.label}
-                    </span>
-                    {isActive ? <Check aria-hidden="true" size={14} /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-1 border-t border-white/10 pt-2">
-            <p className="px-2 py-1 text-xs font-semibold text-white/45">
-              Фон
-            </p>
-            <div className="grid gap-1">
-              {backgroundColorOptions.map((option) => {
-                const value = option.id === "default" ? undefined : option.id;
-                const isActive =
-                  (block.backgroundColor ?? "default") === option.id;
-
-                return (
-                  <button
-                    key={option.id}
-                    className={cn(
-                      "flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10",
-                      isActive && "bg-white/10 text-white",
-                    )}
-                    role="menuitem"
-                    type="button"
-                    onClick={() => onSetBackgroundColor(value)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "size-3 rounded-full",
-                        option.swatchClassName,
-                      )}
-                    />
-                    <span className="min-w-0 flex-1 truncate">
-                      {option.label}
-                    </span>
-                    {isActive ? <Check aria-hidden="true" size={14} /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function TableCellActionMenu({
-  anchorRef,
-  canDeleteColumn,
-  canDeleteRow,
-  hasHeaderRow,
-  onAction,
-  onClose,
-}: Readonly<{
-  anchorRef: RefObject<HTMLDivElement | null>;
-  canDeleteColumn: boolean;
-  canDeleteRow: boolean;
-  hasHeaderRow: boolean;
-  onAction: (action: TableCellAction) => void;
-  onClose: () => void;
-}>) {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const { style: menuStyle } = useViewportMenuPosition({
-    align: "end",
-    anchorRef,
-    maxHeight: 240,
-    menuRef,
-    width: 256,
-  });
-
-  useLayoutEffect(() => {
-    const closeOnPointerDown = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-
-      onClose();
-    };
-
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("pointerdown", closeOnPointerDown);
-    window.addEventListener("keydown", closeOnEscape);
-
-    return () => {
-      window.removeEventListener("pointerdown", closeOnPointerDown);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [onClose]);
-
-  const runAction = (action: TableCellAction) => {
-    onAction(action);
-    onClose();
-  };
-
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="overflow-y-auto rounded-lg border border-white/12 bg-[#242424] p-1.5 text-white shadow-2xl"
-      role="menu"
-      style={{
-        ...menuStyle,
-        zIndex: 80,
-      }}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      <button
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
-        role="menuitem"
-        type="button"
-        onClick={() => runAction("insert-row-above")}
-      >
-        <Plus aria-hidden="true" size={14} />
-        Строка выше
-      </button>
-      <button
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
-        role="menuitem"
-        type="button"
-        onClick={() => runAction("insert-row-below")}
-      >
-        <Plus aria-hidden="true" size={14} />
-        Строка ниже
-      </button>
-      <button
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
-        role="menuitem"
-        type="button"
-        onClick={() => runAction("insert-column-left")}
-      >
-        <Plus aria-hidden="true" size={14} />
-        Колонка слева
-      </button>
-      <button
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
-        role="menuitem"
-        type="button"
-        onClick={() => runAction("insert-column-right")}
-      >
-        <Plus aria-hidden="true" size={14} />
-        Колонка справа
-      </button>
-
-      <div className="my-1 border-t border-white/10" />
-
-      <button
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
-        role="menuitemcheckbox"
-        type="button"
-        aria-checked={hasHeaderRow}
-        onClick={() => runAction("toggle-header-row")}
-      >
-        <span className="grid size-4 place-items-center">
-          {hasHeaderRow ? <Check aria-hidden="true" size={14} /> : null}
-        </span>
-        Header row
-      </button>
-
-      <div className="my-1 border-t border-white/10" />
-
-      <button
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-200 transition hover:bg-red-500/12 disabled:cursor-not-allowed disabled:text-white/28 disabled:hover:bg-transparent"
-        disabled={!canDeleteRow}
-        role="menuitem"
-        type="button"
-        onClick={() => runAction("delete-row")}
-      >
-        <Trash2 aria-hidden="true" size={14} />
-        Удалить строку
-      </button>
-      <button
-        className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-200 transition hover:bg-red-500/12 disabled:cursor-not-allowed disabled:text-white/28 disabled:hover:bg-transparent"
-        disabled={!canDeleteColumn}
-        role="menuitem"
-        type="button"
-        onClick={() => runAction("delete-column")}
-      >
-        <Trash2 aria-hidden="true" size={14} />
-        Удалить колонку
-      </button>
-    </div>,
-    document.body,
-  );
-}
-
-function InlineFormatBubble({
-  menu,
-  onFormat,
-}: Readonly<{
-  menu: InlineFormatMenuState;
-  onFormat: (format: InlineFormat) => void;
-}>) {
-  if (!menu || typeof document === "undefined") {
-    return null;
-  }
-
-  const actions: ReadonlyArray<{
-    format: InlineFormat;
-    label: string;
-    icon: ReactNode;
-  }> = [
-    {
-      format: "bold",
-      label: "Bold",
-      icon: <Bold aria-hidden="true" size={15} />,
-    },
-    {
-      format: "italic",
-      label: "Italic",
-      icon: <Italic aria-hidden="true" size={15} />,
-    },
-    {
-      format: "underline",
-      label: "Underline",
-      icon: <Underline aria-hidden="true" size={15} />,
-    },
-    {
-      format: "strike",
-      label: "Strike",
-      icon: <Strikethrough aria-hidden="true" size={15} />,
-    },
-    {
-      format: "code",
-      label: "Inline code",
-      icon: <Code2 aria-hidden="true" size={15} />,
-    },
-  ];
-
-  return createPortal(
-    <div
-      className="fixed z-[90] flex items-center gap-1 rounded-lg border border-white/12 bg-[#242424] p-1 text-white shadow-2xl"
-      role="toolbar"
-      style={{
-        left: menu.left,
-        top: menu.top,
-      }}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      {actions.map((action) => {
-        const isActive = menu.activeFormats.has(action.format);
-
-        return (
-          <button
-            key={action.format}
-            aria-label={action.label}
-            aria-pressed={isActive}
-            className={cn(
-              "grid size-8 place-items-center rounded-md text-white/72 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
-              isActive && "bg-white/14 text-white",
-            )}
-            type="button"
-            onClick={() => onFormat(action.format)}
-          >
-            {action.icon}
-          </button>
-        );
-      })}
-    </div>,
-    document.body,
-  );
-}
-
-function RootDropZone({
-  isDraggingNestedBlock,
-}: Readonly<{
-  isDraggingNestedBlock: boolean;
-}>) {
-  const { isOver, setNodeRef } = useDroppable({
-    id: NOTES_ROOT_DROP_ZONE_ID,
-    data: { type: "notes-root-drop-zone" },
-  });
-
-  if (!isDraggingNestedBlock) {
-    return null;
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "mb-2 ml-[6.5rem] rounded-lg border border-dashed border-white/14 bg-control/20 px-3 py-2 text-xs font-medium text-text-muted transition",
-        isOver && "border-accent/70 bg-accent/12 text-text",
-      )}
-    >
-      Отпустите здесь, чтобы вынести блок на корневой уровень
-    </div>
-  );
 }
 
 type SortableNoteBlockProps = Readonly<{
@@ -1302,7 +313,7 @@ function SortableNoteBlock({
           onClick={() => onInsertAfter(block.id)}
         />
         {isActionMenuOpen ? (
-          <BlockActionMenu
+          <NotesBlockActionMenu
             block={block}
             onClose={onCloseActionMenu}
             onDelete={() => onDeleteBlock(block.id)}
@@ -1450,7 +461,7 @@ function SortableNoteBlock({
             >
               {tableCells.map((row, rowIndex) =>
                 row.map((cell, cellIndex) => (
-                  <EditableTableCell
+                  <NotesTableCell
                     key={`${rowIndex}-${cellIndex}`}
                     blockId={block.id}
                     canDeleteColumn={tableColumnCount > 1}
@@ -1499,7 +510,7 @@ function SortableNoteBlock({
             </div>
           </div>
         ) : (
-          <EditableBlock
+          <NotesEditableBlock
             block={block}
             className={cn(
             "min-w-0 flex-1 rounded-md px-1.5 py-0.5 outline-none transition empty:before:text-transparent empty:before:content-[attr(data-placeholder)] group-hover:empty:before:text-text-muted/60 focus:empty:before:text-text-muted/60 focus:bg-white/5",
@@ -1524,7 +535,7 @@ function SortableNoteBlock({
       </div>
 
       {isSlashMenuOpen ? (
-        <BlockCommandMenu
+        <NotesBlockCommandMenu
           anchorRef={blockElementRef}
           commands={menuCommands}
           showTaskCreateSection={showTaskCreateSection}
@@ -1537,7 +548,7 @@ function SortableNoteBlock({
         />
       ) : null}
       {isActionMenuOpen ? (
-        <BlockActionMenu
+        <NotesBlockActionMenu
           block={block}
           onClose={onCloseActionMenu}
           onDelete={() => onDeleteBlock(block.id)}
@@ -1560,14 +571,8 @@ export function NotesEditor({
   onCreateTask,
   onOpenCard,
 }: NotesEditorProps) {
-  const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const tableCellRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const pendingFocusIdRef = useRef<string | null>(null);
-  const pendingTableCellFocusRef = useRef<{
-    blockId: string;
-    rowIndex: number;
-    cellIndex: number;
-  } | null>(null);
+  const { blockRefs, focusBlock, focusTableCell, tableCellRefs } =
+    useNotesEditorFocus(blocks);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState>(null);
   const [actionMenu, setActionMenu] = useState<BlockActionMenuState>(null);
   const [tableCellMenu, setTableCellMenu] = useState<TableCellMenuState>(null);
@@ -1586,60 +591,6 @@ export function NotesEditor({
     () => getNumberedListNumbers(visibleBlocks),
     [visibleBlocks],
   );
-
-  useEffect(() => {
-    const pendingFocusId = pendingFocusIdRef.current;
-
-    if (!pendingFocusId) {
-      return;
-    }
-
-    pendingFocusIdRef.current = null;
-    const element = blockRefs.current.get(pendingFocusId);
-
-    if (!element) {
-      return;
-    }
-
-    element.focus();
-    placeCaretAtEnd(element);
-  }, [blocks]);
-
-  useEffect(() => {
-    const pendingFocus = pendingTableCellFocusRef.current;
-
-    if (!pendingFocus) {
-      return;
-    }
-
-    pendingTableCellFocusRef.current = null;
-    const element = tableCellRefs.current.get(
-      getTableCellKey(
-        pendingFocus.blockId,
-        pendingFocus.rowIndex,
-        pendingFocus.cellIndex,
-      ),
-    );
-
-    if (!element) {
-      return;
-    }
-
-    element.focus();
-    placeCaretAtEnd(element);
-  }, [blocks]);
-
-  const focusBlock = (blockId: string) => {
-    pendingFocusIdRef.current = blockId;
-  };
-
-  const focusTableCell = (
-    blockId: string,
-    rowIndex: number,
-    cellIndex: number,
-  ) => {
-    pendingTableCellFocusRef.current = { blockId, rowIndex, cellIndex };
-  };
 
   const closeSlashMenu = () => setSlashMenu(null);
   const closeActionMenu = () => setActionMenu(null);
@@ -2539,7 +1490,7 @@ export function NotesEditor({
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-1">
-            <RootDropZone isDraggingNestedBlock={isDraggingNestedBlock} />
+            <NotesRootDropZone isDraggingNestedBlock={isDraggingNestedBlock} />
             {visibleBlocks.map((block) => (
               <SortableNoteBlock
                 key={block.id}
@@ -2647,7 +1598,7 @@ export function NotesEditor({
           </div>
         </SortableContext>
       </DndContext>
-      <InlineFormatBubble
+      <NotesInlineFormatBubble
         menu={inlineMenu}
         onFormat={applyInlineFormatToCurrentSelection}
       />
