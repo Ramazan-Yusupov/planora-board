@@ -308,6 +308,10 @@ function hasName(
   return names.has(value.toLocaleLowerCase("ru-RU"));
 }
 
+function createNormalizedNameSet(names: readonly string[]): ReadonlySet<string> {
+  return new Set(names.map((name) => name.toLocaleLowerCase("ru-RU")));
+}
+
 function appendUniqueChecklistTemplates(
   board: Board,
   titles: readonly string[],
@@ -463,6 +467,47 @@ function appendUniqueCoverColors(
   }
 
   return nextColors;
+}
+
+export function isBoardMarketplaceTemplateApplied(
+  board: Board,
+  templateId: BoardMarketplaceTemplateId,
+): boolean {
+  const template = BOARD_MARKETPLACE_TEMPLATES.find((item) => item.id === templateId);
+
+  if (!template) {
+    return false;
+  }
+
+  const labelNames = createNormalizedNameSet(
+    board.labelIds.flatMap((labelId) => {
+      const label = board.labels[labelId];
+
+      return label ? [label.name] : [];
+    }),
+  );
+  const statusNames = createNormalizedNameSet(
+    board.cardStatuses.map((status) => status.name),
+  );
+  const priorityNames = createNormalizedNameSet(
+    board.cardPriorities.map((priority) => priority.name),
+  );
+  const checklistTemplateTitles = createNormalizedNameSet(
+    board.checklistTemplates.map((checklistTemplate) => checklistTemplate.title),
+  );
+  const customFieldTemplateNames = createNormalizedNameSet(
+    board.customFieldTemplates.map((customFieldTemplate) => customFieldTemplate.name),
+  );
+  const coverColors = new Set(board.coverColors.map((color) => normalizeHexColor(color)));
+
+  return (
+    template.labels.every((label) => hasName(labelNames, normalizeTemplateText(label.name, 32))) &&
+    template.statuses.every((status) => hasName(statusNames, normalizeTemplateText(status.name, 48))) &&
+    template.priorities.every((priority) => hasName(priorityNames, normalizeTemplateText(priority.name, 48))) &&
+    template.checklistTemplates.every((title) => hasName(checklistTemplateTitles, normalizeTemplateText(title, 120))) &&
+    template.customFieldTemplates.every((name) => hasName(customFieldTemplateNames, normalizeTemplateText(name, 64))) &&
+    template.coverColors.every((color) => coverColors.has(normalizeHexColor(color)))
+  );
 }
 
 export function applyBoardWorkflowTemplate(

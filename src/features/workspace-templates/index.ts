@@ -4,6 +4,7 @@ export {
   BOARD_MARKETPLACE_TEMPLATES,
   BOARD_WORKFLOW_TEMPLATES,
   createNoteFromTemplate,
+  isBoardMarketplaceTemplateApplied,
   NOTE_TEMPLATES,
   type BoardMarketplaceTemplate,
   type BoardMarketplaceTemplateId,

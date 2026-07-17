@@ -15,6 +15,7 @@ import {
   BOARD_MARKETPLACE_TEMPLATES,
   BOARD_WORKFLOW_TEMPLATES,
   createNoteFromTemplate,
+  isBoardMarketplaceTemplateApplied,
   NOTE_TEMPLATES,
   type BoardMarketplaceTemplateId,
   type BoardWorkflowTemplateId,
@@ -90,15 +91,24 @@ export function useWorkspaceCenterActions({
       const template = BOARD_MARKETPLACE_TEMPLATES.find(
         (item) => item.id === templateId,
       );
+      let didApplyTemplate = false;
 
       updateActiveBoard(
-        (board) => applyBoardMarketplaceTemplate(board, templateId),
+        (board) => {
+          if (isBoardMarketplaceTemplateApplied(board, templateId)) {
+            return board;
+          }
+
+          didApplyTemplate = true;
+
+          return applyBoardMarketplaceTemplate(board, templateId);
+        },
         "immediate",
       );
       showToast({
-        title: "Template kit применён",
+        title: didApplyTemplate ? "Template kit применён" : "Template kit уже применён",
         description: template?.title ?? "Набор",
-        tone: "success",
+        tone: didApplyTemplate ? "success" : "info",
       });
     },
     [showToast, updateActiveBoard],

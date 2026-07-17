@@ -25,6 +25,7 @@ import type {
 import {
   BOARD_MARKETPLACE_TEMPLATES,
   BOARD_WORKFLOW_TEMPLATES,
+  isBoardMarketplaceTemplateApplied,
   NOTE_TEMPLATES,
   type BoardMarketplaceTemplateId,
   type BoardWorkflowTemplateId,
@@ -303,9 +304,11 @@ export function ActivityTab({
 }
 
 export function MarketplaceTab({
+  activeBoard,
   onApplyMarketplaceTemplate,
   onCreateNoteTemplate,
 }: Readonly<{
+  activeBoard: Board;
   onApplyMarketplaceTemplate: (templateId: BoardMarketplaceTemplateId) => void;
   onCreateNoteTemplate: (templateId: NoteTemplateId) => void;
 }>) {
@@ -330,27 +333,32 @@ export function MarketplaceTab({
           </div>
 
           <div className="mt-3 grid gap-2">
-            {BOARD_MARKETPLACE_TEMPLATES.map((template) => (
-              <ToolSurfaceRow
-                key={template.id}
-                action={
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => onApplyMarketplaceTemplate(template.id)}
-                  >
-                    Применить
-                  </Button>
-                }
-                description={template.description}
-                icon={<Tags aria-hidden="true" size={18} />}
-                title={template.title}
-              >
-                <p className="mt-2 text-xs text-text-muted">
-                  {template.labels.length} метки · {template.statuses.length} статуса · {template.checklistTemplates.length} чек-листа
-                </p>
-              </ToolSurfaceRow>
-            ))}
+            {BOARD_MARKETPLACE_TEMPLATES.map((template) => {
+              const isApplied = isBoardMarketplaceTemplateApplied(activeBoard, template.id);
+
+              return (
+                <ToolSurfaceRow
+                  key={template.id}
+                  action={
+                    <Button
+                      disabled={isApplied}
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onApplyMarketplaceTemplate(template.id)}
+                    >
+                      {isApplied ? "Применено" : "Применить"}
+                    </Button>
+                  }
+                  description={template.description}
+                  icon={<Tags aria-hidden="true" size={18} />}
+                  title={template.title}
+                >
+                  <p className="mt-2 text-xs text-text-muted">
+                    {template.labels.length} метки · {template.statuses.length} статуса · {template.checklistTemplates.length} чек-листа
+                  </p>
+                </ToolSurfaceRow>
+              );
+            })}
           </div>
         </section>
 

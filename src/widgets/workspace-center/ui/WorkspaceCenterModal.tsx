@@ -119,6 +119,7 @@ export function WorkspaceCenterModal({
         ) : null}
         {activeTab === "marketplace" ? (
           <MarketplaceTab
+            activeBoard={activeBoard}
             onApplyMarketplaceTemplate={onApplyMarketplaceTemplate}
             onCreateNoteTemplate={onCreateNoteTemplate}
           />

@@ -355,6 +355,7 @@ export function ListColumn({
 
         {!isCollapsed && isAddingCard ? (
           <form
+            aria-label={`Создание карточки в списке ${list.title}`}
             className="mt-2 rounded-xl border border-white/10 bg-slate-950/70 p-2 shadow-[inset_0_1px_0_rgb(255_255_255/3%)]"
             onSubmit={saveCard}
           >
@@ -408,6 +409,7 @@ export function ListColumn({
           </form>
         ) : !isCollapsed ? (
           <button
+            aria-label={`Добавить карточку в список ${list.title}`}
             className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-300 transition-[background-color,color,transform] hover:bg-white/10 hover:text-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45"
             disabled={Boolean(list.wipLimit && totalCardCount >= list.wipLimit)}
             title={
