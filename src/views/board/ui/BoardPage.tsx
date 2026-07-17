@@ -138,7 +138,11 @@ import {
 } from "@/widgets/command-palette";
 import { ListActionsDialog } from "@/widgets/list-actions";
 import { ProjectSwitcher } from "@/widgets/project-switcher";
-import { WorkspaceCenterModal } from "@/widgets/workspace-center";
+import {
+  type AgentRoleId,
+  WorkspaceCenterModal,
+  type WorkspaceCenterTab,
+} from "@/widgets/workspace-center";
 import { WorkspaceDataModal } from "@/widgets/workspace-data";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 import { WorkspaceHealthModal } from "@/widgets/workspace-health";
@@ -251,6 +255,8 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   const [isQuickCreateListOpen, setIsQuickCreateListOpen] = useState(false);
   const [isWorkspaceDataOpen, setIsWorkspaceDataOpen] = useState(false);
   const [isWorkspaceCenterOpen, setIsWorkspaceCenterOpen] = useState(false);
+  const [workspaceCenterInitialTab, setWorkspaceCenterInitialTab] =
+    useState<WorkspaceCenterTab>("workflows");
   const [isWorkspaceHealthOpen, setIsWorkspaceHealthOpen] = useState(false);
   const [listActionsListId, setListActionsListId] = useState<string | null>(
     null,
@@ -530,6 +536,11 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     router.push(MY_WORK_ROUTE);
   };
 
+  const openTaskReview = () => {
+    closePanels();
+    router.push(TASK_REVIEW_ROUTE);
+  };
+
   const openWorkspaceHealth = () => {
     setNotesSnapshot(loadNotes());
     closePanels();
@@ -561,13 +572,33 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     });
   };
 
-  const openWorkspaceCenter = () => {
+  const openWorkspaceCenter = (initialTab: WorkspaceCenterTab = "workflows") => {
     setNotesSnapshot(loadNotes());
+    setWorkspaceCenterInitialTab(initialTab);
     closePanels();
     setIsArchiveOpen(false);
     setIsWorkspaceDataOpen(false);
     setIsWorkspaceHealthOpen(false);
     setIsWorkspaceCenterOpen(true);
+  };
+
+  const runAgentRole = (roleId: AgentRoleId) => {
+    if (roleId === "data-reviewer") {
+      openWorkspaceHealth();
+      return;
+    }
+
+    if (roleId === "planner") {
+      openMyWork();
+      return;
+    }
+
+    if (roleId === "notes-editor") {
+      openNotes();
+      return;
+    }
+
+    openTaskReview();
   };
 
   const openLinkedNote = (noteId: string) => {
@@ -612,15 +643,18 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       onOpenCalendar: openCalendar,
       onOpenDraw: openDraw,
       onOpenMyWork: openMyWork,
-      onOpenTaskReview: () => router.push(TASK_REVIEW_ROUTE),
+      onOpenTaskReview: openTaskReview,
       onOpenNotes: openNotes,
       onOpenFilters: () => setIsFiltersOpen(true),
       onOpenHealthCheck: openWorkspaceHealth,
+      onOpenIntegrations: () => openWorkspaceCenter("integrations"),
       onOpenProjects: () => setIsProjectsOpen(true),
       onOpenWorkspaceCenter: openWorkspaceCenter,
       onOpenCard: openCard,
       onOpenQuickCreateCard: () => setIsQuickCreateOpen(true),
       onOpenQuickCreateList: () => setIsQuickCreateListOpen(true),
+      onApplyWorkflowTemplate: workspaceCenterActions.applyWorkflowTemplate,
+      onRunAgentRole: runAgentRole,
     }),
     ...getWorkspaceSearchActions({
       activeBoardId: activeBoard.id,
@@ -661,7 +695,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onOpenCalendar={openCalendar}
         onOpenDraw={openDraw}
         onOpenMyWork={openMyWork}
-        onOpenTaskReview={() => router.push(TASK_REVIEW_ROUTE)}
+        onOpenTaskReview={openTaskReview}
         onOpenNotes={openNotes}
         onOpenCommands={openCommandPalette}
         onOpenHealthCheck={openWorkspaceHealth}
@@ -1526,6 +1560,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         <WorkspaceCenterModal
           activeBoard={activeBoard}
           healthReport={workspaceHealthReport}
+          initialTab={workspaceCenterInitialTab}
           isOpen={isWorkspaceCenterOpen}
           notes={notesSnapshot}
           onApplyMarketplaceTemplate={workspaceCenterActions.applyMarketplaceTemplate}
@@ -1533,6 +1568,9 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           onClose={() => setIsWorkspaceCenterOpen(false)}
           onCreateNoteTemplate={workspaceCenterActions.createNoteTemplate}
           onOpenHealthCheck={openWorkspaceHealth}
+          onOpenMyWork={openMyWork}
+          onOpenNotes={openNotes}
+          onOpenTaskReview={openTaskReview}
           onOpenWorkspaceData={() => {
             setIsWorkspaceCenterOpen(false);
             setIsWorkspaceDataOpen(true);

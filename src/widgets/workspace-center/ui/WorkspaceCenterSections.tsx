@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  ArrowRight,
   Bot,
   CheckCircle2,
   ClipboardCheck,
@@ -33,7 +34,12 @@ import {
 } from "@/features/workspace-templates";
 import { Button, Panel, StatusPill, ToolSurfaceHeader, ToolSurfaceRow } from "@/shared/ui";
 
-import { agentRoles, integrations } from "../model/workspaceCenterData";
+import {
+  agentRoles,
+  integrationPipeline,
+  integrations,
+  type AgentRoleId,
+} from "../model/workspaceCenterData";
 
 const preflightToneLabels: Record<WorkspacePreflightTone, string> = {
   danger: "Ошибка",
@@ -186,7 +192,11 @@ export function PreflightTab({
   );
 }
 
-export function RolesTab() {
+export function RolesTab({
+  roleActions,
+}: Readonly<{
+  roleActions: Readonly<Record<AgentRoleId, () => void>>;
+}>) {
   return (
     <Panel>
       <ToolSurfaceHeader
@@ -198,8 +208,13 @@ export function RolesTab() {
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {agentRoles.map((role) => (
           <div key={role.title} className="rounded-xl border border-white/10 bg-slate-950/20 p-3">
-            <h3 className="text-sm font-semibold text-text">{role.title}</h3>
-            <p className="mt-1 text-xs leading-5 text-text-muted">{role.description}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-text">{role.title}</h3>
+                <p className="mt-1 text-xs leading-5 text-text-muted">{role.description}</p>
+              </div>
+              <StatusPill tone="accent">Role</StatusPill>
+            </div>
             <ul className="mt-3 space-y-1">
               {role.checks.map((check) => (
                 <li key={check} className="flex items-center gap-2 text-xs text-text-muted">
@@ -208,6 +223,14 @@ export function RolesTab() {
                 </li>
               ))}
             </ul>
+            <Button
+              className="mt-3"
+              size="sm"
+              variant="secondary"
+              onClick={roleActions[role.id]}
+            >
+              {role.primaryActionLabel}
+            </Button>
           </div>
         ))}
       </div>
@@ -224,6 +247,26 @@ export function IntegrationsTab() {
         title="Plugin / integration dashboard"
       />
 
+      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        {integrationPipeline.map((step, index) => (
+          <div
+            className="rounded-xl border border-white/10 bg-slate-950/20 p-3"
+            key={step.title}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <StatusPill tone="accent">{index + 1}</StatusPill>
+              {index < integrationPipeline.length - 1 ? (
+                <ArrowRight aria-hidden="true" className="text-text-muted" size={16} />
+              ) : null}
+            </div>
+            <h3 className="mt-3 text-sm font-semibold text-text">{step.title}</h3>
+            <p className="mt-1 text-xs leading-5 text-text-muted">
+              {step.description}
+            </p>
+          </div>
+        ))}
+      </div>
+
       <div className="mt-4 grid gap-2">
         {integrations.map((integration) => (
           <ToolSurfaceRow
@@ -232,7 +275,18 @@ export function IntegrationsTab() {
             description={integration.description}
             icon={<Plug aria-hidden="true" size={18} />}
             title={integration.title}
-          />
+          >
+            <div className="mt-2 grid gap-2 text-xs text-text-muted sm:grid-cols-2">
+              <p className="rounded-lg border border-white/10 bg-control/20 px-2.5 py-2">
+                <span className="font-semibold text-text">Источник:</span>{" "}
+                {integration.source}
+              </p>
+              <p className="rounded-lg border border-white/10 bg-control/20 px-2.5 py-2">
+                <span className="font-semibold text-text">Следующий шаг:</span>{" "}
+                {integration.nextStep}
+              </p>
+            </div>
+          </ToolSurfaceRow>
         ))}
       </div>
     </Panel>

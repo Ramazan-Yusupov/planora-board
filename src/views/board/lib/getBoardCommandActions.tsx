@@ -3,6 +3,7 @@
 import {
   Archive,
   BarChart3,
+  Bot,
   CalendarDays,
   ClipboardList,
   ClipboardCheck,
@@ -10,16 +11,23 @@ import {
   FileSearch,
   FileText,
   Filter,
+  GitBranch,
   LayoutDashboard,
   ListPlus,
   Palette,
   PenTool,
   Plus,
+  Plug,
   ShieldCheck,
 } from "lucide-react";
 
 import type { Board } from "@/entities/board";
+import {
+  BOARD_WORKFLOW_TEMPLATES,
+  type BoardWorkflowTemplateId,
+} from "@/features/workspace-templates";
 import type { CommandPaletteAction } from "@/widgets/command-palette";
+import { agentRoles, type AgentRoleId } from "@/widgets/workspace-center";
 
 type GetBoardCommandActionsOptions = Readonly<{
   board: Board;
@@ -34,11 +42,14 @@ type GetBoardCommandActionsOptions = Readonly<{
   onOpenTaskReview: () => void;
   onOpenFilters: () => void;
   onOpenHealthCheck: () => void;
+  onOpenIntegrations: () => void;
   onOpenProjects: () => void;
   onOpenWorkspaceCenter: () => void;
   onOpenCard: (cardId: string) => void;
   onOpenQuickCreateCard: () => void;
   onOpenQuickCreateList: () => void;
+  onApplyWorkflowTemplate: (templateId: BoardWorkflowTemplateId) => void;
+  onRunAgentRole: (roleId: AgentRoleId) => void;
 }>;
 
 export function getBoardCommandActions({
@@ -54,11 +65,14 @@ export function getBoardCommandActions({
   onOpenTaskReview,
   onOpenFilters,
   onOpenHealthCheck,
+  onOpenIntegrations,
   onOpenProjects,
   onOpenWorkspaceCenter,
   onOpenCard,
   onOpenQuickCreateCard,
   onOpenQuickCreateList,
+  onApplyWorkflowTemplate,
+  onRunAgentRole,
 }: GetBoardCommandActionsOptions): CommandPaletteAction[] {
   const cardActions = Object.values(board.cards)
     .filter((card) => {
@@ -94,6 +108,28 @@ export function getBoardCommandActions({
       onSelect: onOpenQuickCreateCard,
       disabled: activeListsCount === 0,
     },
+    ...BOARD_WORKFLOW_TEMPLATES.map(
+      (template): CommandPaletteAction => ({
+        id: `workflow-template-${template.id}`,
+        label: `Добавить ${template.title}`,
+        description: `${template.listTitles.length} списков · ${template.cards.length} карточек · ${template.checklistTemplates.length} чек-листа`,
+        group: "Шаблоны",
+        keywords: `workflow template шаблон сценарий ${template.description}`,
+        icon: <GitBranch aria-hidden="true" size={18} />,
+        onSelect: () => onApplyWorkflowTemplate(template.id),
+      }),
+    ),
+    ...agentRoles.map(
+      (role): CommandPaletteAction => ({
+        id: `agent-role-${role.id}`,
+        label: `Роль: ${role.title}`,
+        description: role.description,
+        group: "Роли",
+        keywords: `${role.primaryActionLabel} ${role.checks.join(" ")}`,
+        icon: <Bot aria-hidden="true" size={18} />,
+        onSelect: () => onRunAgentRole(role.id),
+      }),
+    ),
     {
       id: "new-list",
       label: "Новый список",
@@ -175,6 +211,15 @@ export function getBoardCommandActions({
       group: "Инструменты",
       icon: <Command aria-hidden="true" size={18} />,
       onSelect: onOpenWorkspaceCenter,
+    },
+    {
+      id: "integration-roadmap",
+      label: "Интеграции",
+      description: "Открыть roadmap внешних источников и безопасный import pipeline",
+      group: "Инструменты",
+      keywords: "plugin mcp roadmap source import permissions",
+      icon: <Plug aria-hidden="true" size={18} />,
+      onSelect: onOpenIntegrations,
     },
     {
       id: "health-check",

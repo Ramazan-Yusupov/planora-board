@@ -21,6 +21,7 @@ import type {
 } from "@/features/workspace-templates";
 import type { WorkspaceHealthReport } from "@/features/workspace-health";
 import { Modal, ToolSurfaceHeader } from "@/shared/ui";
+import type { AgentRoleId } from "../model/workspaceCenterData";
 
 import {
   ActivityTab,
@@ -39,6 +40,7 @@ import {
 type WorkspaceCenterModalProps = Readonly<{
   activeBoard: Board;
   healthReport: WorkspaceHealthReport;
+  initialTab?: WorkspaceCenterTab;
   isOpen: boolean;
   onApplyMarketplaceTemplate: (templateId: BoardMarketplaceTemplateId) => void;
   notes: readonly Note[];
@@ -46,6 +48,9 @@ type WorkspaceCenterModalProps = Readonly<{
   onClose: () => void;
   onCreateNoteTemplate: (templateId: NoteTemplateId) => void;
   onOpenHealthCheck: () => void;
+  onOpenMyWork: () => void;
+  onOpenNotes: () => void;
+  onOpenTaskReview: () => void;
   onOpenWorkspaceData: () => void;
 }>;
 
@@ -61,6 +66,7 @@ const tabs: readonly WorkspaceCenterTabItem[] = [
 export function WorkspaceCenterModal({
   activeBoard,
   healthReport,
+  initialTab = "workflows",
   isOpen,
   onApplyMarketplaceTemplate,
   notes,
@@ -68,9 +74,12 @@ export function WorkspaceCenterModal({
   onClose,
   onCreateNoteTemplate,
   onOpenHealthCheck,
+  onOpenMyWork,
+  onOpenNotes,
+  onOpenTaskReview,
   onOpenWorkspaceData,
 }: WorkspaceCenterModalProps) {
-  const [activeTab, setActiveTab] = useState<WorkspaceCenterTab>("workflows");
+  const [activeTab, setActiveTab] = useState<WorkspaceCenterTab>(initialTab);
   const preflightReport = useMemo(
     () =>
       buildWorkspacePreflightReport({
@@ -79,6 +88,15 @@ export function WorkspaceCenterModal({
         notes,
       }),
     [activeBoard, healthReport, notes],
+  );
+  const roleActions = useMemo(
+    (): Readonly<Record<AgentRoleId, () => void>> => ({
+      "data-reviewer": onOpenHealthCheck,
+      "notes-editor": onOpenNotes,
+      planner: onOpenMyWork,
+      "risk-analyst": onOpenTaskReview,
+    }),
+    [onOpenHealthCheck, onOpenMyWork, onOpenNotes, onOpenTaskReview],
   );
 
   if (!isOpen) {
@@ -112,7 +130,7 @@ export function WorkspaceCenterModal({
             onOpenWorkspaceData={onOpenWorkspaceData}
           />
         ) : null}
-        {activeTab === "roles" ? <RolesTab /> : null}
+        {activeTab === "roles" ? <RolesTab roleActions={roleActions} /> : null}
         {activeTab === "integrations" ? <IntegrationsTab /> : null}
         {activeTab === "activity" ? (
           <ActivityTab activeBoard={activeBoard} notes={notes} />
