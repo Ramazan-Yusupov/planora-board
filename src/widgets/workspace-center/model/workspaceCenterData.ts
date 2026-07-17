@@ -62,6 +62,33 @@ export const integrationPipeline = [
   },
 ] as const;
 
+export const pluginControlSurfaces = [
+  {
+    title: "Permissions gate",
+    description: "Будущие подключения должны явно показывать requested scopes до чтения внешних данных.",
+    status: "Locked",
+    safeguards: ["No silent OAuth", "Preview scopes", "Manual approve"],
+  },
+  {
+    title: "Connection registry",
+    description: "Единый список подключений с владельцем, источником и последней синхронизацией.",
+    status: "Design",
+    safeguards: ["Source id", "Owner", "Last sync"],
+  },
+  {
+    title: "Import drafts",
+    description: "Внешние задачи сначала попадают в черновики с дедупликацией и preflight review.",
+    status: "Roadmap",
+    safeguards: ["Deduplicate", "Map fields", "Confirm write"],
+  },
+  {
+    title: "Disable / disconnect",
+    description: "Отключение интеграции не удаляет локальные карточки и оставляет audit trail.",
+    status: "Policy",
+    safeguards: ["Keep local data", "Stop sync", "Audit event"],
+  },
+] as const;
+
 export const integrations: readonly Readonly<{
   title: string;
   description: string;

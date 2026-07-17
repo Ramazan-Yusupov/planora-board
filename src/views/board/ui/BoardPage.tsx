@@ -550,6 +550,14 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setIsWorkspaceHealthOpen(true);
   };
 
+  const openWorkspaceData = () => {
+    closePanels();
+    setIsArchiveOpen(false);
+    setIsWorkspaceCenterOpen(false);
+    setIsWorkspaceHealthOpen(false);
+    setIsWorkspaceDataOpen(true);
+  };
+
   const applyWorkspaceHealthAutoFixes = () => {
     const result = applyWorkspaceHealthFixes(workspace, notesSnapshot);
 
@@ -639,6 +647,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       activeListsCount: activeLists.length,
       onOpenArchive: () => setIsArchiveOpen(true),
       onOpenAnalytics: openAnalytics,
+      onOpenActivityMonitor: () => openWorkspaceCenter("activity"),
       onOpenAppearance: () => setIsAppearanceOpen(true),
       onOpenCalendar: openCalendar,
       onOpenDraw: openDraw,
@@ -649,6 +658,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       onOpenHealthCheck: openWorkspaceHealth,
       onOpenIntegrations: () => openWorkspaceCenter("integrations"),
       onOpenProjects: () => setIsProjectsOpen(true),
+      onOpenWorkspaceData: openWorkspaceData,
       onOpenWorkspaceCenter: openWorkspaceCenter,
       onOpenCard: openCard,
       onOpenQuickCreateCard: () => setIsQuickCreateOpen(true),
@@ -700,7 +710,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         onOpenCommands={openCommandPalette}
         onOpenHealthCheck={openWorkspaceHealth}
         onOpenWorkspaceCenter={openWorkspaceCenter}
-        onOpenWorkspaceData={() => setIsWorkspaceDataOpen(true)}
+        onOpenWorkspaceData={openWorkspaceData}
         onRedo={redo}
         onToggleBoardTools={() => {
           setIsBoardToolsOpen((current) => !current);
@@ -1571,10 +1581,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           onOpenMyWork={openMyWork}
           onOpenNotes={openNotes}
           onOpenTaskReview={openTaskReview}
-          onOpenWorkspaceData={() => {
-            setIsWorkspaceCenterOpen(false);
-            setIsWorkspaceDataOpen(true);
-          }}
+          onOpenWorkspaceData={openWorkspaceData}
         />
       ) : null}
 

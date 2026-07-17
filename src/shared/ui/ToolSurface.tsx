@@ -90,7 +90,7 @@ export function StatusPill({ children, tone = "muted" }: StatusPillProps) {
   return (
     <span
       className={cn(
-        "rounded-full border px-2.5 py-1 text-xs font-semibold",
+        "inline-flex items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-center text-xs font-semibold leading-none",
         statusPillClasses[tone],
       )}
     >

@@ -38,6 +38,7 @@ import {
   agentRoles,
   integrationPipeline,
   integrations,
+  pluginControlSurfaces,
   type AgentRoleId,
 } from "../model/workspaceCenterData";
 
@@ -68,6 +69,15 @@ function getSignalLabel(count: number): string {
   }
 
   return `${count} сигналов`;
+}
+
+function formatMonitorTime(timestamp: number): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+  }).format(new Date(timestamp));
 }
 
 export function WorkflowsTab({
@@ -247,7 +257,7 @@ export function IntegrationsTab() {
         title="Plugin / integration dashboard"
       />
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {integrationPipeline.map((step, index) => (
           <div
             className="rounded-xl border border-white/10 bg-slate-950/20 p-3"
@@ -266,6 +276,51 @@ export function IntegrationsTab() {
           </div>
         ))}
       </div>
+
+      <section className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-text">
+              Permission and connection controls
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-text-muted">
+              Будущий dashboard для scopes, подключений, import drafts и безопасного отключения.
+            </p>
+          </div>
+          <StatusPill tone="warning">No external access</StatusPill>
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {pluginControlSurfaces.map((surface) => (
+            <div
+              className="rounded-lg border border-white/10 bg-control/20 p-3"
+              key={surface.title}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="min-w-0 text-sm font-semibold leading-5 text-text">
+                  {surface.title}
+                </h4>
+                <span className="shrink-0">
+                  <StatusPill>{surface.status}</StatusPill>
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-text-muted">
+                {surface.description}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {surface.safeguards.map((safeguard) => (
+                  <span
+                    className="rounded-md border border-white/10 bg-slate-950/30 px-2 py-1 text-[11px] font-medium text-text-muted"
+                    key={safeguard}
+                  >
+                    {safeguard}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="mt-4 grid gap-2">
         {integrations.map((integration) => (
@@ -297,7 +352,7 @@ export function ActivityTab({
   activeBoard,
   notes,
 }: Readonly<{ activeBoard: Board; notes: readonly Note[] }>) {
-  const activityItems = useMemo(() => {
+  const { activityItems, boardActivityCount, noteActivityCount } = useMemo(() => {
     const boardItems = activeBoard.activityIds.flatMap((activityId) => {
       const activity = activeBoard.activities[activityId];
       const card = activity ? activeBoard.cards[activity.cardId] : undefined;
@@ -324,9 +379,13 @@ export function ActivityTab({
         type: "Note",
       }));
 
-    return [...boardItems, ...noteItems]
-      .sort((first, second) => second.timestamp - first.timestamp)
-      .slice(0, 10);
+    return {
+      activityItems: [...boardItems, ...noteItems]
+        .sort((first, second) => second.timestamp - first.timestamp)
+        .slice(0, 10),
+      boardActivityCount: boardItems.length,
+      noteActivityCount: noteItems.length,
+    };
   }, [activeBoard, notes]);
 
   return (
@@ -337,6 +396,27 @@ export function ActivityTab({
         title="Conversation / activity monitor"
       />
 
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl border border-white/10 bg-slate-950/20 p-3">
+          <p className="text-xs text-text-muted">Всего событий</p>
+          <p className="mt-1 text-xl font-semibold text-text">
+            {boardActivityCount + noteActivityCount}
+          </p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/20 p-3">
+          <p className="text-xs text-text-muted">Board</p>
+          <p className="mt-1 text-xl font-semibold text-text">
+            {boardActivityCount}
+          </p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/20 p-3">
+          <p className="text-xs text-text-muted">Notes</p>
+          <p className="mt-1 text-xl font-semibold text-text">
+            {noteActivityCount}
+          </p>
+        </div>
+      </div>
+
       <div className="mt-4 space-y-2">
         {activityItems.map((item) => (
           <div key={`${item.type}-${item.id}`} className="rounded-xl border border-white/10 bg-slate-950/20 p-3">
@@ -344,7 +424,9 @@ export function ActivityTab({
               <p className="min-w-0 truncate text-sm font-semibold text-text">{item.title}</p>
               <StatusPill>{item.type}</StatusPill>
             </div>
-            <p className="mt-1 truncate text-xs text-text-muted">{item.meta}</p>
+            <p className="mt-1 truncate text-xs text-text-muted">
+              {item.meta} · {formatMonitorTime(item.timestamp)}
+            </p>
           </div>
         ))}
         {activityItems.length === 0 ? (

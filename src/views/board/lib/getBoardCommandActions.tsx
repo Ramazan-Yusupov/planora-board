@@ -2,12 +2,14 @@
 
 import {
   Archive,
+  Activity,
   BarChart3,
   Bot,
   CalendarDays,
   ClipboardList,
   ClipboardCheck,
   Command,
+  DatabaseBackup,
   FileSearch,
   FileText,
   Filter,
@@ -34,6 +36,7 @@ type GetBoardCommandActionsOptions = Readonly<{
   activeListsCount: number;
   onOpenArchive: () => void;
   onOpenAnalytics: () => void;
+  onOpenActivityMonitor: () => void;
   onOpenAppearance: () => void;
   onOpenCalendar: () => void;
   onOpenDraw: () => void;
@@ -44,6 +47,7 @@ type GetBoardCommandActionsOptions = Readonly<{
   onOpenHealthCheck: () => void;
   onOpenIntegrations: () => void;
   onOpenProjects: () => void;
+  onOpenWorkspaceData: () => void;
   onOpenWorkspaceCenter: () => void;
   onOpenCard: (cardId: string) => void;
   onOpenQuickCreateCard: () => void;
@@ -57,6 +61,7 @@ export function getBoardCommandActions({
   activeListsCount,
   onOpenArchive,
   onOpenAnalytics,
+  onOpenActivityMonitor,
   onOpenAppearance,
   onOpenCalendar,
   onOpenDraw,
@@ -67,6 +72,7 @@ export function getBoardCommandActions({
   onOpenHealthCheck,
   onOpenIntegrations,
   onOpenProjects,
+  onOpenWorkspaceData,
   onOpenWorkspaceCenter,
   onOpenCard,
   onOpenQuickCreateCard,
@@ -213,11 +219,38 @@ export function getBoardCommandActions({
       onSelect: onOpenWorkspaceCenter,
     },
     {
+      id: "activity-monitor",
+      label: "Monitor активности",
+      description: "Открыть компактный журнал изменений workspace и заметок",
+      group: "Инструменты",
+      keywords: "activity monitor журнал история изменения conversation",
+      icon: <Activity aria-hidden="true" size={18} />,
+      onSelect: onOpenActivityMonitor,
+    },
+    {
+      id: "workspace-data",
+      label: "Экспорт и импорт",
+      description: "Открыть backup, export/import и проверку данных workspace",
+      group: "Инструменты",
+      keywords: "backup import export json storage данные preflight",
+      icon: <DatabaseBackup aria-hidden="true" size={18} />,
+      onSelect: onOpenWorkspaceData,
+    },
+    {
       id: "integration-roadmap",
       label: "Интеграции",
       description: "Открыть roadmap внешних источников и безопасный import pipeline",
       group: "Инструменты",
       keywords: "plugin mcp roadmap source import permissions",
+      icon: <Plug aria-hidden="true" size={18} />,
+      onSelect: onOpenIntegrations,
+    },
+    {
+      id: "plugin-dashboard",
+      label: "Plugin dashboard",
+      description: "Открыть permissions, connections, import drafts и disable policy",
+      group: "Инструменты",
+      keywords: "plugin permissions connections scopes disable disconnect import drafts",
       icon: <Plug aria-hidden="true" size={18} />,
       onSelect: onOpenIntegrations,
     },
