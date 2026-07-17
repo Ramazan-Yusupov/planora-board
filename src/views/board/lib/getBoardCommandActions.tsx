@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarDays,
   ClipboardList,
+  ClipboardCheck,
   Command,
   FileSearch,
   FileText,
@@ -30,6 +31,7 @@ type GetBoardCommandActionsOptions = Readonly<{
   onOpenDraw: () => void;
   onOpenMyWork: () => void;
   onOpenNotes: () => void;
+  onOpenTaskReview: () => void;
   onOpenFilters: () => void;
   onOpenHealthCheck: () => void;
   onOpenProjects: () => void;
@@ -49,6 +51,7 @@ export function getBoardCommandActions({
   onOpenDraw,
   onOpenMyWork,
   onOpenNotes,
+  onOpenTaskReview,
   onOpenFilters,
   onOpenHealthCheck,
   onOpenProjects,
@@ -124,6 +127,14 @@ export function getBoardCommandActions({
       group: "Навигация",
       icon: <ClipboardList aria-hidden="true" size={18} />,
       onSelect: onOpenMyWork,
+    },
+    {
+      id: "task-review",
+      label: "Обзор задач",
+      description: "Открыть аудит просрочек, блокеров и задач без срока",
+      group: "Навигация",
+      icon: <ClipboardCheck aria-hidden="true" size={18} />,
+      onSelect: onOpenTaskReview,
     },
     {
       id: "analytics",

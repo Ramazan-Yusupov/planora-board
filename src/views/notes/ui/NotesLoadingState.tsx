@@ -1,16 +1,17 @@
-"use client";
+import { Grid, Text } from "@/shared/ui";
+
 export function NotesLoadingState() {
   return (
-    <main className="grid h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text">
-      <p
+    <Grid
+      tag="main"
+      className="h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text"
+    >
+      <Text
         aria-busy="true"
         aria-live="polite"
-        className="rounded-xl border border-white/15 bg-slate-950/35 px-4 py-3 text-sm text-white/80 backdrop-blur-sm"
-      >
-        Загружаем заметки…
-      </p>
-    </main>
+        text="Загружаем заметки…"
+        variant="loading"
+      />
+    </Grid>
   );
 }
-
-

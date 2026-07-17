@@ -26,7 +26,7 @@ export function NotesRootDropZone({
     <div
       ref={setNodeRef}
       className={cn(
-        "mb-2 ml-[6.5rem] rounded-lg border border-dashed border-white/14 bg-control/20 px-3 py-2 text-xs font-medium text-text-muted transition",
+        "mb-2 ml-26 rounded-lg border border-dashed border-white/14 bg-control/20 px-3 py-2 text-xs font-medium text-text-muted transition",
         isOver && "border-accent/70 bg-accent/12 text-text",
       )}
     >

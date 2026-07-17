@@ -83,7 +83,7 @@ export function ProjectsSidebar() {
 
       <aside
         aria-label="Проекты"
-        className="drawtool-projects-sidebar fixed inset-y-0 left-0 z-50 flex w-dvw max-w-full flex-col border-r border-border/90 bg-panel/96 shadow-float backdrop-blur-xl sm:w-88 lg:w-[20rem]"
+        className="drawtool-projects-sidebar fixed inset-y-0 left-0 z-50 flex w-dvw max-w-full flex-col border-r border-border/90 bg-panel/96 shadow-float backdrop-blur-xl sm:w-88 lg:w-80"
       >
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/80 p-4">
           <div className="flex min-w-0 items-center gap-2">
@@ -134,7 +134,7 @@ export function ProjectsSidebar() {
                     className={cn(
                       "group rounded-xl border transition-[background-color,border-color,box-shadow]",
                       isActive
-                        ? "border-accent/70 bg-control-active/25 shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]"
+                        ? "border-accent/70 bg-control-active/25 shadow-[inset_0_1px_0_rgb(255_255_255/4%)]"
                         : "border-transparent hover:border-border hover:bg-control/75",
                     )}
                     key={project.id}
@@ -220,7 +220,7 @@ export function ProjectsSidebar() {
             <div className="space-y-2">
               <input
                 autoFocus
-                className="w-full rounded-xl border border-border bg-control px-3 py-2 text-sm text-text shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/15"
+                className="w-full rounded-xl border border-border bg-control px-3 py-2 text-sm text-text shadow-[inset_0_1px_0_rgb(255_255_255/3%)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/15"
                 onChange={(event) =>
                   setNewProjectName(event.currentTarget.value)
                 }

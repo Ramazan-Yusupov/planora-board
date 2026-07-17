@@ -377,7 +377,7 @@ export function CardContextMenu({
     <div
       ref={menuRef}
       aria-activedescendant={activeItemId}
-      className="fixed z-[80] grid max-h-[min(80dvh,42rem)] w-[min(94vw,29rem)] gap-3 overflow-y-auto rounded-xl border border-white/10 bg-panel/98 p-3 text-text shadow-float backdrop-blur-2xl"
+      className="fixed z-80 grid max-h-[min(80dvh,42rem)] w-[min(94vw,29rem)] gap-3 overflow-y-auto rounded-xl border border-white/10 bg-panel/98 p-3 text-text shadow-float backdrop-blur-2xl"
       role="menu"
       style={menuStyle}
       tabIndex={-1}
@@ -522,7 +522,7 @@ export function CardContextMenu({
       </MenuSection>
 
       <MenuSection title="Обложка">
-        <div className="grid grid-cols-[repeat(8,minmax(0,1fr))] gap-1.5">
+        <div className="grid grid-cols-8 gap-1.5">
           <button
             {...getItemProps(coverOffset)}
             className={cn(

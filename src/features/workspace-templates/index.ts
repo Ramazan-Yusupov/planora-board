@@ -1,8 +1,12 @@
 export {
+  applyBoardMarketplaceTemplate,
   applyBoardWorkflowTemplate,
+  BOARD_MARKETPLACE_TEMPLATES,
   BOARD_WORKFLOW_TEMPLATES,
   createNoteFromTemplate,
   NOTE_TEMPLATES,
+  type BoardMarketplaceTemplate,
+  type BoardMarketplaceTemplateId,
   type BoardWorkflowTemplate,
   type BoardWorkflowTemplateId,
   type NoteTemplate,

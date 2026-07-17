@@ -22,7 +22,7 @@ export function WorkspaceImportPanel({
   onReplaceScene,
 }: WorkspaceImportPanelProps) {
   return (
-    <Panel className="rounded-2xl border border-border/90 bg-control/28 p-3 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]">
+    <Panel className="rounded-2xl border border-border/90 bg-control/28 p-3 shadow-[inset_0_1px_0_rgb(255_255_255/3%)]">
       <h3 className="m-0 text-sm font-semibold text-text">Импорт</h3>
       <p className="mt-1 text-xs leading-5 text-text-muted">
         Выберите, добавить ли отдельную сцену новым проектом, заменить активную

@@ -5,3 +5,10 @@ export {
   type WorkspaceHealthScope,
   type WorkspaceHealthSeverity,
 } from "./lib/workspaceHealth";
+export {
+  applyWorkspaceHealthFixes,
+  getWorkspaceHealthFixPlan,
+  type WorkspaceHealthFixPlan,
+  type WorkspaceHealthFixResult,
+  type WorkspaceHealthFixSummary,
+} from "./lib/workspaceHealthFixes";

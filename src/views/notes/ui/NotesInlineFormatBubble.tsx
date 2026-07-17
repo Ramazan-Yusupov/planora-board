@@ -68,7 +68,7 @@ export function NotesInlineFormatBubble({
 
   return createPortal(
     <div
-      className="fixed z-[90] flex items-center gap-1 rounded-lg border border-white/12 bg-[#242424] p-1 text-white shadow-2xl"
+      className="fixed z-90 flex items-center gap-1 rounded-lg border border-white/12 bg-[#242424] p-1 text-white shadow-2xl"
       role="toolbar"
       style={{
         left: menu.left,

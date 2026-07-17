@@ -34,7 +34,7 @@ export function ConfirmDialog({
     <Modal
       role="alertdialog"
       title={title}
-      zIndexClassName="z-[80]"
+      zIndexClassName="z-80"
       onClose={onCancel}
     >
       <div className="space-y-6">

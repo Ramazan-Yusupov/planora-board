@@ -15,7 +15,11 @@ import {
   type AnalyticsSegment,
   type ListAnalyticsSegment,
 } from "@/features/view-analytics";
-import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import { buildTaskReviewReport, getTaskReviewIssueCount } from "@/features/task-review";
+import {
+  getWorkspacePersistenceLabel,
+  useBoardWorkspace,
+} from "@/features/manage-board-workspace";
 import { loadNotes, type Note } from "@/features/manage-notes";
 import {
   ANALYTICS_ROUTE,
@@ -23,9 +27,11 @@ import {
   DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
+  TASK_REVIEW_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
 import { cn, usePrefetchRoutes } from "@/shared/lib";
+import { Box, Flex, Grid, Inline, Stack, Surface, Text, Title } from "@/shared/ui";
 import {
   CommandPalette,
   getWorkspaceSearchActions,
@@ -39,15 +45,17 @@ type ChartMode = "bars" | "line" | "area" | "donut";
 
 function AnalyticsLoadingState() {
   return (
-    <main className="grid h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text">
-      <p
+    <Grid
+      tag="main"
+      className="h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text"
+    >
+      <Text
         aria-busy="true"
         aria-live="polite"
-        className="rounded-xl border border-white/15 bg-slate-950/35 px-4 py-3 text-sm text-white/80 backdrop-blur-sm"
-      >
-        Загружаем аналитику…
-      </p>
-    </main>
+        text="Загружаем аналитику…"
+        variant="loading"
+      />
+    </Grid>
   );
 }
 
@@ -63,23 +71,19 @@ function MetricCard({
   tone?: "default" | "success" | "warning" | "danger";
 }>) {
   return (
-    <section
+    <Surface
       className={cn(
-        "rounded-lg border bg-panel/72 p-4 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]",
+        "p-4",
         tone === "success" && "border-emerald-300/20",
         tone === "warning" && "border-amber-300/20",
         tone === "danger" && "border-red-300/20",
         tone === "default" && "border-white/10",
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
-        {label}
-      </p>
-      <p className="mt-3 text-3xl font-semibold tabular-nums text-text">
-        {value}
-      </p>
-      <p className="mt-2 text-sm leading-5 text-text-muted">{detail}</p>
-    </section>
+      <Text text={label} variant="eyebrow" />
+      <Text className="mt-3" text={value} variant="stat" />
+      <Text className="mt-2" text={detail} variant="muted" />
+    </Surface>
   );
 }
 
@@ -141,7 +145,7 @@ function ChartTooltip({
   }
 
   return (
-    <div
+    <Box
       className="pointer-events-none absolute z-10 min-w-36 max-w-56 rounded-lg border border-white/12 bg-slate-950/95 px-3 py-2 text-xs shadow-2xl"
       style={{
         left: `${state.x}%`,
@@ -149,21 +153,25 @@ function ChartTooltip({
         transform: "translate(-50%, calc(-100% - 0.75rem))",
       }}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <Inline className="min-w-0 gap-2">
         <span
           aria-hidden="true"
           className="size-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: state.segment.color }}
         />
-        <p className="min-w-0 truncate font-semibold text-text">
-          {state.segment.label}
-        </p>
-      </div>
-      <p className="mt-1 text-text-muted">
-        {state.segment.value} задач ·{" "}
-        {getSegmentPercent(state.segment.value, total)}%
-      </p>
-    </div>
+        <Text
+          className="min-w-0 truncate font-semibold text-text"
+          text={state.segment.label}
+        />
+      </Inline>
+      <Text
+        className="mt-1 text-text-muted"
+        text={`${state.segment.value} задач · ${getSegmentPercent(
+          state.segment.value,
+          total,
+        )}%`}
+      />
+    </Box>
   );
 }
 
@@ -228,15 +236,15 @@ function SegmentChart({
   ).slices;
 
   return (
-    <section className="rounded-lg border border-white/10 bg-panel/72 p-4 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]">
-      <h2 className="text-sm font-semibold text-text">{title}</h2>
+    <Surface className="p-4">
+      <Title tag="h2" title={title} variant="card" />
 
       {mode === "line" || mode === "area" ? (
-        <div
+        <Box
           className="relative mt-4 rounded-lg border border-white/8 bg-control/25 p-3"
           onMouseLeave={() => setTooltip(null)}
         >
-          <div className="relative h-44">
+          <Box className="relative h-44">
             <svg
               aria-label={`${title}: ${mode === "line" ? "линейный график" : "график площади"}`}
               className="absolute inset-0 size-full"
@@ -295,16 +303,16 @@ function SegmentChart({
             ))}
 
             <ChartTooltip state={tooltip} total={total} />
-          </div>
+          </Box>
 
           <ChartLegend segments={segments} />
-        </div>
+        </Box>
       ) : mode === "donut" ? (
-        <div
-          className="relative mt-4 grid gap-4 rounded-lg border border-white/8 bg-control/25 p-3 md:grid-cols-[13rem_minmax(0,1fr)]"
+        <Grid
+          className="relative mt-4 gap-4 rounded-lg border border-white/8 bg-control/25 p-3 md:grid-cols-[13rem_minmax(0,1fr)]"
           onMouseLeave={() => setTooltip(null)}
         >
-          <div className="relative mx-auto size-52">
+          <Box className="relative mx-auto size-52">
             <svg
               aria-label={`${title}: Donutовый график`}
               className="size-full"
@@ -349,21 +357,22 @@ function SegmentChart({
                 },
               )}
             </svg>
-            <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-              <div>
-                <p className="text-2xl font-semibold tabular-nums text-text">
-                  {total}
-                </p>
-                <p className="text-xs text-text-muted">всего</p>
-              </div>
-            </div>
+            <Grid className="pointer-events-none absolute inset-0 place-items-center text-center">
+              <Box>
+                <Text
+                  className="text-2xl font-semibold tabular-nums text-text"
+                  text={total}
+                />
+                <Text text="всего" variant="caption" />
+              </Box>
+            </Grid>
             <ChartTooltip state={tooltip} total={total} />
-          </div>
+          </Box>
 
           <ChartLegend segments={segments} />
-        </div>
+        </Grid>
       ) : (
-        <div
+        <Box
           className="relative mt-4 space-y-3"
           onMouseLeave={() => setTooltip(null)}
         >
@@ -392,30 +401,34 @@ function SegmentChart({
                   })
                 }
               >
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="min-w-0 truncate text-text-muted">
-                    {segment.label}
-                  </span>
-                  <span className="font-semibold tabular-nums text-text">
-                    {segment.value}
-                  </span>
-                </div>
-                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-control">
-                  <div
+                <Inline className="justify-between gap-3 text-xs">
+                  <Text
+                    tag="span"
+                    className="min-w-0 truncate text-text-muted"
+                    text={segment.label}
+                  />
+                  <Text
+                    tag="span"
+                    className="font-semibold tabular-nums text-text"
+                    text={segment.value}
+                  />
+                </Inline>
+                <Box className="mt-1.5 h-2 overflow-hidden rounded-full bg-control">
+                  <Box
                     className="h-full rounded-full"
                     style={{
                       width: `${width}%`,
                       backgroundColor: segment.color,
                     }}
                   />
-                </div>
+                </Box>
               </button>
             );
           })}
           <ChartTooltip state={tooltip} total={total} />
-        </div>
+        </Box>
       )}
-    </section>
+    </Surface>
   );
 }
 
@@ -423,23 +436,27 @@ function ChartLegend({
   segments,
 }: Readonly<{ segments: readonly AnalyticsSegment[] }>) {
   return (
-    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+    <Grid className="mt-3 gap-2 sm:grid-cols-2">
       {segments.map((segment) => (
-        <div key={segment.id} className="flex items-center gap-2 text-xs">
+        <Inline key={segment.id} className="gap-2 text-xs">
           <span
             aria-hidden="true"
             className="size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: segment.color }}
           />
-          <span className="min-w-0 flex-1 truncate text-text-muted">
-            {segment.label}
-          </span>
-          <span className="font-semibold tabular-nums text-text">
-            {segment.value}
-          </span>
-        </div>
+          <Text
+            tag="span"
+            className="min-w-0 flex-1 truncate text-text-muted"
+            text={segment.label}
+          />
+          <Text
+            tag="span"
+            className="font-semibold tabular-nums text-text"
+            text={segment.value}
+          />
+        </Inline>
       ))}
-    </div>
+    </Grid>
   );
 }
 
@@ -447,38 +464,40 @@ function ListProgress({
   segments,
 }: Readonly<{ segments: readonly ListAnalyticsSegment[] }>) {
   return (
-    <section className="rounded-lg border border-white/10 bg-panel/72 p-4 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]">
-      <h2 className="text-sm font-semibold text-text">Списки</h2>
-      <div className="mt-4 space-y-3">
+    <Surface className="p-4">
+      <Title tag="h2" title="Списки" variant="card" />
+      <Stack className="mt-4 gap-3">
         {segments.map((segment) => {
           const percent = segment.total
             ? Math.round((segment.completed / segment.total) * 100)
             : 0;
 
           return (
-            <div
+            <Box
               key={segment.id}
               className="rounded-lg border border-white/8 bg-control/30 p-3"
             >
-              <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 truncate text-sm font-medium text-text">
-                  {segment.label}
-                </p>
-                <p className="shrink-0 text-xs font-semibold tabular-nums text-text-muted">
-                  {segment.completed}/{segment.total}
-                </p>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/20">
-                <div
+              <Inline className="justify-between gap-3">
+                <Text
+                  className="min-w-0 truncate text-sm font-medium text-text"
+                  text={segment.label}
+                />
+                <Text
+                  className="shrink-0 text-xs font-semibold tabular-nums text-text-muted"
+                  text={`${segment.completed}/${segment.total}`}
+                />
+              </Inline>
+              <Box className="mt-2 h-2 overflow-hidden rounded-full bg-black/20">
+                <Box
                   className="h-full rounded-full bg-emerald-400"
                   style={{ width: `${percent}%` }}
                 />
-              </div>
-            </div>
+              </Box>
+            </Box>
           );
         })}
-      </div>
-    </section>
+      </Stack>
+    </Surface>
   );
 }
 
@@ -508,6 +527,10 @@ export function AnalyticsPage() {
     () => (activeBoard ? buildBoardAnalytics(activeBoard) : null),
     [activeBoard],
   );
+  const taskReviewIssuesCount = useMemo(
+    () => (workspace ? getTaskReviewIssueCount(buildTaskReviewReport(workspace)) : 0),
+    [workspace],
+  );
   usePrefetchRoutes([
     activeBoard ? getBoardRoute(activeBoard.id) : null,
     NOTES_ROUTE,
@@ -515,22 +538,17 @@ export function AnalyticsPage() {
     DRAW_ROUTE,
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
+    TASK_REVIEW_ROUTE,
   ]);
 
   if (!isReady || !workspace || !activeBoard || !analytics) {
     return <AnalyticsLoadingState />;
   }
 
-  const statusLabel =
-    persistenceState === "saving"
-      ? "Сохраняем…"
-      : persistenceState === "error"
-        ? "Ошибка сохранения"
-        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
-          ? `Сохранено в папку: ${workspaceStorage.name}`
-          : workspaceStorage.kind === "folder"
-            ? "Требуется доступ к папке"
-            : "Сохранено в браузере";
+  const persistenceLabel = getWorkspacePersistenceLabel({
+    persistenceState,
+    workspaceStorage,
+  });
 
   const openBoard = (boardId: string) => {
     selectProject(boardId);
@@ -582,6 +600,7 @@ export function AnalyticsPage() {
       onOpenDraw: () => router.push(DRAW_ROUTE),
       onOpenMyWork: () => router.push(MY_WORK_ROUTE),
       onOpenNotes: () => router.push(NOTES_ROUTE),
+      onOpenTaskReview: () => router.push(TASK_REVIEW_ROUTE),
     }),
     ...chartModeActions,
     ...getWorkspaceSearchActions({
@@ -595,12 +614,16 @@ export function AnalyticsPage() {
   ];
 
   return (
-    <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
+    <Stack
+      tag="main"
+      className="h-dvh min-h-dvh overflow-hidden bg-canvas text-text"
+    >
       <WorkspaceHeader
         activeView="analytics"
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
-        persistenceLabel={statusLabel}
+        persistenceLabel={persistenceLabel}
+        taskReviewIssuesCount={taskReviewIssuesCount}
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
@@ -608,6 +631,7 @@ export function AnalyticsPage() {
         onOpenDraw={() => router.push(DRAW_ROUTE)}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        onOpenTaskReview={() => router.push(TASK_REVIEW_ROUTE)}
         showProjectsButton={false}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
@@ -622,37 +646,45 @@ export function AnalyticsPage() {
         />
       </WorkspaceHeader>
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <section className="relative z-0 min-w-0 flex-1 overflow-y-auto">
+      <Box className="relative flex min-h-0 flex-1 overflow-hidden">
+        <Box tag="section" className="relative z-0 min-w-0 flex-1 overflow-y-auto">
           {storageError ? (
-            <div className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">
-              <div className="mx-auto flex max-w-[1800px] items-start gap-2 text-sm leading-5">
+            <Box className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">
+              <Flex className="mx-auto max-w-[1800px] items-start gap-2 text-sm leading-5">
                 <AlertTriangle
                   aria-hidden="true"
                   className="mt-0.5 shrink-0"
                   size={17}
                 />
-                <p>{storageError}</p>
-              </div>
-            </div>
+                <Text text={storageError} />
+              </Flex>
+            </Box>
           ) : null}
 
-          <div className="mx-auto grid max-w-[1800px] gap-4 px-4 py-4 sm:px-6 lg:py-6">
-            <section className="flex flex-col gap-3 rounded-lg border border-white/10 bg-panel/60 p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">
-                  {activeBoard.title}
-                </p>
-                <h2 className="mt-1 text-xl font-semibold text-text">
-                  Состояние задач
-                </h2>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-control/50 px-3 py-2 text-sm text-text-muted">
+          <Grid className="mx-auto max-w-[1800px] gap-4 px-4 py-4 sm:px-6 lg:py-6">
+            <Surface className="flex flex-col gap-3 bg-panel/60 p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+              <Box>
+                <Text
+                  className="text-accent"
+                  text={activeBoard.title}
+                  variant="eyebrow"
+                />
+                <Title
+                  className="mt-1"
+                  tag="h2"
+                  title="Состояние задач"
+                  variant="section"
+                />
+              </Box>
+              <Stack className="gap-2 sm:flex-row sm:items-center">
+                <Inline className="gap-2 rounded-lg border border-white/10 bg-control/50 px-3 py-2 text-sm text-text-muted">
                   <BarChart3 aria-hidden="true" size={17} />
-                  {analytics.activeCards} активных карточек
-                </div>
-                <div className="inline-grid grid-cols-2 rounded-lg border border-white/10 bg-control/35 p-1 sm:grid-cols-4">
+                  <Text
+                    tag="span"
+                    text={`${analytics.activeCards} активных карточек`}
+                  />
+                </Inline>
+                <Grid className="grid-cols-2 rounded-lg border border-white/10 bg-control/35 p-1 sm:grid-cols-4">
                   <button
                     aria-pressed={chartMode === "bars"}
                     className={cn(
@@ -664,7 +696,7 @@ export function AnalyticsPage() {
                     type="button"
                     onClick={() => setChartMode("bars")}
                   >
-                    Бары
+                    <Text tag="span" text="Бары" />
                   </button>
                   <button
                     aria-pressed={chartMode === "line"}
@@ -677,7 +709,7 @@ export function AnalyticsPage() {
                     type="button"
                     onClick={() => setChartMode("line")}
                   >
-                    Линия
+                    <Text tag="span" text="Линия" />
                   </button>
                   <button
                     aria-pressed={chartMode === "area"}
@@ -690,7 +722,7 @@ export function AnalyticsPage() {
                     type="button"
                     onClick={() => setChartMode("area")}
                   >
-                    Площадь
+                    <Text tag="span" text="Площадь" />
                   </button>
                   <button
                     aria-pressed={chartMode === "donut"}
@@ -703,13 +735,13 @@ export function AnalyticsPage() {
                     type="button"
                     onClick={() => setChartMode("donut")}
                   >
-                    Donut
+                    <Text tag="span" text="Donut" />
                   </button>
-                </div>
-              </div>
-            </section>
+                </Grid>
+              </Stack>
+            </Surface>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Grid className="gap-3 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 detail="От активных задач на доске"
                 label="Выполнено"
@@ -734,9 +766,9 @@ export function AnalyticsPage() {
                 tone="danger"
                 value={analytics.overdueCards}
               />
-            </div>
+            </Grid>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <Grid className="gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <SegmentChart
                 mode={chartMode}
                 segments={analytics.statusSegments}
@@ -747,25 +779,27 @@ export function AnalyticsPage() {
                 segments={analytics.prioritySegments}
                 title="По приоритетам"
               />
-            </div>
+            </Grid>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <Grid className="gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
               <ListProgress segments={analytics.listSegments} />
 
-              <section className="rounded-lg border border-white/10 bg-panel/72 p-4 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)]">
-                <h2 className="text-sm font-semibold text-text">Сроки</h2>
+              <Surface className="p-4">
+                <Title tag="h2" title="Сроки" variant="card" />
                 <div className="mt-4 grid gap-3">
                   <div className="flex items-center gap-3 rounded-lg border border-white/8 bg-control/30 p-3">
                     <span className="grid size-10 place-items-center rounded-lg bg-red-500/12 text-red-200">
                       <TimerReset aria-hidden="true" size={18} />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text">
-                        {analytics.overdueCards} просрочено
-                      </p>
-                      <p className="text-xs text-text-muted">
-                        Не готово и срок уже прошёл
-                      </p>
+                      <Text
+                        text={`${analytics.overdueCards} просрочено`}
+                        variant="itemTitle"
+                      />
+                      <Text
+                        text="Не готово и срок уже прошёл"
+                        variant="caption"
+                      />
                     </div>
                   </div>
 
@@ -774,12 +808,14 @@ export function AnalyticsPage() {
                       <CalendarClock aria-hidden="true" size={18} />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text">
-                        {analytics.dueSoonCards} на ближайшие 7 дней
-                      </p>
-                      <p className="text-xs text-text-muted">
-                        Можно планировать загрузку
-                      </p>
+                      <Text
+                        text={`${analytics.dueSoonCards} на ближайшие 7 дней`}
+                        variant="itemTitle"
+                      />
+                      <Text
+                        text="Можно планировать загрузку"
+                        variant="caption"
+                      />
                     </div>
                   </div>
 
@@ -788,20 +824,19 @@ export function AnalyticsPage() {
                       <CircleCheckBig aria-hidden="true" size={18} />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text">
-                        {analytics.completedCards} завершено
-                      </p>
-                      <p className="text-xs text-text-muted">
-                        По статусу карточки
-                      </p>
+                      <Text
+                        text={`${analytics.completedCards} завершено`}
+                        variant="itemTitle"
+                      />
+                      <Text text="По статусу карточки" variant="caption" />
                     </div>
                   </div>
                 </div>
-              </section>
-            </div>
-          </div>
-        </section>
-      </div>
+              </Surface>
+            </Grid>
+          </Grid>
+        </Box>
+      </Box>
       {isCommandPaletteOpen ? (
         <CommandPalette
           actions={commandActions}
@@ -809,6 +844,6 @@ export function AnalyticsPage() {
           onClose={() => setIsCommandPaletteOpen(false)}
         />
       ) : null}
-    </main>
+    </Stack>
   );
 }

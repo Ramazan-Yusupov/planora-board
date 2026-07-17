@@ -3,6 +3,7 @@
 import {
   BarChart3,
   CalendarDays,
+  ClipboardCheck,
   ClipboardList,
   FileText,
   LayoutDashboard,
@@ -18,6 +19,7 @@ type GetWorkspaceNavigationActionsOptions = Readonly<{
   onOpenDraw: () => void;
   onOpenMyWork: () => void;
   onOpenNotes: () => void;
+  onOpenTaskReview?: () => void;
 }>;
 
 export function getWorkspaceNavigationActions({
@@ -27,8 +29,9 @@ export function getWorkspaceNavigationActions({
   onOpenDraw,
   onOpenMyWork,
   onOpenNotes,
+  onOpenTaskReview,
 }: GetWorkspaceNavigationActionsOptions): CommandPaletteAction[] {
-  return [
+  const actions: CommandPaletteAction[] = [
     {
       id: "workspace-board",
       label: "Рабочая доска",
@@ -50,6 +53,17 @@ export function getWorkspaceNavigationActions({
       icon: <ClipboardList aria-hidden="true" size={18} />,
       onSelect: onOpenMyWork,
     },
+    ...(onOpenTaskReview
+      ? [
+          {
+            id: "workspace-task-review",
+            label: "Обзор задач",
+            description: "Открыть аудит просрочек, блокеров и задач без срока",
+            icon: <ClipboardCheck aria-hidden="true" size={18} />,
+            onSelect: onOpenTaskReview,
+          },
+        ]
+      : []),
     {
       id: "workspace-draw",
       label: "DrawTool",
@@ -72,4 +86,6 @@ export function getWorkspaceNavigationActions({
       onSelect: onOpenAnalytics,
     },
   ];
+
+  return actions;
 }

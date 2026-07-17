@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getCardAttachments,
@@ -59,13 +59,24 @@ import {
   hasActiveCardFilters,
   type CardFilters,
 } from "@/features/filter-cards";
-import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import {
+  getWorkspacePersistenceLabel,
+  useBoardWorkspace,
+} from "@/features/manage-board-workspace";
 import {
   loadNotes,
   replaceStoredNotes,
   type Note,
 } from "@/features/manage-notes";
-import { evaluateWorkspaceHealth } from "@/features/workspace-health";
+import {
+  buildTaskReviewReport,
+  getTaskReviewIssueCount,
+} from "@/features/task-review";
+import {
+  applyWorkspaceHealthFixes,
+  evaluateWorkspaceHealth,
+  getWorkspaceHealthFixPlan,
+} from "@/features/workspace-health";
 import {
   addAttachmentToCard,
   removeAttachmentFromCard,
@@ -101,11 +112,13 @@ import {
   DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
+  TASK_REVIEW_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
 import { usePrefetchRoutes } from "@/shared/lib";
 import {
   IconButton,
+  Text,
   TextField,
   ToastViewport,
   type ToastMessage,
@@ -160,7 +173,7 @@ type LinkedNoteSummary = Readonly<{
 function ActiveFilterChip({ label, onClear }: ActiveFilterChipProps) {
   return (
     <span className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-white/15 bg-slate-950/30 px-2.5 text-xs font-medium text-white/85 backdrop-blur-sm">
-      <span className="min-w-0 truncate">{label}</span>
+      <Text tag="span" className="min-w-0 truncate" text={label} />
       <button
         className="-mr-1 grid size-6 shrink-0 place-items-center rounded-md text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
         type="button"
@@ -295,6 +308,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     DRAW_ROUTE,
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
+    TASK_REVIEW_ROUTE,
   ]);
 
   useEffect(() => {
@@ -359,6 +373,12 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     onUndo: undo,
   });
 
+  const taskReviewIssuesCount = useMemo(
+    () =>
+      workspace ? getTaskReviewIssueCount(buildTaskReviewReport(workspace)) : 0,
+    [workspace],
+  );
+
   if (!isReady || !workspace || !activeBoard) {
     return <BoardLoadingState />;
   }
@@ -408,6 +428,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     notes: notesSnapshot,
     workspace,
   });
+  const workspaceHealthFixPlan = getWorkspaceHealthFixPlan(
+    workspace,
+    notesSnapshot,
+  );
   const isFiltering = hasActiveCardFilters(cardFilters);
   const selectedListForActions = listActionsListId
     ? (activeBoard.lists[listActionsListId] ?? null)
@@ -418,16 +442,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
   });
   const selectedFilterList =
     cardFilters.listId === "all" ? null : activeBoard.lists[cardFilters.listId];
-  const statusLabel =
-    persistenceState === "saving"
-      ? "Сохраняем…"
-      : persistenceState === "error"
-        ? "Ошибка сохранения"
-        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
-          ? `Сохранено в папку: ${workspaceStorage.name}`
-          : workspaceStorage.kind === "folder"
-            ? "Требуется доступ к папке"
-            : "Сохранено в браузере";
+  const persistenceLabel = getWorkspacePersistenceLabel({
+    persistenceState,
+    workspaceStorage,
+  });
 
   const closePanels = () => {
     setIsProjectsOpen(false);
@@ -521,6 +539,28 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
     setIsWorkspaceHealthOpen(true);
   };
 
+  const applyWorkspaceHealthAutoFixes = () => {
+    const result = applyWorkspaceHealthFixes(workspace, notesSnapshot);
+
+    if (result.totalCount === 0) {
+      showToast({
+        title: "Исправлений нет",
+        description: "Health Check не нашёл безопасных auto-fix действий.",
+        tone: "info",
+      });
+      return;
+    }
+
+    replaceStoredNotes(result.notes);
+    setNotesSnapshot(result.notes);
+    replaceWorkspace(result.workspace);
+    showToast({
+      title: "Workspace исправлен",
+      description: `${result.totalCount} изменений применено`,
+      tone: "success",
+    });
+  };
+
   const openWorkspaceCenter = () => {
     setNotesSnapshot(loadNotes());
     closePanels();
@@ -572,6 +612,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
       onOpenCalendar: openCalendar,
       onOpenDraw: openDraw,
       onOpenMyWork: openMyWork,
+      onOpenTaskReview: () => router.push(TASK_REVIEW_ROUTE),
       onOpenNotes: openNotes,
       onOpenFilters: () => setIsFiltersOpen(true),
       onOpenHealthCheck: openWorkspaceHealth,
@@ -612,13 +653,15 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
         isBoardToolsOpen={isBoardToolsOpen}
-        persistenceLabel={statusLabel}
+        persistenceLabel={persistenceLabel}
+        taskReviewIssuesCount={taskReviewIssuesCount}
         showProjectsButton={false}
         onOpenAnalytics={openAnalytics}
         onOpenBoard={() => router.push(getBoardRoute(activeBoard.id))}
         onOpenCalendar={openCalendar}
         onOpenDraw={openDraw}
         onOpenMyWork={openMyWork}
+        onOpenTaskReview={() => router.push(TASK_REVIEW_ROUTE)}
         onOpenNotes={openNotes}
         onOpenCommands={openCommandPalette}
         onOpenHealthCheck={openWorkspaceHealth}
@@ -834,7 +877,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
                   className="mt-0.5 shrink-0"
                   size={17}
                 />
-                <p>{storageError}</p>
+                <Text text={storageError} />
               </div>
             </div>
           ) : null}
@@ -1485,6 +1528,7 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
           healthReport={workspaceHealthReport}
           isOpen={isWorkspaceCenterOpen}
           notes={notesSnapshot}
+          onApplyMarketplaceTemplate={workspaceCenterActions.applyMarketplaceTemplate}
           onApplyWorkflowTemplate={workspaceCenterActions.applyWorkflowTemplate}
           onClose={() => setIsWorkspaceCenterOpen(false)}
           onCreateNoteTemplate={workspaceCenterActions.createNoteTemplate}
@@ -1498,8 +1542,10 @@ export function BoardPage({ boardId, initialCardId }: BoardPageProps) {
 
       {isWorkspaceHealthOpen ? (
         <WorkspaceHealthModal
+          fixPlan={workspaceHealthFixPlan}
           isOpen={isWorkspaceHealthOpen}
           report={workspaceHealthReport}
+          onApplyFixes={applyWorkspaceHealthAutoFixes}
           onClose={() => setIsWorkspaceHealthOpen(false)}
         />
       ) : null}

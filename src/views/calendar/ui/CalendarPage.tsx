@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CalendarDays } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import {
   DEFAULT_CALENDAR_CARD_FILTERS,
@@ -10,7 +10,10 @@ import {
 } from "@/features/filter-cards";
 import { type BoardCard, type CardDraft } from "@/entities/board";
 import { updateCard } from "@/features/board-management";
-import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import {
+  getWorkspacePersistenceLabel,
+  useBoardWorkspace,
+} from "@/features/manage-board-workspace";
 import { loadNotes, type Note } from "@/features/manage-notes";
 import {
   getCalendarItems,
@@ -18,15 +21,18 @@ import {
   shiftMonth,
   type CalendarItem,
 } from "@/features/view-calendar";
+import { buildTaskReviewReport, getTaskReviewIssueCount } from "@/features/task-review";
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
   DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
+  TASK_REVIEW_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
 import { usePrefetchRoutes } from "@/shared/lib";
+import { Text } from "@/shared/ui";
 import { CalendarView } from "@/widgets/calendar-view";
 import {
   CommandPalette,
@@ -52,13 +58,12 @@ function getServerMonthTimestamp(): number {
 function CalendarLoadingState() {
   return (
     <main className="grid h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text">
-      <p
+      <Text
         aria-busy="true"
         aria-live="polite"
-        className="rounded-xl border border-white/15 bg-slate-950/35 px-4 py-3 text-sm text-white/80 backdrop-blur-sm"
-      >
-        Загружаем календарь…
-      </p>
+        text="Загружаем календарь…"
+        variant="loading"
+      />
     </main>
   );
 }
@@ -114,6 +119,10 @@ export function CalendarPage() {
     getServerMonthTimestamp,
   );
   const month = shiftMonth(new Date(currentMonthTimestamp), monthOffset);
+  const taskReviewIssuesCount = useMemo(
+    () => (workspace ? getTaskReviewIssueCount(buildTaskReviewReport(workspace)) : 0),
+    [workspace],
+  );
   usePrefetchRoutes([
     activeBoard ? getBoardRoute(activeBoard.id) : null,
     NOTES_ROUTE,
@@ -121,6 +130,7 @@ export function CalendarPage() {
     DRAW_ROUTE,
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
+    TASK_REVIEW_ROUTE,
   ]);
 
   if (!isReady || !workspace || !activeBoard) {
@@ -129,16 +139,10 @@ export function CalendarPage() {
 
   const selectedCalendarBoardId = selectedBoardId ?? activeBoard.id;
 
-  const statusLabel =
-    persistenceState === "saving"
-      ? "Сохраняем…"
-      : persistenceState === "error"
-        ? "Ошибка сохранения"
-        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
-          ? `Сохранено в папку: ${workspaceStorage.name}`
-          : workspaceStorage.kind === "folder"
-            ? "Требуется доступ к папке"
-            : "Сохранено в браузере";
+  const persistenceLabel = getWorkspacePersistenceLabel({
+    persistenceState,
+    workspaceStorage,
+  });
 
   const openBoard = (boardId: string) => {
     selectProject(boardId);
@@ -198,6 +202,7 @@ export function CalendarPage() {
       onOpenDraw: () => router.push(DRAW_ROUTE),
       onOpenMyWork: () => router.push(MY_WORK_ROUTE),
       onOpenNotes: () => router.push(NOTES_ROUTE),
+      onOpenTaskReview: () => router.push(TASK_REVIEW_ROUTE),
     }),
     ...calendarTaskActions,
     ...getWorkspaceSearchActions({
@@ -239,7 +244,8 @@ export function CalendarPage() {
         activeView="calendar"
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
-        persistenceLabel={statusLabel}
+        persistenceLabel={persistenceLabel}
+        taskReviewIssuesCount={taskReviewIssuesCount}
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
@@ -247,6 +253,7 @@ export function CalendarPage() {
         onOpenDraw={() => router.push(DRAW_ROUTE)}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        onOpenTaskReview={() => router.push(TASK_REVIEW_ROUTE)}
         showProjectsButton={false}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
@@ -271,7 +278,7 @@ export function CalendarPage() {
                   className="mt-0.5 shrink-0"
                   size={17}
                 />
-                <p>{storageError}</p>
+                <Text text={storageError} />
               </div>
             </div>
           ) : null}

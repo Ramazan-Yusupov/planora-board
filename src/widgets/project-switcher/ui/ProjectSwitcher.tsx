@@ -181,7 +181,7 @@ export function ProjectSwitcher({
           aria-expanded={isOpen}
           aria-haspopup="menu"
           className={cn(
-            "flex h-11 w-full min-w-0 items-center gap-3 rounded-xl border border-white/10 bg-control/45 px-3 text-left text-text shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)] transition hover:border-white/20 hover:bg-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex h-11 w-full min-w-0 items-center gap-3 rounded-xl border border-white/10 bg-control/45 px-3 text-left text-text shadow-[inset_0_1px_0_rgb(255_255_255/3%)] transition hover:border-white/20 hover:bg-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             isOpen && "border-accent/55 ring-2 ring-accent/20",
           )}
           type="button"
@@ -241,7 +241,7 @@ export function ProjectSwitcher({
               </button>
             </div>
 
-            <div className="max-h-[15rem] overflow-y-auto px-1 py-1">
+            <div className="max-h-60 overflow-y-auto px-1 py-1">
               {boards.map((board, boardIndex) => {
                 const isActive = board.id === activeBoard.id;
                 const isKeyboardActive = activeIndex === boardIndex;

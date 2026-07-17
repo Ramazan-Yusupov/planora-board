@@ -35,7 +35,7 @@ export function QuickCreateListDialog({
   };
 
   return (
-    <Modal title="Новый список" zIndexClassName="z-[84]" onClose={onClose}>
+    <Modal title="Новый список" zIndexClassName="z-84" onClose={onClose}>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-medium text-text" htmlFor={titleId}>

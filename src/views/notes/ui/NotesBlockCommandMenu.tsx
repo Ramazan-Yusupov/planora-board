@@ -235,7 +235,7 @@ export function NotesBlockCommandMenu({
               {taskCreateTargets.length}
             </span>
           </div>
-          <div className="max-h-[6.75rem] overflow-x-hidden overflow-y-auto pr-1">
+          <div className="max-h-27 overflow-x-hidden overflow-y-auto pr-1">
             {taskCreateTargets.length > 0 ? (
               <div className="grid min-w-0 gap-1">
                 {taskCreateTargets.map((target, targetIndex) => {
@@ -296,7 +296,7 @@ export function NotesBlockCommandMenu({
             {tasks.length}
           </span>
         </div>
-        <div className="max-h-[6.75rem] overflow-x-hidden overflow-y-auto pr-1">
+        <div className="max-h-27 overflow-x-hidden overflow-y-auto pr-1">
           {tasks.length > 0 ? (
             <div className="grid min-w-0 gap-1">
               {tasks.map((task, taskIndex) => {

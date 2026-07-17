@@ -50,7 +50,7 @@ export function NotesSidebar({
         />
       </label>
 
-      <div className="mt-3 max-h-[15rem] space-y-1 overflow-y-auto lg:max-h-[calc(100dvh-12rem)]">
+      <div className="mt-3 max-h-60 space-y-1 overflow-y-auto lg:max-h-[calc(100dvh-12rem)]">
         {notes.length > 0 ? (
           notes.map((note) => {
             const isActive = activeNoteId === note.id;

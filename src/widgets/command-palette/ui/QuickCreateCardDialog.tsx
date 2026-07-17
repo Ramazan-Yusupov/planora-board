@@ -40,7 +40,7 @@ export function QuickCreateCardDialog({
   };
 
   return (
-    <Modal title="Новая карточка" zIndexClassName="z-[84]" onClose={onClose}>
+    <Modal title="Новая карточка" zIndexClassName="z-84" onClose={onClose}>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-medium text-text" htmlFor={titleId}>Название</label>

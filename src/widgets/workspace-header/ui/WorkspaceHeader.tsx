@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarDays,
   ClipboardList,
+  ClipboardCheck,
   Cloud,
   Command,
   Download,
@@ -33,7 +34,7 @@ import {
 
 import { APP_NAME } from "@/shared/config/app";
 import { cn } from "@/shared/lib";
-import { IconButton, Tooltip, useKeyboardListNavigation } from "@/shared/ui";
+import { IconButton, Text, Tooltip, useKeyboardListNavigation } from "@/shared/ui";
 
 export type WorkspaceView =
   | "board"
@@ -41,7 +42,8 @@ export type WorkspaceView =
   | "analytics"
   | "draw"
   | "my-work"
-  | "notes";
+  | "notes"
+  | "task-review";
 
 type WorkspaceHeaderProps = Readonly<{
   activeView: WorkspaceView;
@@ -60,12 +62,14 @@ type WorkspaceHeaderProps = Readonly<{
   isProjectsOpen: boolean;
   persistenceLabel: string;
   showProjectsButton?: boolean;
+  taskReviewIssuesCount?: number;
   onOpenBoard: () => void;
   onOpenAnalytics?: () => void;
   onOpenCalendar: () => void;
   onOpenDraw?: () => void;
   onOpenMyWork?: () => void;
   onOpenNotes?: () => void;
+  onOpenTaskReview?: () => void;
   onOpenCommands?: () => void;
   onOpenHealthCheck?: () => void;
   onOpenWorkspaceCenter?: () => void;
@@ -121,32 +125,32 @@ function HeaderMenuItem({
     >
       <span className="grid size-7 shrink-0 place-items-center">{icon}</span>
 
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <Text tag="span" text={label} variant="menuLabel" />
 
       {shortcut ? (
-        <kbd
+        <Text
+          tag="span"
           className={cn(
-            "rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
             active
               ? "border-accent-foreground/30 text-accent-foreground/80"
               : "border-white/10 text-text-muted",
           )}
-        >
-          {shortcut}
-        </kbd>
+          text={shortcut}
+          variant="shortcut"
+        />
       ) : null}
 
       {badge ? (
-        <span
+        <Text
+          tag="span"
           className={cn(
-            "grid min-h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold",
             active
               ? "bg-accent-foreground text-accent"
               : "bg-danger text-slate-950",
           )}
-        >
-          {badge}
-        </span>
+          text={badge}
+          variant="badge"
+        />
       ) : null}
     </button>
   );
@@ -186,12 +190,14 @@ export function WorkspaceHeader({
   isProjectsOpen,
   persistenceLabel,
   showProjectsButton = true,
+  taskReviewIssuesCount = 0,
   onOpenBoard,
   onOpenAnalytics,
   onOpenCalendar,
   onOpenDraw,
   onOpenMyWork,
   onOpenNotes,
+  onOpenTaskReview,
   onOpenCommands,
   onOpenHealthCheck,
   onOpenWorkspaceCenter,
@@ -218,7 +224,7 @@ export function WorkspaceHeader({
     dataToolsGroupLabel ?? (activeView === "board" ? "Доска" : "Данные");
 
   const desktopIconClass =
-    "rounded-xl text-text-muted hover:bg-control/85 hover:text-text hover:shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]";
+    "rounded-xl text-text-muted hover:bg-control/85 hover:text-text hover:shadow-[inset_0_1px_0_rgb(255_255_255/4%)]";
   const desktopIconGroupClass =
     "flex items-center gap-1 border-r border-white/10 pr-2";
   const selectMenuAction = useCallback((action: (() => void) | undefined) => {
@@ -280,6 +286,17 @@ export function WorkspaceHeader({
         id: "my-work",
         label: "Мои задачи",
         onSelect: onOpenMyWork,
+      });
+    }
+
+    if (onOpenTaskReview) {
+      navigationActions.push({
+        active: activeView === "task-review",
+        badge: taskReviewIssuesCount || undefined,
+        icon: <ClipboardCheck aria-hidden="true" size={18} />,
+        id: "task-review",
+        label: "Обзор задач",
+        onSelect: onOpenTaskReview,
       });
     }
 
@@ -416,6 +433,8 @@ export function WorkspaceHeader({
     onOpenHealthCheck,
     onOpenMyWork,
     onOpenNotes,
+    onOpenTaskReview,
+    taskReviewIssuesCount,
     onOpenWorkspaceCenter,
     onOpenWorkspaceData,
     onRedo,
@@ -544,10 +563,12 @@ export function WorkspaceHeader({
             </Tooltip>
 
             <div className="hidden md:block">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
-                {APP_NAME}
-              </p>
-              <p className="text-xs text-text-muted">Локальные проекты</p>
+              <Text
+                className="tracking-[0.14em] text-accent"
+                text={APP_NAME}
+                variant="eyebrow"
+              />
+              <Text text="Локальные проекты" variant="caption" />
             </div>
           </div>
         </div>
@@ -557,7 +578,8 @@ export function WorkspaceHeader({
         {/* Desktop: отдельные группы инструментов */}
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
           <div className={desktopIconGroupClass}>
-            <span
+            <Text
+              tag="span"
               aria-live="polite"
               className={cn(
                 "inline-flex w-48 shrink-0 items-center gap-1.5 truncate text-xs font-medium",
@@ -567,8 +589,12 @@ export function WorkspaceHeader({
               title={persistenceLabel}
             >
               <Cloud aria-hidden="true" className="shrink-0" size={15} />
-              <span className="min-w-0 truncate">{persistenceLabel}</span>
-            </span>
+              <Text
+                tag="span"
+                className="min-w-0 truncate"
+                text={persistenceLabel}
+              />
+            </Text>
           </div>
 
           {onUndo || onRedo || onOpenCommands ? (
@@ -685,6 +711,30 @@ export function WorkspaceHeader({
                   onClick={onOpenDraw}
                 >
                   <PenTool aria-hidden="true" size={18} />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+
+            {onOpenTaskReview ? (
+              <Tooltip
+                label={
+                  taskReviewIssuesCount
+                    ? `Обзор задач: ${taskReviewIssuesCount} рисков`
+                    : "Обзор задач"
+                }
+              >
+                <IconButton
+                  aria-pressed={activeView === "task-review"}
+                  className={cn(
+                    activeView === "task-review"
+                      ? "bg-accent text-accent-foreground"
+                      : desktopIconClass,
+                  )}
+                  label="Обзор задач"
+                  size="sm"
+                  onClick={onOpenTaskReview}
+                >
+                  <ClipboardCheck aria-hidden="true" size={18} />
                 </IconButton>
               </Tooltip>
             ) : null}
@@ -878,9 +928,11 @@ export function WorkspaceHeader({
                     ) : null}
 
                     {section.title ? (
-                      <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
-                        {section.title}
-                      </p>
+                      <Text
+                        className="px-3 pb-2 pt-1"
+                        text={section.title}
+                        variant="eyebrow"
+                      />
                     ) : null}
 
                     {section.actions.map((action, actionIndex) => {

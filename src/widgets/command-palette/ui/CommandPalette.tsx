@@ -93,7 +93,7 @@ export function CommandPalette({ actions, isOpen, onClose }: CommandPaletteProps
   }
 
   return (
-    <Modal title="Команды" zIndexClassName="z-[85]" onClose={closePalette}>
+    <Modal title="Команды" zIndexClassName="z-85" onClose={closePalette}>
       <div className="space-y-4">
         <label className="relative block">
           <span className="sr-only">Поиск команды</span>

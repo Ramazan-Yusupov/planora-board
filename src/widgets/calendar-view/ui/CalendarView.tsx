@@ -335,7 +335,7 @@ export function CalendarView({
         onDragStart={handleDragStart}
       >
         <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6">
-          <div className="min-w-[46rem] overflow-hidden rounded-2xl border border-white/10 bg-panel/60 shadow-sm">
+          <div className="min-w-184 overflow-hidden rounded-2xl border border-white/10 bg-panel/60 shadow-sm">
           <div className="grid grid-cols-7 border-b border-white/10 bg-control/35">
             {weekdayLabels.map((weekday) => (
               <div

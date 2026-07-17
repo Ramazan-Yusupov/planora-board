@@ -190,7 +190,7 @@ export function Select({
         <div
           ref={menuRef}
           className={cn(
-            "z-[140] overflow-y-auto rounded-2xl border border-white/10 bg-panel/98 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl",
+            "z-140 overflow-y-auto rounded-2xl border border-white/10 bg-panel/98 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl",
             !isPositioned && "pointer-events-none opacity-0",
             menuClassName,
           )}
@@ -242,7 +242,7 @@ export function Select({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         className={cn(
-          "flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-control/45 px-3 text-left text-sm text-text shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)] transition-[background-color,border-color,box-shadow] focus:border-accent/70 focus:bg-control/70 focus:outline-none focus:ring-2 focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-60",
+          "flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-control/45 px-3 text-left text-sm text-text shadow-[inset_0_1px_0_rgb(255_255_255/3%)] transition-[background-color,border-color,box-shadow] focus:border-accent/70 focus:bg-control/70 focus:outline-none focus:ring-2 focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-60",
           className,
         )}
         disabled={disabled}

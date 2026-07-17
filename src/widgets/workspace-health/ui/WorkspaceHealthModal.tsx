@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -8,9 +9,11 @@ import {
   Link2,
   ShieldCheck,
   TriangleAlert,
+  Wrench,
 } from "lucide-react";
 
 import type {
+  WorkspaceHealthFixPlan,
   WorkspaceHealthIssue,
   WorkspaceHealthReport,
   WorkspaceHealthScope,
@@ -19,6 +22,7 @@ import type {
 import { cn } from "@/shared/lib";
 import {
   Button,
+  ConfirmDialog,
   EmptyState,
   Modal,
   Panel,
@@ -28,7 +32,9 @@ import {
 } from "@/shared/ui";
 
 type WorkspaceHealthModalProps = Readonly<{
+  fixPlan: WorkspaceHealthFixPlan;
   isOpen: boolean;
+  onApplyFixes: () => void;
   onClose: () => void;
   report: WorkspaceHealthReport;
 }>;
@@ -128,11 +134,61 @@ function IssueRow({ issue }: Readonly<{ issue: WorkspaceHealthIssue }>) {
   );
 }
 
+function FixPlanPanel({
+  fixPlan,
+  onApply,
+}: Readonly<{
+  fixPlan: WorkspaceHealthFixPlan;
+  onApply: () => void;
+}>) {
+  if (fixPlan.totalCount === 0) {
+    return null;
+  }
+
+  return (
+    <Panel>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <ToolSurfaceHeader
+          description="Доступны только безопасные исправления: без удаления досок, карточек и вложений."
+          icon={<Wrench aria-hidden="true" size={20} />}
+          title="Auto-fix"
+        />
+        <Button className="shrink-0" onClick={onApply}>
+          Исправить доступное
+        </Button>
+      </div>
+
+      <ul className="mt-3 space-y-2">
+        {fixPlan.fixes.map((fix) => (
+          <li
+            className="rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2"
+            key={fix.kind}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text">{fix.title}</p>
+                <p className="mt-1 text-xs leading-5 text-text-muted">
+                  {fix.description}
+                </p>
+              </div>
+              <StatusPill tone="accent">{fix.count}</StatusPill>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
 export function WorkspaceHealthModal({
+  fixPlan,
   isOpen,
+  onApplyFixes,
   onClose,
   report,
 }: WorkspaceHealthModalProps) {
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
   if (!isOpen) {
     return null;
   }
@@ -153,76 +209,95 @@ export function WorkspaceHealthModal({
   );
 
   return (
-    <Modal title="Диагностика workspace" onClose={onClose}>
-      <div className="space-y-4">
-        <Panel>
-          <ToolSurfaceHeader
-            action={<StatusPill tone={summaryTone.tone}>{summaryTone.label}</StatusPill>}
-            description="Проверяет схему проектов, связи заметок с задачами, вложенность блоков Notes и готовность данных к backup/import."
-            icon={<ShieldCheck aria-hidden="true" size={20} />}
-            title="Health Check"
+    <>
+      <Modal title="Диагностика workspace" onClose={onClose}>
+        <div className="space-y-4">
+          <Panel>
+            <ToolSurfaceHeader
+              action={<StatusPill tone={summaryTone.tone}>{summaryTone.label}</StatusPill>}
+              description="Проверяет схему проектов, связи заметок с задачами, вложенность блоков Notes и готовность данных к backup/import."
+              icon={<ShieldCheck aria-hidden="true" size={20} />}
+              title="Health Check"
+            />
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-4">
+              <SummaryCard label="Проекты" value={report.boardsCount} />
+              <SummaryCard label="Активные задачи" value={report.activeCardsCount} />
+              <SummaryCard label="Заметки" value={report.notesCount} />
+              <SummaryCard label="Проверка" value={checkedAt} />
+            </div>
+          </Panel>
+
+          <FixPlanPanel
+            fixPlan={fixPlan}
+            onApply={() => setIsConfirmOpen(true)}
           />
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-4">
-            <SummaryCard label="Проекты" value={report.boardsCount} />
-            <SummaryCard label="Активные задачи" value={report.activeCardsCount} />
-            <SummaryCard label="Заметки" value={report.notesCount} />
-            <SummaryCard label="Проверка" value={checkedAt} />
-          </div>
-        </Panel>
+          {report.issues.length === 0 ? (
+            <Panel>
+              <EmptyState
+                description="Workspace, board schema и связи Notes ↔ Board выглядят готовыми к работе, backup и import/export."
+                icon={<CheckCircle2 aria-hidden="true" size={24} />}
+                title="Критичных проблем не найдено"
+              />
+            </Panel>
+          ) : (
+            <div className="space-y-3">
+              {(Object.keys(scopeLabels) as WorkspaceHealthScope[]).flatMap(
+                (scope) => {
+                  const scopeIssues = issuesByScope[scope] ?? [];
 
-        {report.issues.length === 0 ? (
-          <Panel>
-            <EmptyState
-              description="Workspace, board schema и связи Notes ↔ Board выглядят готовыми к работе, backup и import/export."
-              icon={<CheckCircle2 aria-hidden="true" size={24} />}
-              title="Критичных проблем не найдено"
-            />
-          </Panel>
-        ) : (
-          <div className="space-y-3">
-            {(Object.keys(scopeLabels) as WorkspaceHealthScope[]).flatMap(
-              (scope) => {
-                const scopeIssues = issuesByScope[scope] ?? [];
+                  if (scopeIssues.length === 0) {
+                    return [];
+                  }
 
-                if (scopeIssues.length === 0) {
-                  return [];
-                }
-
-                return [
-                  <Panel key={scope}>
-                    <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-                      <ToolIcon>
-                        {getScopeIcon(scope)}
-                      </ToolIcon>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-semibold text-text">
-                          {scopeLabels[scope]}
-                        </h3>
-                        <p className="text-xs text-text-muted">
-                          {scopeIssues.length} проблем
-                        </p>
+                  return [
+                    <Panel key={scope}>
+                      <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+                        <ToolIcon>
+                          {getScopeIcon(scope)}
+                        </ToolIcon>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-semibold text-text">
+                            {scopeLabels[scope]}
+                          </h3>
+                          <p className="text-xs text-text-muted">
+                            {scopeIssues.length} проблем
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    <ul className="mt-3 space-y-2">
-                      {scopeIssues.map((issue) => (
-                        <IssueRow key={issue.id} issue={issue} />
-                      ))}
-                    </ul>
-                  </Panel>,
-                ];
-              },
-            )}
+                      <ul className="mt-3 space-y-2">
+                        {scopeIssues.map((issue) => (
+                          <IssueRow key={issue.id} issue={issue} />
+                        ))}
+                      </ul>
+                    </Panel>,
+                  ];
+                },
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={onClose}>
+              Закрыть
+            </Button>
           </div>
-        )}
-
-        <div className="flex justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            Закрыть
-          </Button>
         </div>
-      </div>
-    </Modal>
+      </Modal>
+
+      <ConfirmDialog
+        confirmLabel="Применить исправления"
+        description={`Будет применено исправлений: ${fixPlan.totalCount}. Доски, карточки и вложения не удаляются; битые linked-card блоки в Notes станут обычным текстом.`}
+        isOpen={isConfirmOpen}
+        title="Исправить доступные проблемы?"
+        onCancel={() => setIsConfirmOpen(false)}
+        onConfirm={() => {
+          setIsConfirmOpen(false);
+          onApplyFixes();
+        }}
+      />
+    </>
   );
 }

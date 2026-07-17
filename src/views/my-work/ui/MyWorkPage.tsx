@@ -30,7 +30,11 @@ import {
   type CardStatus,
 } from "@/entities/board";
 import { updateCard } from "@/features/board-management";
-import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import {
+  getWorkspacePersistenceLabel,
+  useBoardWorkspace,
+} from "@/features/manage-board-workspace";
+import { buildTaskReviewReport, getTaskReviewIssueCount } from "@/features/task-review";
 import { loadNotes, type Note } from "@/features/manage-notes";
 import {
   ANALYTICS_ROUTE,
@@ -38,9 +42,11 @@ import {
   DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
+  TASK_REVIEW_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
 import { cn, usePrefetchRoutes } from "@/shared/lib";
+import { Box, Flex, Grid, Inline, Stack, Surface, Text, Title } from "@/shared/ui";
 import {
   CommandPalette,
   getWorkspaceSearchActions,
@@ -238,15 +244,17 @@ function buildGroups(items: readonly MyWorkItem[], today = new Date()) {
 
 function MyWorkLoadingState() {
   return (
-    <main className="grid h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text">
-      <p
+    <Grid
+      tag="main"
+      className="h-dvh min-h-dvh place-items-center bg-canvas px-4 text-text"
+    >
+      <Text
         aria-busy="true"
         aria-live="polite"
-        className="rounded-xl border border-white/15 bg-slate-950/35 px-4 py-3 text-sm text-white/80 backdrop-blur-sm"
-      >
-        Загружаем мои задачи…
-      </p>
-    </main>
+        text="Загружаем мои задачи…"
+        variant="loading"
+      />
+    </Grid>
   );
 }
 
@@ -330,47 +338,70 @@ function WorkCard({
       {...listeners}
       {...attributes}
     >
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-panel/70 text-text-muted">
+      <Flex className="min-w-0 items-start gap-3">
+        <Box
+          tag="span"
+          className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-panel/70 text-text-muted"
+        >
           <FolderKanban aria-hidden="true" size={16} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="block max-w-full truncate text-sm font-semibold text-text">
-            {card.title}
-          </p>
-          <p className="mt-1 block max-w-full truncate text-xs text-text-muted">
-            {board.title} / {listTitle}
-          </p>
-        </div>
-      </div>
+        </Box>
+        <Box className="min-w-0 flex-1">
+          <Text
+            className="block max-w-full truncate"
+            text={card.title}
+            variant="itemTitle"
+          />
+          <Text
+            className="mt-1 block max-w-full truncate"
+            text={`${board.title} / ${listTitle}`}
+            variant="caption"
+          />
+        </Box>
+      </Flex>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <Inline className="mt-3 flex-wrap gap-1.5">
         {card.dueDate ? (
-          <span className="inline-flex min-h-7 items-center gap-1 rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-semibold tabular-nums text-text">
+          <Inline
+            tag="span"
+            className="min-h-7 gap-1 rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-semibold tabular-nums text-text"
+          >
             <CalendarDays aria-hidden="true" size={13} />
-            {formatDueDate(card.dueDate)}
-          </span>
+            <Text tag="span" text={formatDueDate(card.dueDate)} />
+          </Inline>
         ) : null}
 
         {card.status !== "none" ? (
-          <span className="inline-flex min-h-7 max-w-full items-center rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-medium text-text-muted">
-            <span className="max-w-28 truncate">{statusLabel}</span>
-          </span>
+          <Inline
+            tag="span"
+            className="min-h-7 max-w-full rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-medium text-text-muted"
+          >
+            <Text tag="span" className="max-w-28 truncate" text={statusLabel} />
+          </Inline>
         ) : null}
 
         {card.priority !== "none" ? (
-          <span className="inline-flex min-h-7 max-w-full items-center rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-medium text-text-muted">
-            <span className="max-w-28 truncate">{priorityLabel}</span>
-          </span>
+          <Inline
+            tag="span"
+            className="min-h-7 max-w-full rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-medium text-text-muted"
+          >
+            <Text
+              tag="span"
+              className="max-w-28 truncate"
+              text={priorityLabel}
+            />
+          </Inline>
         ) : null}
 
         {card.checklistIds.length > 0 ? (
-          <span className="inline-flex min-h-7 items-center gap-1 rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-medium tabular-nums text-text-muted">
+          <Inline
+            tag="span"
+            className="min-h-7 gap-1 rounded-md border border-white/10 bg-black/12 px-2 text-[11px] font-medium tabular-nums text-text-muted"
+          >
             <CheckCircle2 aria-hidden="true" size={13} />
-            {card.checklistIds.length}
-          </span>
+            <Text tag="span" text={card.checklistIds.length} />
+          </Inline>
         ) : null}
-      </div>
+      </Inline>
     </button>
   );
 }
@@ -391,31 +422,35 @@ function WorkGroupColumn({
   });
 
   return (
-    <section
+    <Surface
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[18rem] flex-col rounded-lg border border-white/10 bg-panel/62 p-3 shadow-[inset_0_1px_0_rgb(255_255_255/_3%)] transition",
+        "flex min-h-72 flex-col bg-panel/62 p-3 transition",
         isOver && "border-accent/55 bg-accent/8 ring-1 ring-accent/35",
       )}
     >
-      <header className="flex items-start gap-3 border-b border-white/10 pb-3">
+      <Flex tag="header" className="items-start gap-3 border-b border-white/10 pb-3">
         <GroupIcon tone={group.tone} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="truncate text-sm font-semibold text-text">
-              {group.title}
-            </h2>
-            <span className="rounded-md bg-control px-1.5 py-0.5 text-xs font-semibold tabular-nums text-text-muted">
-              {group.items.length}
-            </span>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-text-muted">
-            {group.description}
-          </p>
-        </div>
-      </header>
+        <Box className="min-w-0 flex-1">
+          <Inline className="justify-between gap-2">
+            <Title
+              className="truncate"
+              tag="h2"
+              title={group.title}
+              variant="card"
+            />
+            <Box
+              tag="span"
+              className="rounded-md bg-control px-1.5 py-0.5 text-xs font-semibold tabular-nums text-text-muted"
+            >
+              <Text tag="span" text={group.items.length} />
+            </Box>
+          </Inline>
+          <Text className="mt-1" text={group.description} variant="caption" />
+        </Box>
+      </Flex>
 
-      <div className="mt-3 grid min-w-0 gap-2 overflow-hidden">
+      <Grid className="mt-3 min-w-0 gap-2 overflow-hidden">
         {group.items.length > 0 ? (
           group.items.map((item) => (
             <WorkCard
@@ -425,12 +460,14 @@ function WorkGroupColumn({
             />
           ))
         ) : (
-          <p className="grid min-h-24 place-items-center rounded-lg border border-dashed border-white/14 bg-control/20 px-3 text-center text-xs leading-5 text-text-muted">
-            Перетащите карточку сюда, чтобы изменить срок.
-          </p>
+          <Text
+            className="grid min-h-24 place-items-center rounded-lg border border-dashed border-white/14 bg-control/20 px-3 text-center"
+            text="Перетащите карточку сюда, чтобы изменить срок."
+            variant="caption"
+          />
         )}
-      </div>
-    </section>
+      </Grid>
+    </Surface>
   );
 }
 
@@ -461,6 +498,10 @@ export function MyWorkPage() {
     () => (activeBoard ? buildGroups(getActiveItems([activeBoard])) : []),
     [activeBoard],
   );
+  const taskReviewIssuesCount = useMemo(
+    () => (workspace ? getTaskReviewIssueCount(buildTaskReviewReport(workspace)) : 0),
+    [workspace],
+  );
   usePrefetchRoutes([
     activeBoard ? getBoardRoute(activeBoard.id) : null,
     NOTES_ROUTE,
@@ -468,6 +509,7 @@ export function MyWorkPage() {
     DRAW_ROUTE,
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
+    TASK_REVIEW_ROUTE,
   ]);
 
   if (!isReady || !workspace || !activeBoard) {
@@ -478,16 +520,10 @@ export function MyWorkPage() {
     (total, group) => total + group.items.length,
     0,
   );
-  const statusLabel =
-    persistenceState === "saving"
-      ? "Сохраняем…"
-      : persistenceState === "error"
-        ? "Ошибка сохранения"
-        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
-          ? `Сохранено в папку: ${workspaceStorage.name}`
-          : workspaceStorage.kind === "folder"
-            ? "Требуется доступ к папке"
-            : "Сохранено в браузере";
+  const persistenceLabel = getWorkspacePersistenceLabel({
+    persistenceState,
+    workspaceStorage,
+  });
 
   const openBoard = (boardId: string) => {
     selectProject(boardId);
@@ -540,6 +576,7 @@ export function MyWorkPage() {
       onOpenDraw: () => router.push(DRAW_ROUTE),
       onOpenMyWork: () => router.push(MY_WORK_ROUTE),
       onOpenNotes: () => router.push(NOTES_ROUTE),
+      onOpenTaskReview: () => router.push(TASK_REVIEW_ROUTE),
     }),
     ...myWorkTaskActions,
     ...getWorkspaceSearchActions({
@@ -598,12 +635,16 @@ export function MyWorkPage() {
   };
 
   return (
-    <main className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-canvas text-text">
+    <Stack
+      tag="main"
+      className="h-dvh min-h-dvh overflow-hidden bg-canvas text-text"
+    >
       <WorkspaceHeader
         activeView="my-work"
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
-        persistenceLabel={statusLabel}
+        persistenceLabel={persistenceLabel}
+        taskReviewIssuesCount={taskReviewIssuesCount}
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
@@ -611,6 +652,7 @@ export function MyWorkPage() {
         onOpenDraw={() => router.push(DRAW_ROUTE)}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        onOpenTaskReview={() => router.push(TASK_REVIEW_ROUTE)}
         showProjectsButton={false}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >
@@ -625,41 +667,49 @@ export function MyWorkPage() {
         />
       </WorkspaceHeader>
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <section className="relative z-0 min-w-0 flex-1 overflow-y-auto">
+      <Box className="relative flex min-h-0 flex-1 overflow-hidden">
+        <Box tag="section" className="relative z-0 min-w-0 flex-1 overflow-y-auto">
           {storageError ? (
-            <div className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">
-              <div className="mx-auto flex max-w-[1800px] items-start gap-2 text-sm leading-5">
+            <Box className="border-b border-amber-300/35 bg-amber-950/70 px-4 py-3 text-amber-100 sm:px-6">
+              <Flex className="mx-auto max-w-[1800px] items-start gap-2 text-sm leading-5">
                 <AlertTriangle
                   aria-hidden="true"
                   className="mt-0.5 shrink-0"
                   size={17}
                 />
-                <p>{storageError}</p>
-              </div>
-            </div>
+                <Text text={storageError} />
+              </Flex>
+            </Box>
           ) : null}
 
-          <div className="mx-auto grid max-w-[1800px] gap-4 px-4 py-4 sm:px-6 lg:py-6">
-            <section className="rounded-lg border border-white/10 bg-panel/70 p-4 shadow-panel">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">
-                Фокус
-              </p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-text">
-                    {totalVisibleCards} активных задач
-                  </h2>
-                  <p className="mt-1 text-sm text-text-muted">
-                    Готовые и архивные карточки здесь не показываются.
-                  </p>
-                </div>
-                <span className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/10 bg-control/45 px-3 text-sm text-text-muted">
-                  <CalendarDays aria-hidden="true" size={16} />
-                  {formatDueDate(getDateKey(new Date()))}
-                </span>
-              </div>
-            </section>
+          <Grid className="mx-auto max-w-[1800px] gap-4 px-4 py-4 sm:px-6 lg:py-6">
+            <Surface className="bg-panel/70 p-4 shadow-panel">
+              <Text className="text-accent" text="Фокус" variant="eyebrow" />
+              <Stack className="mt-2 gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <Box>
+                  <Title
+                    tag="h2"
+                    title={`${totalVisibleCards} активных задач`}
+                    variant="section"
+                  />
+                  <Text
+                    className="mt-1"
+                    text="Готовые и архивные карточки здесь не показываются."
+                    variant="muted"
+                  />
+                </Box>
+                <Inline
+                  tag="span"
+                  className="min-h-9 gap-2 rounded-lg border border-white/10 bg-control/45 px-3 text-sm text-text-muted"
+                >
+            <CalendarDays aria-hidden="true" size={16} />
+                  <Text
+                    tag="span"
+                    text={formatDueDate(getDateKey(new Date()))}
+                  />
+                </Inline>
+              </Stack>
+            </Surface>
 
             <DndContext
               onDragCancel={() => setActiveDragItem(null)}
@@ -686,7 +736,7 @@ export function MyWorkPage() {
                 setActiveDragItem(item ?? null);
               }}
             >
-              <div className="grid min-w-0 gap-4 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
+              <Grid className="min-w-0 gap-4 xl:grid-cols-4">
                 {groups.map((group) => (
                   <WorkGroupColumn
                     key={group.id}
@@ -694,7 +744,7 @@ export function MyWorkPage() {
                     onOpen={openWorkItem}
                   />
                 ))}
-              </div>
+              </Grid>
 
               <DragOverlay>
                 {activeDragItem ? (
@@ -706,9 +756,9 @@ export function MyWorkPage() {
                 ) : null}
               </DragOverlay>
             </DndContext>
-          </div>
-        </section>
-      </div>
+          </Grid>
+        </Box>
+      </Box>
       {isCommandPaletteOpen ? (
         <CommandPalette
           actions={commandActions}
@@ -716,6 +766,6 @@ export function MyWorkPage() {
           onClose={() => setIsCommandPaletteOpen(false)}
         />
       ) : null}
-    </main>
+    </Stack>
   );
 }

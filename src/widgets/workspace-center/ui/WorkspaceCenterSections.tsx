@@ -5,27 +5,63 @@ import {
   Bot,
   CheckCircle2,
   ClipboardCheck,
+  FileWarning,
   FileText,
   GitBranch,
   PackageOpen,
   Plug,
   ShieldCheck,
+  Tags,
   Workflow,
 } from "lucide-react";
 import { useMemo } from "react";
 
 import type { Board } from "@/entities/board";
 import type { Note } from "@/features/manage-notes";
+import type {
+  WorkspacePreflightReport,
+  WorkspacePreflightTone,
+} from "@/features/workspace-preflight";
 import {
+  BOARD_MARKETPLACE_TEMPLATES,
   BOARD_WORKFLOW_TEMPLATES,
   NOTE_TEMPLATES,
+  type BoardMarketplaceTemplateId,
   type BoardWorkflowTemplateId,
   type NoteTemplateId,
 } from "@/features/workspace-templates";
-import type { WorkspaceHealthReport } from "@/features/workspace-health";
 import { Button, Panel, StatusPill, ToolSurfaceHeader, ToolSurfaceRow } from "@/shared/ui";
 
 import { agentRoles, integrations } from "../model/workspaceCenterData";
+
+const preflightToneLabels: Record<WorkspacePreflightTone, string> = {
+  danger: "Ошибка",
+  info: "Инфо",
+  success: "Готово",
+  warning: "Проверить",
+};
+
+const preflightStatusTone: Record<
+  WorkspacePreflightTone,
+  "accent" | "danger" | "success" | "warning"
+> = {
+  danger: "danger",
+  info: "accent",
+  success: "success",
+  warning: "warning",
+};
+
+function getSignalLabel(count: number): string {
+  if (count % 10 === 1 && count % 100 !== 11) {
+    return `${count} сигнал`;
+  }
+
+  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
+    return `${count} сигнала`;
+  }
+
+  return `${count} сигналов`;
+}
 
 export function WorkflowsTab({
   onApplyWorkflowTemplate,
@@ -64,20 +100,20 @@ export function WorkflowsTab({
 }
 
 export function PreflightTab({
-  healthReport,
   onOpenHealthCheck,
   onOpenWorkspaceData,
+  preflightReport,
 }: Readonly<{
-  healthReport: WorkspaceHealthReport;
   onOpenHealthCheck: () => void;
   onOpenWorkspaceData: () => void;
+  preflightReport: WorkspacePreflightReport;
 }>) {
-  const hasIssues = healthReport.issues.length > 0;
+  const hasIssues = preflightReport.totalSignals > 0;
 
   return (
     <Panel>
       <ToolSurfaceHeader
-        action={<StatusPill tone={hasIssues ? "warning" : "success"}>{hasIssues ? `${healthReport.issues.length} сигналов` : "Чисто"}</StatusPill>}
+        action={<StatusPill tone={hasIssues ? "warning" : "success"}>{hasIssues ? getSignalLabel(preflightReport.totalSignals) : "Чисто"}</StatusPill>}
         description="Preflight перед import, backup, удалением проекта и массовыми изменениями."
         icon={<ShieldCheck aria-hidden="true" size={20} />}
         title="Hooks-style checks"
@@ -96,6 +132,54 @@ export function PreflightTab({
           icon={<ClipboardCheck aria-hidden="true" size={18} />}
           title="Backup/import gate"
         />
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        {preflightReport.sections.map((section) => (
+          <section
+            className="rounded-xl border border-white/10 bg-slate-950/20 p-3"
+            key={section.id}
+          >
+            <div className="flex items-start gap-3 border-b border-white/10 pb-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-control text-accent">
+                <FileWarning aria-hidden="true" size={18} />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-text">
+                  {section.title}
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-text-muted">
+                  {section.description}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2">
+              {section.items.map((item) => (
+                <div
+                  className="rounded-lg border border-white/10 bg-control/25 px-3 py-2"
+                  key={item.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-text">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">
+                        {item.description}
+                      </p>
+                    </div>
+                    <StatusPill tone={preflightStatusTone[item.tone]}>
+                      {item.count !== undefined
+                        ? `${preflightToneLabels[item.tone]} · ${item.count}`
+                        : preflightToneLabels[item.tone]}
+                    </StatusPill>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </Panel>
   );
@@ -219,19 +303,69 @@ export function ActivityTab({
 }
 
 export function MarketplaceTab({
+  onApplyMarketplaceTemplate,
   onCreateNoteTemplate,
 }: Readonly<{
+  onApplyMarketplaceTemplate: (templateId: BoardMarketplaceTemplateId) => void;
   onCreateNoteTemplate: (templateId: NoteTemplateId) => void;
 }>) {
   return (
     <Panel>
       <ToolSurfaceHeader
-        description="Локальная библиотека шаблонов заметок. Следующий слой сюда же добавит шаблоны статусов, labels и boards."
+        description="Локальная библиотека наборов для доски и шаблонов заметок."
         icon={<PackageOpen aria-hidden="true" size={20} />}
         title="Template marketplace"
       />
 
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 space-y-4">
+        <section>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-text">Board kits</h3>
+              <p className="mt-1 text-xs leading-5 text-text-muted">
+                Добавляют недостающие labels, statuses, priorities, cover colors и templates.
+              </p>
+            </div>
+            <StatusPill tone="accent">{BOARD_MARKETPLACE_TEMPLATES.length}</StatusPill>
+          </div>
+
+          <div className="mt-3 grid gap-2">
+            {BOARD_MARKETPLACE_TEMPLATES.map((template) => (
+              <ToolSurfaceRow
+                key={template.id}
+                action={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onApplyMarketplaceTemplate(template.id)}
+                  >
+                    Применить
+                  </Button>
+                }
+                description={template.description}
+                icon={<Tags aria-hidden="true" size={18} />}
+                title={template.title}
+              >
+                <p className="mt-2 text-xs text-text-muted">
+                  {template.labels.length} метки · {template.statuses.length} статуса · {template.checklistTemplates.length} чек-листа
+                </p>
+              </ToolSurfaceRow>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-text">Note templates</h3>
+              <p className="mt-1 text-xs leading-5 text-text-muted">
+                Создают новую заметку, связанную с текущим проектом.
+              </p>
+            </div>
+            <StatusPill tone="accent">{NOTE_TEMPLATES.length}</StatusPill>
+          </div>
+
+          <div className="mt-3 grid gap-2">
         {NOTE_TEMPLATES.map((template) => (
           <ToolSurfaceRow
             key={template.id}
@@ -245,6 +379,8 @@ export function MarketplaceTab({
             title={template.title}
           />
         ))}
+          </div>
+        </section>
       </div>
     </Panel>
   );

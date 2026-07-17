@@ -141,7 +141,7 @@ export function NoteSwitcher({
             </div>
           </div>
 
-          <div className="max-h-[15rem] overflow-y-auto px-1 py-1">
+          <div className="max-h-60 overflow-y-auto px-1 py-1">
             {notes.map((note, noteIndex) => {
               const isActive = note.id === activeNote.id;
               const isKeyboardActive = activeIndex === noteIndex;

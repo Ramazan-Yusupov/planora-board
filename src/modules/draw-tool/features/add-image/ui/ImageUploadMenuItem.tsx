@@ -81,7 +81,7 @@ export function ImageUploadMenuItem({
       />
 
       {error && (
-        <p className="absolute left-0 top-full z-[100] mt-1 w-64 rounded-md border border-red-500/30 bg-panel px-2 py-1 text-xs text-red-500 shadow-panel">
+        <p className="absolute left-0 top-full z-100 mt-1 w-64 rounded-md border border-red-500/30 bg-panel px-2 py-1 text-xs text-red-500 shadow-panel">
           {error}
         </p>
       )}

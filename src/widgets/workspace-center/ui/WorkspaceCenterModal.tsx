@@ -9,11 +9,13 @@ import {
   ShieldCheck,
   Workflow,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { Board } from "@/entities/board";
 import type { Note } from "@/features/manage-notes";
+import { buildWorkspacePreflightReport } from "@/features/workspace-preflight";
 import type {
+  BoardMarketplaceTemplateId,
   BoardWorkflowTemplateId,
   NoteTemplateId,
 } from "@/features/workspace-templates";
@@ -38,6 +40,7 @@ type WorkspaceCenterModalProps = Readonly<{
   activeBoard: Board;
   healthReport: WorkspaceHealthReport;
   isOpen: boolean;
+  onApplyMarketplaceTemplate: (templateId: BoardMarketplaceTemplateId) => void;
   notes: readonly Note[];
   onApplyWorkflowTemplate: (templateId: BoardWorkflowTemplateId) => void;
   onClose: () => void;
@@ -59,6 +62,7 @@ export function WorkspaceCenterModal({
   activeBoard,
   healthReport,
   isOpen,
+  onApplyMarketplaceTemplate,
   notes,
   onApplyWorkflowTemplate,
   onClose,
@@ -67,13 +71,22 @@ export function WorkspaceCenterModal({
   onOpenWorkspaceData,
 }: WorkspaceCenterModalProps) {
   const [activeTab, setActiveTab] = useState<WorkspaceCenterTab>("workflows");
+  const preflightReport = useMemo(
+    () =>
+      buildWorkspacePreflightReport({
+        activeBoard,
+        healthReport,
+        notes,
+      }),
+    [activeBoard, healthReport, notes],
+  );
 
   if (!isOpen) {
     return null;
   }
 
   return (
-    <Modal title="Workspace Center" onClose={onClose} zIndexClassName="z-[82]">
+    <Modal title="Workspace Center" onClose={onClose} zIndexClassName="z-82">
       <div className="space-y-4">
         <section className="rounded-2xl border border-white/10 bg-control/20 p-3">
           <ToolSurfaceHeader
@@ -94,7 +107,7 @@ export function WorkspaceCenterModal({
         ) : null}
         {activeTab === "preflight" ? (
           <PreflightTab
-            healthReport={healthReport}
+            preflightReport={preflightReport}
             onOpenHealthCheck={onOpenHealthCheck}
             onOpenWorkspaceData={onOpenWorkspaceData}
           />
@@ -105,7 +118,10 @@ export function WorkspaceCenterModal({
           <ActivityTab activeBoard={activeBoard} notes={notes} />
         ) : null}
         {activeTab === "marketplace" ? (
-          <MarketplaceTab onCreateNoteTemplate={onCreateNoteTemplate} />
+          <MarketplaceTab
+            onApplyMarketplaceTemplate={onApplyMarketplaceTemplate}
+            onCreateNoteTemplate={onCreateNoteTemplate}
+          />
         ) : null}
       </div>
     </Modal>

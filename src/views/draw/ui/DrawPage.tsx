@@ -5,7 +5,14 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import {
+  getWorkspacePersistenceLabel,
+  useBoardWorkspace,
+} from "@/features/manage-board-workspace";
+import {
+  buildTaskReviewReport,
+  getTaskReviewIssueCount,
+} from "@/features/task-review";
 import { AppProviders as DrawToolProviders } from "@/modules/draw-tool/app/providers/AppProviders";
 import {
   PlanoraAdapterProvider,
@@ -18,6 +25,7 @@ import {
   DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
+  TASK_REVIEW_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
 import { usePrefetchRoutes } from "@/shared/lib";
@@ -61,6 +69,11 @@ export function DrawPage() {
     selectProject,
   } = useBoardWorkspace();
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
+  const taskReviewIssuesCount = useMemo(
+    () =>
+      workspace ? getTaskReviewIssueCount(buildTaskReviewReport(workspace)) : 0,
+    [workspace],
+  );
 
   usePrefetchRoutes([
     activeBoard ? getBoardRoute(activeBoard.id) : null,
@@ -119,16 +132,10 @@ export function DrawPage() {
     );
   }
 
-  const statusLabel =
-    persistenceState === "saving"
-      ? "Сохраняем..."
-      : persistenceState === "error"
-        ? "Ошибка сохранения"
-        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
-          ? `Сохранено в папку: ${workspaceStorage.name}`
-          : workspaceStorage.kind === "folder"
-            ? "Требуется доступ к папке"
-            : "Сохранено в браузере";
+  const persistenceLabel = getWorkspacePersistenceLabel({
+    persistenceState,
+    workspaceStorage,
+  });
 
   const openBoard = (boardId: string) => {
     selectProject(boardId);
@@ -156,13 +163,15 @@ export function DrawPage() {
         activeView="draw"
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
-        persistenceLabel={statusLabel}
+        persistenceLabel={persistenceLabel}
+        taskReviewIssuesCount={taskReviewIssuesCount}
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
         onOpenDraw={() => router.push(DRAW_ROUTE)}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        onOpenTaskReview={() => router.push(TASK_REVIEW_ROUTE)}
         showProjectsButton={false}
         onToggleProjects={() => setIsProjectsOpen((current) => !current)}
       >

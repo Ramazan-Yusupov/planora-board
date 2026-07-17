@@ -41,7 +41,7 @@ export function Modal({
   children,
   onClose,
   role = "dialog",
-  zIndexClassName = "z-[70]",
+  zIndexClassName = "z-70",
 }: ModalProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLElement | null>(null);

@@ -23,7 +23,7 @@ export function ToolButton({
       aria-pressed={isActive}
       className={cn(
         "relative grid size-10 shrink-0 place-items-center rounded-xl transition-[background-color,color,box-shadow,transform] max-lg:size-11",
-        isActive ? "bg-accent text-white shadow-[0_6px_16px_rgb(79_136_232_/_28%)]" : "text-text hover:bg-control/90",
+        isActive ? "bg-accent text-white shadow-[0_6px_16px_rgb(79_136_232/28%)]" : "text-text hover:bg-control/90",
         disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
       )}
       disabled={disabled}

@@ -327,7 +327,7 @@ export function PropertiesPanel() {
 
       <aside
         className={cn(
-          "fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-40 max-h-[min(72dvh,34rem)] overflow-y-auto rounded-2xl border border-border bg-panel p-3 shadow-panel lg:absolute lg:right-4 lg:top-20 lg:z-20 lg:block lg:max-h-[calc(100dvh-13rem)] lg:w-[18rem] lg:rounded-xl",
+          "fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-40 max-h-[min(72dvh,34rem)] overflow-y-auto rounded-2xl border border-border bg-panel p-3 shadow-panel lg:absolute lg:right-4 lg:top-20 lg:z-20 lg:block lg:max-h-[calc(100dvh-13rem)] lg:w-72 lg:rounded-xl",
           isCompactPanelOpen ? "max-lg:block" : "max-lg:hidden",
         )}
       >

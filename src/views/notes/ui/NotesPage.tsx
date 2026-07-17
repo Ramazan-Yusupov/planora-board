@@ -5,23 +5,28 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { addCard } from "@/features/board-management";
-import { useBoardWorkspace } from "@/features/manage-board-workspace";
+import {
+  getWorkspacePersistenceLabel,
+  useBoardWorkspace,
+} from "@/features/manage-board-workspace";
 import {
   createNote,
   loadNotes,
   saveNotes,
   type Note,
 } from "@/features/manage-notes";
+import { buildTaskReviewReport, getTaskReviewIssueCount } from "@/features/task-review";
 import {
   ANALYTICS_ROUTE,
   CALENDAR_ROUTE,
   DRAW_ROUTE,
   MY_WORK_ROUTE,
   NOTES_ROUTE,
+  TASK_REVIEW_ROUTE,
   getBoardRoute,
 } from "@/shared/config/routes";
 import { usePrefetchRoutes } from "@/shared/lib";
-import { Button, ConfirmDialog, TextField } from "@/shared/ui";
+import { Button, ConfirmDialog, Text, TextField } from "@/shared/ui";
 import {
   CommandPalette,
   getWorkspaceSearchActions,
@@ -71,6 +76,10 @@ export function NotesPage() {
   }, []);
   useCommandPaletteShortcut(openCommandPalette);
   const activeBoardId = activeBoard?.id ?? null;
+  const taskReviewIssuesCount = useMemo(
+    () => (workspace ? getTaskReviewIssueCount(buildTaskReviewReport(workspace)) : 0),
+    [workspace],
+  );
   usePrefetchRoutes([
     activeBoardId ? getBoardRoute(activeBoardId) : null,
     NOTES_ROUTE,
@@ -78,6 +87,7 @@ export function NotesPage() {
     DRAW_ROUTE,
     MY_WORK_ROUTE,
     ANALYTICS_ROUTE,
+    TASK_REVIEW_ROUTE,
   ]);
   const boardNotes = useMemo(
     () =>
@@ -199,16 +209,10 @@ export function NotesPage() {
     return <NotesLoadingState />;
   }
 
-  const statusLabel =
-    persistenceState === "saving"
-      ? "Сохраняем…"
-      : persistenceState === "error"
-        ? "Ошибка сохранения"
-        : workspaceStorage.kind === "folder" && workspaceStorage.isConnected
-          ? `Сохранено в папку: ${workspaceStorage.name}`
-          : workspaceStorage.kind === "folder"
-            ? "Требуется доступ к папке"
-            : "Сохранено в браузере";
+  const persistenceLabel = getWorkspacePersistenceLabel({
+    persistenceState,
+    workspaceStorage,
+  });
 
   const openBoard = (boardId: string) => {
     selectProject(boardId);
@@ -308,6 +312,7 @@ export function NotesPage() {
       onOpenDraw: () => router.push(DRAW_ROUTE),
       onOpenMyWork: () => router.push(MY_WORK_ROUTE),
       onOpenNotes: () => router.push(NOTES_ROUTE),
+      onOpenTaskReview: () => router.push(TASK_REVIEW_ROUTE),
     }),
     {
       id: "notes-new-note",
@@ -342,7 +347,8 @@ export function NotesPage() {
         dataToolsGroupLabel="Заметки"
         isPersistenceError={persistenceState === "error"}
         isProjectsOpen={isProjectsOpen}
-        persistenceLabel={statusLabel}
+        persistenceLabel={persistenceLabel}
+        taskReviewIssuesCount={taskReviewIssuesCount}
         onOpenAnalytics={() => router.push(ANALYTICS_ROUTE)}
         onOpenBoard={() => openBoard(activeBoard.id)}
         onOpenCalendar={() => router.push(CALENDAR_ROUTE)}
@@ -350,6 +356,7 @@ export function NotesPage() {
         onOpenDraw={() => router.push(DRAW_ROUTE)}
         onOpenMyWork={() => router.push(MY_WORK_ROUTE)}
         onOpenNotes={() => router.push(NOTES_ROUTE)}
+        onOpenTaskReview={() => router.push(TASK_REVIEW_ROUTE)}
         onOpenWorkspaceData={() => setIsNotesDataOpen(true)}
         onRedo={redoActiveNote}
         showProjectsButton={false}
@@ -378,7 +385,7 @@ export function NotesPage() {
                   className="mt-0.5 shrink-0"
                   size={17}
                 />
-                <p>{storageError}</p>
+                <Text text={storageError} />
               </div>
             </div>
           ) : null}

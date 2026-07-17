@@ -10,10 +10,13 @@ import {
   type Note,
 } from "@/features/manage-notes";
 import {
+  applyBoardMarketplaceTemplate,
   applyBoardWorkflowTemplate,
+  BOARD_MARKETPLACE_TEMPLATES,
   BOARD_WORKFLOW_TEMPLATES,
   createNoteFromTemplate,
   NOTE_TEMPLATES,
+  type BoardMarketplaceTemplateId,
   type BoardWorkflowTemplateId,
   type NoteTemplateId,
 } from "@/features/workspace-templates";
@@ -82,7 +85,27 @@ export function useWorkspaceCenterActions({
     [activeBoardId, setNotesSnapshot, showToast],
   );
 
+  const applyMarketplaceTemplate = useCallback(
+    (templateId: BoardMarketplaceTemplateId) => {
+      const template = BOARD_MARKETPLACE_TEMPLATES.find(
+        (item) => item.id === templateId,
+      );
+
+      updateActiveBoard(
+        (board) => applyBoardMarketplaceTemplate(board, templateId),
+        "immediate",
+      );
+      showToast({
+        title: "Template kit применён",
+        description: template?.title ?? "Набор",
+        tone: "success",
+      });
+    },
+    [showToast, updateActiveBoard],
+  );
+
   return {
+    applyMarketplaceTemplate,
     applyWorkflowTemplate,
     createNoteTemplate,
   };

@@ -180,7 +180,7 @@ export function ListColumn({
         ref={setNodeRef}
         style={style}
         className={cn(
-          "flex h-fit max-h-[calc(100dvh-12.25rem)] w-[min(90vw,21rem)] shrink-0 flex-col rounded-2xl border border-white/10 bg-slate-950/52 p-2.5 shadow-[0_16px_38px_rgb(0_0_0_/_24%),inset_0_1px_0_rgb(255_255_255_/_3%)] backdrop-blur-xl sm:w-80",
+          "flex h-fit max-h-[calc(100dvh-12.25rem)] w-[min(90vw,21rem)] shrink-0 flex-col rounded-2xl border border-white/10 bg-slate-950/52 p-2.5 shadow-[0_16px_38px_rgb(0_0_0/24%),inset_0_1px_0_rgb(255_255_255/3%)] backdrop-blur-xl sm:w-80",
           isDragging ? "opacity-40" : "opacity-100",
         )}
       >
@@ -245,7 +245,7 @@ export function ListColumn({
           )}
 
           <span
-            className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/8 bg-white/8 text-xs font-semibold tabular-nums text-slate-100 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]"
+            className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/8 bg-white/8 text-xs font-semibold tabular-nums text-slate-100 shadow-[inset_0_1px_0_rgb(255_255_255/3%)]"
             title={
               list.wipLimit
                 ? `${totalCardCount} из ${list.wipLimit}`
@@ -320,7 +320,7 @@ export function ListColumn({
               className={cn(
                 "scrollbar-none min-h-20 touch-pan-y overscroll-contain space-y-2 overflow-y-auto rounded-xl p-1 transition-[background-color,box-shadow] duration-150",
                 isOver
-                  ? "bg-white/8 ring-1 ring-accent/45 shadow-[inset_0_0_0_1px_rgb(59_130_246_/_10%)]"
+                  ? "bg-white/8 ring-1 ring-accent/45 shadow-[inset_0_0_0_1px_rgb(59_130_246/10%)]"
                   : "",
               )}
             >
@@ -355,7 +355,7 @@ export function ListColumn({
 
         {!isCollapsed && isAddingCard ? (
           <form
-            className="mt-2 rounded-xl border border-white/10 bg-slate-950/70 p-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_3%)]"
+            className="mt-2 rounded-xl border border-white/10 bg-slate-950/70 p-2 shadow-[inset_0_1px_0_rgb(255_255_255/3%)]"
             onSubmit={saveCard}
           >
             <label className="sr-only" htmlFor={`new-card-${list.id}`}>

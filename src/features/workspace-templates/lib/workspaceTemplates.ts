@@ -1,8 +1,21 @@
-import type { Board, BoardCard, BoardChecklistTemplate, BoardCustomFieldTemplate } from "@/entities/board";
+import {
+  CARD_PRIORITY_OPTIONS,
+  CARD_STATUS_OPTIONS,
+  type Board,
+  type BoardCard,
+  type BoardCardOption,
+  type BoardChecklistTemplate,
+  type BoardCustomFieldTemplate,
+  type BoardLabel,
+} from "@/entities/board";
 import type { Note, NoteBlock, NoteBlockType } from "@/features/manage-notes";
 import { createId } from "@/shared/lib";
 
 export type BoardWorkflowTemplateId = "sprint" | "bug-triage" | "content-plan";
+export type BoardMarketplaceTemplateId =
+  | "product-launch-kit"
+  | "design-review-kit"
+  | "ops-risk-kit";
 export type NoteTemplateId = "meeting" | "decision" | "research";
 
 export type BoardWorkflowTemplate = Readonly<{
@@ -33,6 +46,18 @@ export type NoteTemplate = Readonly<{
     text: string;
     type: NoteBlockType;
   }>[];
+}>;
+
+export type BoardMarketplaceTemplate = Readonly<{
+  id: BoardMarketplaceTemplateId;
+  title: string;
+  description: string;
+  labels: readonly Readonly<{ color: string; name: string }>[];
+  statuses: readonly Readonly<{ color: string; name: string }>[];
+  priorities: readonly Readonly<{ color: string; name: string }>[];
+  checklistTemplates: readonly string[];
+  customFieldTemplates: readonly string[];
+  coverColors: readonly string[];
 }>;
 
 export const BOARD_WORKFLOW_TEMPLATES: readonly BoardWorkflowTemplate[] = [
@@ -119,6 +144,63 @@ export const BOARD_WORKFLOW_TEMPLATES: readonly BoardWorkflowTemplate[] = [
     ],
     checklistTemplates: ["Publishing checklist", "Editorial checklist"],
     customFieldTemplates: ["Channel", "Audience"],
+  },
+];
+
+export const BOARD_MARKETPLACE_TEMPLATES: readonly BoardMarketplaceTemplate[] = [
+  {
+    id: "product-launch-kit",
+    title: "Product launch kit",
+    description: "Метки, статусы и поля для запуска продукта или крупной функции.",
+    labels: [
+      { name: "Launch", color: "#38bdf8" },
+      { name: "Marketing", color: "#f472b6" },
+      { name: "Customer", color: "#22c55e" },
+    ],
+    statuses: [
+      { name: "Ready for launch", color: "#22c55e" },
+      { name: "Launch blocked", color: "#ef4444" },
+    ],
+    priorities: [{ name: "Launch critical", color: "#f97316" }],
+    checklistTemplates: ["Launch readiness", "Post-launch review"],
+    customFieldTemplates: ["Launch owner", "Target segment"],
+    coverColors: ["#0ea5e9", "#22c55e", "#f97316"],
+  },
+  {
+    id: "design-review-kit",
+    title: "Design review kit",
+    description: "Набор для UI/UX ревью, решений и визуального контроля качества.",
+    labels: [
+      { name: "UX", color: "#8b5cf6" },
+      { name: "Visual QA", color: "#06b6d4" },
+      { name: "Accessibility", color: "#f59e0b" },
+    ],
+    statuses: [
+      { name: "Needs review", color: "#f59e0b" },
+      { name: "Approved", color: "#10b981" },
+    ],
+    priorities: [{ name: "Design blocker", color: "#e11d48" }],
+    checklistTemplates: ["Design QA", "Accessibility pass"],
+    customFieldTemplates: ["Reviewer", "Design link"],
+    coverColors: ["#8b5cf6", "#06b6d4", "#f59e0b"],
+  },
+  {
+    id: "ops-risk-kit",
+    title: "Ops risk kit",
+    description: "Шаблоны для рисков, инцидентов, блокеров и операционного контроля.",
+    labels: [
+      { name: "Risk", color: "#ef4444" },
+      { name: "Dependency", color: "#f97316" },
+      { name: "Ops", color: "#64748b" },
+    ],
+    statuses: [
+      { name: "At risk", color: "#f97316" },
+      { name: "Mitigated", color: "#22c55e" },
+    ],
+    priorities: [{ name: "Escalation", color: "#dc2626" }],
+    checklistTemplates: ["Risk mitigation", "Incident follow-up"],
+    customFieldTemplates: ["Risk owner", "Impact"],
+    coverColors: ["#ef4444", "#f97316", "#64748b"],
   },
 ];
 
@@ -211,6 +293,21 @@ function createCard(
   };
 }
 
+function normalizeTemplateText(value: string, maxLength: number): string {
+  return value.trim().replace(/\s+/g, " ").slice(0, maxLength);
+}
+
+function normalizeHexColor(value: string, fallback = "#64748B"): string {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : fallback;
+}
+
+function hasName(
+  names: ReadonlySet<string>,
+  value: string,
+): boolean {
+  return names.has(value.toLocaleLowerCase("ru-RU"));
+}
+
 function appendUniqueChecklistTemplates(
   board: Board,
   titles: readonly string[],
@@ -271,6 +368,101 @@ function appendUniqueCustomFieldTemplates(
   }
 
   return nextTemplates;
+}
+
+function appendUniqueLabels(
+  board: Board,
+  labels: BoardMarketplaceTemplate["labels"],
+  timestamp: number,
+): Pick<Board, "labelIds" | "labels"> {
+  const existingNames = new Set(
+    board.labelIds.flatMap((labelId) => {
+      const label = board.labels[labelId];
+
+      return label ? [label.name.toLocaleLowerCase("ru-RU")] : [];
+    }),
+  );
+  const nextLabelIds = [...board.labelIds];
+  const nextLabels = { ...board.labels };
+
+  for (const labelTemplate of labels) {
+    const name = normalizeTemplateText(labelTemplate.name, 32);
+
+    if (!name || hasName(existingNames, name) || nextLabelIds.length >= 10) {
+      continue;
+    }
+
+    const id = createId("label");
+    const label: BoardLabel = {
+      id,
+      name,
+      color: normalizeHexColor(labelTemplate.color),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    existingNames.add(name.toLocaleLowerCase("ru-RU"));
+    nextLabelIds.push(id);
+    nextLabels[id] = label;
+  }
+
+  return {
+    labelIds: nextLabelIds,
+    labels: nextLabels,
+  };
+}
+
+function appendUniqueOptions(
+  options: readonly BoardCardOption[],
+  templates: BoardMarketplaceTemplate["statuses"],
+  timestamp: number,
+  prefix: string,
+  builtInCount: number,
+): BoardCardOption[] {
+  const existingNames = new Set(
+    options.map((option) => option.name.toLocaleLowerCase("ru-RU")),
+  );
+  const nextOptions = [...options];
+
+  for (const template of templates) {
+    const name = normalizeTemplateText(template.name, 48);
+
+    if (
+      !name ||
+      hasName(existingNames, name) ||
+      builtInCount + nextOptions.length >= 10
+    ) {
+      continue;
+    }
+
+    existingNames.add(name.toLocaleLowerCase("ru-RU"));
+    nextOptions.push({
+      id: createId(prefix),
+      name,
+      color: normalizeHexColor(template.color),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+  }
+
+  return nextOptions;
+}
+
+function appendUniqueCoverColors(
+  board: Board,
+  coverColors: readonly string[],
+): string[] {
+  const nextColors = [...board.coverColors];
+
+  for (const color of coverColors) {
+    const normalizedColor = normalizeHexColor(color);
+
+    if (!nextColors.includes(normalizedColor) && nextColors.length < 10) {
+      nextColors.push(normalizedColor);
+    }
+  }
+
+  return nextColors;
 }
 
 export function applyBoardWorkflowTemplate(
@@ -335,6 +527,67 @@ export function applyBoardWorkflowTemplate(
     cards,
     listIds,
     lists,
+    updatedAt: timestamp,
+  };
+}
+
+export function applyBoardMarketplaceTemplate(
+  board: Board,
+  templateId: BoardMarketplaceTemplateId,
+): Board {
+  const template = BOARD_MARKETPLACE_TEMPLATES.find((item) => item.id === templateId);
+
+  if (!template) {
+    return board;
+  }
+
+  const timestamp = Date.now();
+  const nextLabels = appendUniqueLabels(board, template.labels, timestamp);
+  const cardStatuses = appendUniqueOptions(
+    board.cardStatuses,
+    template.statuses,
+    timestamp,
+    "status",
+    CARD_STATUS_OPTIONS.length,
+  );
+  const cardPriorities = appendUniqueOptions(
+    board.cardPriorities,
+    template.priorities,
+    timestamp,
+    "priority",
+    CARD_PRIORITY_OPTIONS.length,
+  );
+  const checklistTemplates = appendUniqueChecklistTemplates(
+    board,
+    template.checklistTemplates,
+    timestamp,
+  );
+  const customFieldTemplates = appendUniqueCustomFieldTemplates(
+    board,
+    template.customFieldTemplates,
+    timestamp,
+  );
+  const coverColors = appendUniqueCoverColors(board, template.coverColors);
+
+  if (
+    nextLabels.labelIds.length === board.labelIds.length &&
+    cardStatuses.length === board.cardStatuses.length &&
+    cardPriorities.length === board.cardPriorities.length &&
+    checklistTemplates.length === board.checklistTemplates.length &&
+    customFieldTemplates.length === board.customFieldTemplates.length &&
+    coverColors.length === board.coverColors.length
+  ) {
+    return board;
+  }
+
+  return {
+    ...board,
+    ...nextLabels,
+    cardStatuses,
+    cardPriorities,
+    checklistTemplates,
+    customFieldTemplates,
+    coverColors,
     updatedAt: timestamp,
   };
 }
