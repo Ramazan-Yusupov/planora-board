@@ -1,34 +1,70 @@
 "use client";
 
-import { Check, FileText, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Check,
+  FileText,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 
 import type { Note } from "@/features/manage-notes";
 import { cn } from "@/shared/lib";
-import { Button, TextField } from "@/shared/ui";
+import { Button, IconButton, TextField } from "@/shared/ui";
 
 type NotesSidebarProps = Readonly<{
   activeNoteId: string;
+  isCollapsed: boolean;
   notes: readonly Note[];
   searchQuery: string;
   onAddNote: () => void;
   onDeleteNote: (noteId: string) => void;
   onSearchChange: (query: string) => void;
   onSelectNote: (noteId: string) => void;
+  onToggleCollapsed: () => void;
 }>;
 
 export function NotesSidebar({
   activeNoteId,
+  isCollapsed,
   notes,
   searchQuery,
   onAddNote,
   onDeleteNote,
   onSearchChange,
   onSelectNote,
+  onToggleCollapsed,
 }: NotesSidebarProps) {
+  if (isCollapsed) {
+    return (
+      <aside className="hidden h-full min-h-0 shrink-0 border-r border-white/10 bg-panel/72 p-2 lg:flex lg:w-14 lg:flex-col lg:items-center">
+        <IconButton
+          className="text-text-muted hover:bg-control hover:text-text"
+          label="Показать sidebar заметок"
+          onClick={onToggleCollapsed}
+        >
+          <PanelLeftOpen aria-hidden="true" size={18} />
+        </IconButton>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="hidden min-h-0 border-r border-white/10 bg-panel/72 p-3 lg:block">
+    <aside className="hidden h-full min-h-0 w-72 shrink-0 border-r border-white/10 bg-panel/72 p-3 lg:block">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-text">Notes</h2>
+        <div className="flex min-w-0 items-center gap-2">
+          <IconButton
+            className="text-text-muted hover:bg-control hover:text-text"
+            label="Скрыть sidebar заметок"
+            size="sm"
+            onClick={onToggleCollapsed}
+          >
+            <PanelLeftClose aria-hidden="true" size={17} />
+          </IconButton>
+          <h2 className="text-sm font-semibold text-text">Notes</h2>
+        </div>
         <Button size="sm" onClick={onAddNote}>
           <Plus aria-hidden="true" size={16} />
           Новая

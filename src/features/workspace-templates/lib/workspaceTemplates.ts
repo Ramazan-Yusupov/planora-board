@@ -661,6 +661,8 @@ export function createNoteFromTemplate(
     id: createId("note"),
     boardId,
     title: template.title,
+    status: "active",
+    tags: [template.id],
     blocks,
     createdAt: timestamp,
     updatedAt: timestamp,

@@ -23,7 +23,9 @@ import type { Board } from "@/entities/board";
 import {
   parseMarkdownBlocks,
   type NoteBlock,
+  type NoteBlockType,
 } from "@/features/manage-notes";
+import { createId } from "@/shared/lib";
 
 import {
   NOTES_ROOT_DROP_ZONE_ID,
@@ -92,8 +94,10 @@ function filterBlockCommands(query: string): readonly BlockCommand[] {
 
   return basicBlockCommands.filter((command) => {
     const haystack = [
+      ...(command.aliases ?? []),
       command.title,
       command.description,
+      command.group ?? "",
       command.shortcut ?? "",
       command.id,
     ]
@@ -305,6 +309,68 @@ export function NotesEditor({
     onChange(nextBlocks);
   };
 
+  const cloneBlock = (block: NoteBlock, parentId = block.parentId): NoteBlock => ({
+    ...block,
+    id: createId("note-block"),
+    parentId,
+    tableCells: block.tableCells?.map((row) => [...row]),
+  });
+
+  const duplicateBlock = (blockId: string) => {
+    const blockIndex = blocks.findIndex((block) => block.id === blockId);
+    const block = blocks[blockIndex];
+
+    if (!block) {
+      return;
+    }
+
+    const childBlocks = blocks.filter((current) => current.parentId === block.id);
+    const duplicatedBlock = cloneBlock(block);
+    const duplicatedChildren = childBlocks.map((child) =>
+      cloneBlock(child, duplicatedBlock.id),
+    );
+    const lastChildIndex =
+      childBlocks.length > 0
+        ? Math.max(
+            ...childBlocks.map((child) =>
+              blocks.findIndex((current) => current.id === child.id),
+            ),
+          )
+        : blockIndex;
+    const nextBlocks = [...blocks];
+
+    nextBlocks.splice(lastChildIndex + 1, 0, duplicatedBlock, ...duplicatedChildren);
+    focusBlock(duplicatedBlock.id);
+    onChange(nextBlocks);
+  };
+
+  const turnBlockInto = (blockId: string, type: NoteBlockType) => {
+    onChange(
+      blocks.map((block) => {
+        if (block.id !== blockId) {
+          return block;
+        }
+
+        return {
+          ...block,
+          checked: type === "todo" ? Boolean(block.checked) : undefined,
+          collapsed: type === "toggle" ? Boolean(block.collapsed) : undefined,
+          html: type === "table" || type === "divider" ? undefined : block.html,
+          tableCells:
+            type === "table"
+              ? block.type === "table"
+                ? getTableCells(block)
+                : getTableCells({ ...block, tableCells: undefined })
+              : undefined,
+          tableHasHeaderRow: type === "table" ? true : undefined,
+          text: type === "table" || type === "divider" ? "" : block.text,
+          type,
+        };
+      }),
+    );
+    focusBlock(blockId);
+  };
+
   const updateTableCell = (
     blockId: string,
     rowIndex: number,
@@ -491,26 +557,82 @@ export function NotesEditor({
     const currentHtml = element
       ? getInlineHtmlFromEditable(element)
       : block.html;
+    const templateBlocks = command.createBlocks?.(block);
+
+    if (templateBlocks && templateBlocks.length > 0) {
+      const index = blocks.findIndex((current) => current.id === block.id);
+
+      if (index < 0) {
+        closeSlashMenu();
+        return;
+      }
+
+      const shouldReplaceCurrent = !currentText || currentText.startsWith("/");
+      const nextBlocks = [...blocks];
+      const nextTemplateBlocks = templateBlocks.map((templateBlock) => ({
+        ...templateBlock,
+        parentId: templateBlock.parentId ?? block.parentId,
+      }));
+
+      if (shouldReplaceCurrent) {
+        const [firstBlock, ...restBlocks] = nextTemplateBlocks;
+
+        if (!firstBlock) {
+          closeSlashMenu();
+          return;
+        }
+
+        nextBlocks[index] = {
+          ...firstBlock,
+          id: block.id,
+          parentId: block.parentId,
+        };
+        nextBlocks.splice(index + 1, 0, ...restBlocks);
+      } else {
+        nextBlocks.splice(index + 1, 0, ...nextTemplateBlocks);
+      }
+
+      if (element && shouldReplaceCurrent) {
+        clearEditableText(element);
+      }
+
+      focusBlock(
+        shouldReplaceCurrent && nextTemplateBlocks.length === 1
+          ? block.id
+          : nextTemplateBlocks.at(-1)?.id ?? block.id,
+      );
+      onChange(nextBlocks);
+      closeSlashMenu();
+      return;
+    }
+
+    const targetType = command.targetType;
+
+    if (!targetType) {
+      closeSlashMenu();
+      return;
+    }
+
     const shouldClearText =
-      currentText.startsWith("/") || command.id === "divider";
+      currentText.startsWith("/") || targetType === "divider";
     const nextText = shouldClearText ? "" : currentText;
     const nextBlocks = blocks.map((current) =>
       current.id === block.id
         ? {
             ...current,
-            checked: command.id === "todo" ? false : undefined,
-            collapsed: command.id === "toggle" ? false : undefined,
+            checked: targetType === "todo" ? false : undefined,
+            collapsed: targetType === "toggle" ? false : undefined,
             html:
-              shouldClearText || command.id === "table"
+              shouldClearText || targetType === "table"
                 ? undefined
                 : currentHtml,
-            tableHasHeaderRow: command.id === "table" ? true : undefined,
+            tableHasHeaderRow: targetType === "table" ? true : undefined,
             tableCells:
-              command.id === "table"
+              targetType === "table"
                 ? getTableCells({ ...current, tableCells: undefined })
                 : undefined,
-            text: command.id === "table" ? "" : nextText,
-            type: command.id,
+            text: targetType === "table" ? "" : nextText,
+            type: targetType,
           }
         : current,
     );
@@ -519,7 +641,7 @@ export function NotesEditor({
       clearEditableText(element);
     }
 
-    if (command.id === "divider") {
+    if (targetType === "divider") {
       const index = nextBlocks.findIndex((current) => current.id === block.id);
       const nextBlock = createBlock();
       const withInserted = [...nextBlocks];
@@ -1059,6 +1181,7 @@ export function NotesEditor({
                 onCloseSlashMenu={closeSlashMenu}
                 onCloseTableCellMenu={closeTableCellMenu}
                 onDeleteBlock={removeBlock}
+                onDuplicateBlock={duplicateBlock}
                 onInput={handleInput}
                 onInsertAfter={insertBlockAfter}
                 onKeyDown={handleKeyDown}
@@ -1122,6 +1245,7 @@ export function NotesEditor({
                     checked: !currentBlock.checked,
                   })
                 }
+                onTurnBlockInto={turnBlockInto}
                 onUpdateTableCell={updateTableCell}
               />
             ))}

@@ -4,6 +4,14 @@ import { createId } from "@/shared/lib";
 
 export const NOTES_STORAGE_KEY = "planora.notes.v1";
 
+export const NOTE_STATUS_OPTIONS = [
+  { label: "Черновик", value: "draft" },
+  { label: "Активная", value: "active" },
+  { label: "Архив", value: "archived" },
+] as const;
+
+export type NoteStatus = (typeof NOTE_STATUS_OPTIONS)[number]["value"];
+
 export type NoteBlockType =
   | "paragraph"
   | "heading1"
@@ -60,10 +68,20 @@ export type Note = Readonly<{
   id: string;
   boardId?: string;
   title: string;
+  status: NoteStatus;
+  tags: string[];
+  dueDate?: string;
+  linkedBoardId?: string;
+  linkedCardId?: string;
   blocks: NoteBlock[];
   createdAt: number;
   updatedAt: number;
 }>;
+
+const noteStatusValues = NOTE_STATUS_OPTIONS.map((option) => option.value) as [
+  NoteStatus,
+  ...NoteStatus[],
+];
 
 const noteBlockSchema = z.object({
   id: z.string().min(1),
@@ -86,11 +104,45 @@ const noteSchema = z.object({
   id: z.string().min(1),
   boardId: z.string().optional(),
   title: z.string(),
+  status: z.enum(noteStatusValues).optional(),
+  tags: z.array(z.string()).optional(),
+  dueDate: z.string().optional(),
+  linkedBoardId: z.string().optional(),
+  linkedCardId: z.string().optional(),
   blocks: z.array(noteBlockSchema).optional(),
   content: z.string().optional(),
   createdAt: z.number().optional(),
   updatedAt: z.number().optional(),
 });
+
+export function normalizeNoteTags(tags: readonly string[] | string | undefined): string[] {
+  const source: readonly string[] =
+    typeof tags === "string" ? tags.split(/[,#]/) : (tags ?? []);
+  const seenTags = new Set<string>();
+
+  return source.flatMap((tag) => {
+    const normalizedTag = tag
+      .trim()
+      .replace(/^#+/, "")
+      .replace(/\s+/g, "-")
+      .toLocaleLowerCase("ru-RU");
+
+    if (!normalizedTag || seenTags.has(normalizedTag)) {
+      return [];
+    }
+
+    seenTags.add(normalizedTag);
+    return [normalizedTag];
+  }).slice(0, 8);
+}
+
+export function normalizeNoteDueDate(value: string | undefined): string | undefined {
+  const normalizedValue = value?.trim();
+
+  return normalizedValue && /^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)
+    ? normalizedValue
+    : undefined;
+}
 
 function createBlock(type: NoteBlockType, text = ""): NoteBlock {
   return {
@@ -156,6 +208,8 @@ export function createNote(boardId?: string): Note {
     id: createId("note"),
     boardId,
     title: "Новая заметка",
+    status: "active",
+    tags: [],
     blocks: contentToBlocks(undefined),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -181,6 +235,11 @@ export function parseNotes(value: unknown): Note[] {
         id: note.id,
         boardId: note.boardId,
         title: note.title.trim() || "Без названия",
+        status: note.status ?? "active",
+        tags: normalizeNoteTags(note.tags),
+        dueDate: normalizeNoteDueDate(note.dueDate),
+        linkedBoardId: note.linkedBoardId,
+        linkedCardId: note.linkedCardId,
         blocks,
         createdAt: note.createdAt ?? timestamp,
         updatedAt: note.updatedAt ?? timestamp,

@@ -3,6 +3,7 @@
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import {
   Code2,
+  FileText,
   Heading1,
   Heading2,
   Heading3,
@@ -67,6 +68,11 @@ export function createBlock(
 export function getNoteSearchText(note: Note): string {
   return [
     note.title,
+    note.status,
+    note.dueDate ?? "",
+    note.linkedBoardId ?? "",
+    note.linkedCardId ?? "",
+    note.tags.join(" "),
     ...note.blocks.flatMap((block) => [
       block.text,
       block.tableCells?.flat().join(" ") ?? "",
@@ -251,7 +257,11 @@ export function getVisibleBlocks(blocks: readonly NoteBlock[]): NoteBlock[] {
 }
 
 export type BlockCommand = Readonly<{
-  id: NoteBlockType;
+  aliases?: readonly string[];
+  createBlocks?: (sourceBlock: NoteBlock) => NoteBlock[];
+  group?: "basic" | "markdown" | "planora";
+  id: string;
+  targetType?: NoteBlockType;
   title: string;
   description: string;
   shortcut?: string;
@@ -275,98 +285,200 @@ export type NoteTaskCreateTarget = Readonly<{
 export const basicBlockCommands: readonly BlockCommand[] = [
   {
     id: "paragraph",
+    targetType: "paragraph",
     title: "Text",
     description: "Обычный текстовый блок",
+    aliases: ["paragraph", "p", "text", "текст"],
     icon: <Text aria-hidden="true" size={17} />,
   },
   {
     id: "heading1",
+    targetType: "heading1",
     title: "Heading 1",
     description: "Большой заголовок раздела",
     shortcut: "#",
+    aliases: ["h1", "title", "заголовок"],
     icon: <Heading1 aria-hidden="true" size={18} />,
   },
   {
     id: "heading2",
+    targetType: "heading2",
     title: "Heading 2",
     description: "Средний заголовок",
     shortcut: "##",
+    aliases: ["h2", "subtitle", "подзаголовок"],
     icon: <Heading2 aria-hidden="true" size={18} />,
   },
   {
     id: "heading3",
+    targetType: "heading3",
     title: "Heading 3",
     description: "Малый заголовок",
     shortcut: "###",
+    aliases: ["h3"],
     icon: <Heading3 aria-hidden="true" size={18} />,
   },
   {
     id: "heading4",
+    targetType: "heading4",
     title: "Heading 4",
     description: "Компактный заголовок",
     shortcut: "####",
+    aliases: ["h4"],
     icon: <Heading4 aria-hidden="true" size={18} />,
   },
   {
     id: "bulleted",
+    targetType: "bulleted",
     title: "Bulleted list",
     description: "Список с маркерами",
     shortcut: "-",
+    aliases: ["ul", "bullet", "list", "список"],
     icon: <List aria-hidden="true" size={17} />,
   },
   {
     id: "numbered",
+    targetType: "numbered",
     title: "Numbered list",
     description: "Нумерованный список",
     shortcut: "1.",
+    aliases: ["ol", "ordered", "steps", "шаги"],
     icon: <ListOrdered aria-hidden="true" size={17} />,
   },
   {
     id: "todo",
+    targetType: "todo",
     title: "To-do list",
     description: "Чекбокс с текстом",
     shortcut: "[]",
+    aliases: ["task", "checklist", "todo", "чеклист"],
     icon: <SquareCheck aria-hidden="true" size={17} />,
   },
   {
     id: "toggle",
+    targetType: "toggle",
     title: "Toggle list",
     description: "Сворачиваемый пункт",
     shortcut: ">",
+    aliases: ["details", "spoiler", "toggle"],
     icon: <ToggleRight aria-hidden="true" size={17} />,
   },
   {
     id: "quote",
+    targetType: "quote",
     title: "Quote",
     description: "Цитата с вертикальной линией",
     shortcut: '"',
+    aliases: ["blockquote", "цитата"],
     icon: <Quote aria-hidden="true" size={17} />,
   },
   {
     id: "callout",
+    targetType: "callout",
     title: "Callout",
     description: "Выделенный блок заметки",
+    aliases: ["note", "info", "warning", "заметка"],
     icon: <MessageSquare aria-hidden="true" size={17} />,
   },
   {
     id: "code",
+    targetType: "code",
     title: "Code",
     description: "Моноширинный блок кода",
     shortcut: "```",
+    aliases: ["snippet", "pre", "код"],
     icon: <Code2 aria-hidden="true" size={17} />,
   },
   {
     id: "table",
+    targetType: "table",
     title: "Table",
     description: "Быстрая таблица 2 x 2",
+    aliases: ["database", "grid", "таблица"],
     icon: <Table2 aria-hidden="true" size={17} />,
   },
   {
     id: "divider",
+    targetType: "divider",
     title: "Divider",
     description: "Горизонтальная линия",
     shortcut: "---",
+    aliases: ["hr", "line", "разделитель"],
     icon: <Minus aria-hidden="true" size={17} />,
+  },
+  {
+    id: "template-checklist",
+    group: "markdown",
+    title: "Checklist section",
+    description: "Заголовок и несколько задач",
+    aliases: ["todo section", "checklist", "чеклист"],
+    icon: <SquareCheck aria-hidden="true" size={17} />,
+    createBlocks: () => [
+      createBlock("heading2", "Checklist"),
+      createBlock("todo", "Первый пункт"),
+      createBlock("todo", "Следующий пункт"),
+      createBlock("todo", "Проверить результат"),
+    ],
+  },
+  {
+    id: "template-meeting",
+    group: "markdown",
+    title: "Meeting note",
+    description: "Повестка, решения и action items",
+    aliases: ["meeting", "standup", "встреча"],
+    icon: <FileText aria-hidden="true" size={17} />,
+    createBlocks: () => [
+      createBlock("heading2", "Повестка"),
+      createBlock("bulleted", "Контекст"),
+      createBlock("heading2", "Решения"),
+      createBlock("quote", "Коротко: что решили и почему."),
+      createBlock("heading2", "Action items"),
+      createBlock("todo", "Назначить владельца"),
+      createBlock("todo", "Обновить задачу Planora"),
+    ],
+  },
+  {
+    id: "template-decision",
+    group: "markdown",
+    title: "Decision record",
+    description: "Решение, альтернативы и последствия",
+    aliases: ["decision", "adr", "решение"],
+    icon: <Quote aria-hidden="true" size={17} />,
+    createBlocks: () => [
+      createBlock("heading2", "Decision"),
+      createBlock("callout", "Короткое решение и причина."),
+      createBlock("heading2", "Alternatives"),
+      {
+        ...createBlock("table"),
+        tableCells: [
+          ["Вариант", "Плюсы", "Минусы"],
+          ["", "", ""],
+          ["", "", ""],
+        ],
+        tableHasHeaderRow: true,
+      },
+      createBlock("heading2", "Next steps"),
+      createBlock("todo", "Привязать связанную задачу"),
+    ],
+  },
+  {
+    id: "template-bug-report",
+    group: "markdown",
+    title: "Bug report",
+    description: "Шаги, ожидание, факт и окружение",
+    aliases: ["bug", "issue", "ошибка", "баг"],
+    icon: <FileText aria-hidden="true" size={17} />,
+    createBlocks: () => [
+      createBlock("heading2", "Шаги воспроизведения"),
+      createBlock("numbered", "Открыть сценарий"),
+      createBlock("numbered", "Повторить действие"),
+      createBlock("heading2", "Ожидание"),
+      createBlock("paragraph", ""),
+      createBlock("heading2", "Факт"),
+      createBlock("paragraph", ""),
+      createBlock("heading2", "Окружение"),
+      createBlock("code", "Planora / Browser / localhost"),
+    ],
   },
 ];
 
@@ -851,7 +963,18 @@ export function getInlineFormatShortcut(
 }
 
 
-export type NoteSnapshot = Readonly<Pick<Note, "blocks" | "title">>;
+export type NoteSnapshot = Readonly<
+  Pick<
+    Note,
+    | "blocks"
+    | "dueDate"
+    | "linkedBoardId"
+    | "linkedCardId"
+    | "status"
+    | "tags"
+    | "title"
+  >
+>;
 
 export type NoteHistoryState = Readonly<{
   future: NoteSnapshot[];
@@ -869,6 +992,11 @@ export function cloneNoteBlocks(blocks: readonly NoteBlock[]): NoteBlock[] {
 export function createNoteSnapshot(note: Note): NoteSnapshot {
   return {
     blocks: cloneNoteBlocks(note.blocks),
+    dueDate: note.dueDate,
+    linkedBoardId: note.linkedBoardId,
+    linkedCardId: note.linkedCardId,
+    status: note.status,
+    tags: [...note.tags],
     title: note.title,
   };
 }
@@ -879,6 +1007,11 @@ export function areNoteSnapshotsEqual(
 ): boolean {
   return (
     first.title === second.title &&
+    first.status === second.status &&
+    first.dueDate === second.dueDate &&
+    first.linkedBoardId === second.linkedBoardId &&
+    first.linkedCardId === second.linkedCardId &&
+    JSON.stringify(first.tags) === JSON.stringify(second.tags) &&
     JSON.stringify(first.blocks) === JSON.stringify(second.blocks)
   );
 }

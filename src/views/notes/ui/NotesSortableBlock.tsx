@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useRef, type KeyboardEvent } from "react";
 
-import type { NoteBlock } from "@/features/manage-notes";
+import type { NoteBlock, NoteBlockType } from "@/features/manage-notes";
 import { cn } from "@/shared/lib";
 
 import {
@@ -67,6 +67,7 @@ type NotesSortableBlockProps = Readonly<{
   ) => void;
   onCloseActionMenu: () => void;
   onCloseSlashMenu: () => void;
+  onDuplicateBlock: (blockId: string) => void;
   onInsertAfter: (blockId: string) => void;
   onRegisterElement: (blockId: string, element: HTMLElement | null) => void;
   onRegisterTableCell: (
@@ -98,6 +99,7 @@ type NotesSortableBlockProps = Readonly<{
   ) => void;
   onToggleCollapsed: (block: NoteBlock) => void;
   onToggleTodo: (block: NoteBlock) => void;
+  onTurnBlockInto: (blockId: string, type: NoteBlockType) => void;
   onUpdateTableCell: (
     blockId: string,
     rowIndex: number,
@@ -128,6 +130,7 @@ export function NotesSortableBlock({
   onOpenTableCellMenu,
   onCloseActionMenu,
   onCloseSlashMenu,
+  onDuplicateBlock,
   onInsertAfter,
   onRegisterElement,
   onRegisterTableCell,
@@ -141,6 +144,7 @@ export function NotesSortableBlock({
   onTableCellKeyDown,
   onToggleCollapsed,
   onToggleTodo,
+  onTurnBlockInto,
   onUpdateTableCell,
 }: NotesSortableBlockProps) {
   const blockElementRef = useRef<HTMLDivElement | null>(null);
@@ -232,12 +236,15 @@ export function NotesSortableBlock({
             block={block}
             onClose={onCloseActionMenu}
             onDelete={() => onDeleteBlock(block.id)}
+            onDuplicate={() => onDuplicateBlock(block.id)}
+            onInsertAfter={() => onInsertAfter(block.id)}
             onSetBackgroundColor={(backgroundColor) =>
               onSetBlockColor(block.id, { backgroundColor })
             }
             onSetTextColor={(textColor) =>
               onSetBlockColor(block.id, { textColor })
             }
+            onTurnInto={(type) => onTurnBlockInto(block.id, type)}
           />
         ) : null}
       </div>
@@ -335,7 +342,7 @@ export function NotesSortableBlock({
       <div className="min-w-0 flex-1">
         {block.type === "linked-card" ? (
           <button
-            className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-white/10 bg-control/35 px-3 py-2 text-left transition hover:border-accent/45 hover:bg-control/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-white/12 bg-control/55 px-3 py-2.5 text-left transition hover:border-accent/45 hover:bg-control/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             type="button"
             onClick={() => onOpenLinkedCard(block)}
           >
@@ -347,14 +354,22 @@ export function NotesSortableBlock({
               <span className="size-2.5 shrink-0 rounded-full bg-accent" />
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-text">
+              <span className="block truncate text-sm font-semibold leading-5 text-text">
                 {linkedTask?.card.title || block.text || "Задача недоступна"}
               </span>
-              <span className="block truncate text-xs text-text-muted">
-                {linkedTask
-                  ? `${linkedTask.boardTitle} / ${linkedTask.listTitle}`
-                  : "Карточка не найдена в текущей доске"}
-              </span>
+              {linkedTask ? (
+                <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
+                  <span className="truncate">{linkedTask.boardTitle}</span>
+                  <span aria-hidden="true" className="shrink-0 text-text-muted/60">
+                    /
+                  </span>
+                  <span className="truncate">{linkedTask.listTitle}</span>
+                </span>
+              ) : (
+                <span className="mt-1 block truncate text-xs text-text-muted">
+                  Карточка не найдена в текущей доске
+                </span>
+              )}
             </span>
             {linkedTask?.card.dueDate ? (
               <span className="shrink-0 rounded-md border border-white/10 bg-black/12 px-2 py-1 text-[11px] font-semibold tabular-nums text-text-muted">
@@ -429,7 +444,7 @@ export function NotesSortableBlock({
             block={block}
             className={cn(
               "min-w-0 flex-1 rounded-md px-1.5 py-0.5 outline-none transition empty:before:text-transparent empty:before:content-[attr(data-placeholder)] group-hover:empty:before:text-text-muted/60 focus:empty:before:text-text-muted/60 focus:bg-white/5",
-              "whitespace-pre-wrap",
+              "break-words whitespace-pre-wrap",
               getBlockClassName(block.type),
               getBlockColorClassName(block),
               block.type === "todo" &&
@@ -470,12 +485,15 @@ export function NotesSortableBlock({
           block={block}
           onClose={onCloseActionMenu}
           onDelete={() => onDeleteBlock(block.id)}
+          onDuplicate={() => onDuplicateBlock(block.id)}
+          onInsertAfter={() => onInsertAfter(block.id)}
           onSetBackgroundColor={(backgroundColor) =>
             onSetBlockColor(block.id, { backgroundColor })
           }
           onSetTextColor={(textColor) =>
             onSetBlockColor(block.id, { textColor })
           }
+          onTurnInto={(type) => onTurnBlockInto(block.id, type)}
         />
       ) : null}
     </div>

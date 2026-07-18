@@ -186,7 +186,7 @@ export function NotesBlockCommandMenu({
     >
       <div className="min-h-24 flex-1 overflow-y-auto p-1.5">
         <p className="px-2 py-1.5 text-xs font-semibold text-white/45">
-          Basic blocks
+          Blocks and markdown tools
         </p>
         {commands.length > 0 ? (
           commands.map((command, commandIndex) => (

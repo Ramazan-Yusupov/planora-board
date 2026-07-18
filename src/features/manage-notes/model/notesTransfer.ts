@@ -286,6 +286,8 @@ function markdownToNote(source: string, fileName: string): Note {
   return {
     id: createId("note"),
     title: firstHeading?.text.trim() || fallbackTitle || "Markdown импорт",
+    status: "active",
+    tags: ["markdown"],
     blocks,
     createdAt: timestamp,
     updatedAt: timestamp,

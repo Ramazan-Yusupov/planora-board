@@ -51,6 +51,11 @@ export function useNoteHistory({
           ? {
               ...note,
               blocks: cloneNoteBlocks(snapshot.blocks),
+              dueDate: snapshot.dueDate,
+              linkedBoardId: snapshot.linkedBoardId,
+              linkedCardId: snapshot.linkedCardId,
+              status: snapshot.status,
+              tags: [...snapshot.tags],
               title: snapshot.title,
               updatedAt: Date.now(),
             }

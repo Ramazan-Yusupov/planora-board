@@ -4,7 +4,11 @@ import { AlertTriangle, FileText, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { addCard } from "@/features/board-management";
+import {
+  addCard,
+  getActiveBoardListIds,
+  isListAtWipLimit,
+} from "@/features/board-management";
 import {
   getWorkspacePersistenceLabel,
   useBoardWorkspace,
@@ -12,6 +16,8 @@ import {
 import {
   createNote,
   loadNotes,
+  normalizeNoteDueDate,
+  normalizeNoteTags,
   saveNotes,
   type Note,
 } from "@/features/manage-notes";
@@ -37,7 +43,9 @@ import { ProjectSwitcher } from "@/widgets/project-switcher";
 import { WorkspaceHeader } from "@/widgets/workspace-header";
 
 import {
+  createBlock,
   getCreatedCardFromListDiff,
+  getBoardTaskItems,
   getNoteSearchText,
   type NoteTaskItem,
 } from "../lib/notesEditorModel";
@@ -47,6 +55,22 @@ import { NotesDataModal } from "./NotesDataModal";
 import { NotesLoadingState } from "./NotesLoadingState";
 import { NotesSidebar } from "./NotesSidebar";
 import { NoteSwitcher } from "./NoteSwitcher";
+import { NotePropertiesMenu } from "./NotePropertiesMenu";
+
+const NOTES_SIDEBAR_COLLAPSED_STORAGE_KEY = "planora.notes.sidebarCollapsed";
+
+type ActiveNotePatch = Partial<
+  Pick<
+    Note,
+    | "blocks"
+    | "dueDate"
+    | "linkedBoardId"
+    | "linkedCardId"
+    | "status"
+    | "tags"
+    | "title"
+  >
+>;
 
 export function NotesPage() {
   const router = useRouter();
@@ -69,12 +93,29 @@ export function NotesPage() {
   const [isNotesDataOpen, setIsNotesDataOpen] = useState(false);
   const [isNotesReady, setIsNotesReady] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isNotesSidebarCollapsed, setIsNotesSidebarCollapsed] = useState(false);
   const [noteSearchQuery, setNoteSearchQuery] = useState("");
   const [isNoteSwitcherOpen, setIsNoteSwitcherOpen] = useState(false);
   const openCommandPalette = useCallback(() => {
     setIsCommandPaletteOpen(true);
   }, []);
   useCommandPaletteShortcut(openCommandPalette);
+  const toggleNotesSidebarCollapsed = useCallback(() => {
+    setIsNotesSidebarCollapsed((current) => {
+      const nextValue = !current;
+
+      try {
+        window.localStorage.setItem(
+          NOTES_SIDEBAR_COLLAPSED_STORAGE_KEY,
+          nextValue ? "true" : "false",
+        );
+      } catch {
+        // The sidebar still works when browser storage is unavailable.
+      }
+
+      return nextValue;
+    });
+  }, []);
   const activeBoardId = activeBoard?.id ?? null;
   const taskReviewIssuesCount = useMemo(
     () => (workspace ? getTaskReviewIssueCount(buildTaskReviewReport(workspace)) : 0),
@@ -109,6 +150,10 @@ export function NotesPage() {
 
     return boardNotes.filter((note) => getNoteSearchText(note).includes(query));
   }, [boardNotes, noteSearchQuery]);
+  const taskItems = useMemo(
+    () => (activeBoard ? getBoardTaskItems(activeBoard) : []),
+    [activeBoard],
+  );
   const deleteNote = deleteNoteId
     ? notes.find((note) => note.id === deleteNoteId)
     : undefined;
@@ -133,6 +178,21 @@ export function NotesPage() {
       setNotes(loadedNotes);
       setActiveNoteId(requestedNoteId ?? loadedNotes[0]?.id ?? null);
       setIsNotesReady(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      try {
+        setIsNotesSidebarCollapsed(
+          window.localStorage.getItem(NOTES_SIDEBAR_COLLAPSED_STORAGE_KEY) ===
+            "true",
+        );
+      } catch {
+        setIsNotesSidebarCollapsed(false);
+      }
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
@@ -235,7 +295,7 @@ export function NotesPage() {
     setIsProjectsOpen(false);
   };
 
-  const patchActiveNote = (patch: Partial<Pick<Note, "blocks" | "title">>) => {
+  const patchActiveNote = (patch: ActiveNotePatch) => {
     recordActiveNoteHistory();
     setNotes((currentNotes) =>
       currentNotes.map((note) =>
@@ -252,9 +312,39 @@ export function NotesPage() {
     setActiveNoteId(note.id);
   };
 
+  const linkActiveNoteToTask = (
+    task: NoteTaskItem,
+    options: Readonly<{ insertLinkedBlock?: boolean }> = {},
+  ) => {
+    const hasLinkedBlock = activeNote.blocks.some(
+      (block) =>
+        block.type === "linked-card" &&
+        block.linkedBoardId === task.boardId &&
+        block.linkedCardId === task.card.id,
+    );
+    const blocks =
+      options.insertLinkedBlock && !hasLinkedBlock
+        ? [
+            ...activeNote.blocks,
+            {
+              ...createBlock("linked-card", task.card.title),
+              linkedBoardId: task.boardId,
+              linkedCardId: task.card.id,
+            },
+          ]
+        : activeNote.blocks;
+
+    patchActiveNote({
+      blocks,
+      linkedBoardId: task.boardId,
+      linkedCardId: task.card.id,
+    });
+  };
+
   const createTaskFromNote = (
     listId: string,
     title: string,
+    options: Readonly<{ syncNoteLink?: boolean }> = {},
   ): NoteTaskItem | null => {
     let createdTask: NoteTaskItem | null = null;
 
@@ -290,7 +380,34 @@ export function NotesPage() {
       return nextBoard;
     }, "immediate");
 
+    if (createdTask && options.syncNoteLink !== false) {
+      linkActiveNoteToTask(createdTask);
+    }
+
     return createdTask;
+  };
+  const firstAvailableTaskListId = getActiveBoardListIds(activeBoard).find((listId) => {
+    const list = activeBoard.lists[listId];
+
+    return Boolean(list && !isListAtWipLimit(list));
+  });
+  const createTaskDisabledReason = firstAvailableTaskListId
+    ? undefined
+    : "Нет доступного списка для новой задачи";
+  const createTaskFromActiveNote = () => {
+    if (!firstAvailableTaskListId) {
+      return;
+    }
+
+    const createdTask = createTaskFromNote(
+      firstAvailableTaskListId,
+      activeNote.title || "Новая задача",
+      { syncNoteLink: false },
+    );
+
+    if (createdTask) {
+      linkActiveNoteToTask(createdTask, { insertLinkedBlock: true });
+    }
   };
   const openWorkspaceCard = (boardId: string, cardId: string) => {
     selectProject(boardId);
@@ -390,18 +507,20 @@ export function NotesPage() {
             </div>
           ) : null}
 
-          <div className="grid min-h-0 flex-1 lg:grid-cols-[18rem_minmax(0,1fr)]">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
             <NotesSidebar
               activeNoteId={activeNote.id}
+              isCollapsed={isNotesSidebarCollapsed}
               notes={filteredBoardNotes}
               searchQuery={noteSearchQuery}
               onAddNote={addNote}
               onDeleteNote={setDeleteNoteId}
               onSearchChange={setNoteSearchQuery}
               onSelectNote={setActiveNoteId}
+              onToggleCollapsed={toggleNotesSidebarCollapsed}
             />
 
-            <section className="min-h-0 overflow-y-auto">
+            <section className="min-h-0 flex-1 overflow-y-auto">
               <div className="border-b border-white/10 bg-panel/70 px-4 py-3 lg:hidden">
                 <div className="flex items-center gap-2">
                   <NoteSwitcher
@@ -419,10 +538,10 @@ export function NotesPage() {
                 </div>
               </div>
               <div className="mx-auto w-full max-w-3xl px-4 pt-8 sm:px-8">
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-3">
                   <TextField
                     aria-label="Название заметки"
-                    className="h-auto border-0 bg-transparent px-0 py-1 text-4xl font-semibold leading-tight text-text shadow-none focus:border-0"
+                    className="h-auto min-w-0 border-0 bg-transparent px-0 py-1 text-4xl font-semibold leading-tight text-text shadow-none focus:border-0"
                     value={activeNote.title}
                     onChange={(event) =>
                       patchActiveNote({ title: event.currentTarget.value })
@@ -432,6 +551,34 @@ export function NotesPage() {
                         title:
                           event.currentTarget.value.trim() || "Без названия",
                       })
+                    }
+                  />
+                  <NotePropertiesMenu
+                    canCreateTask={Boolean(firstAvailableTaskListId)}
+                    createTaskDisabledReason={createTaskDisabledReason}
+                    note={activeNote}
+                    taskItems={taskItems}
+                    onCreateTask={createTaskFromActiveNote}
+                    onDueDateChange={(dueDate) =>
+                      patchActiveNote({ dueDate: normalizeNoteDueDate(dueDate) })
+                    }
+                    onLinkedTaskChange={(task) => {
+                      if (!task) {
+                        patchActiveNote({
+                          linkedBoardId: undefined,
+                          linkedCardId: undefined,
+                        });
+                        return;
+                      }
+
+                      linkActiveNoteToTask(task, { insertLinkedBlock: true });
+                    }}
+                    onOpenLinkedTask={(task) =>
+                      openWorkspaceCard(task.boardId, task.card.id)
+                    }
+                    onStatusChange={(status) => patchActiveNote({ status })}
+                    onTagsChange={(tags) =>
+                      patchActiveNote({ tags: normalizeNoteTags(tags) })
                     }
                   />
                 </div>
