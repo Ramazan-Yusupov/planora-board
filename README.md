@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Live demo: https://planora-board.vercel.app/
 
-## Getting Started
+Кратко
 
-First, run the development server:
+Planora Board — веб-приложение типа канбан/доска задач для личного или командного планирования. Пользователи создают доски, списки и карточки; прикрепляют файлы, ставят метки и чек-листы; используют шаблоны и локальные рабочие пространства для сохранения данных.
+Для тех, кто не понимает, что делает сайт (простыми словами)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Доска — это набор списков (колонок). В каждой колонке — карточки с задачами.
+Карточка содержит заголовок, описание, метки (цветные ярлыки), чек-листы (список подзадач), прикреплённые файлы/изображения и комментарии.
+Шаблоны досок — готовые наборы списков/карточек, которые можно использовать как стартовую точку.
+Данные хранятся локально (в браузере) и/или в выбранной папке на компьютере (File System Access). В текущей версии синхронизации между устройствами через сервер нет — это важный пункт для улучшения.
+Как пользоваться (быстрая инструкция для пользователей)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Открой https://planora-board.vercel.app/.
+Создать новую доску: нажать "New board" / выбрать шаблон.
+Добавить колонку/список и карточки — перетащи карточки между списками.
+Открыть карточку — добавить описание, чек-листы, метки, прикрепить файл.
+Сохранение: данные сохраняются локально автоматически; чтобы сделать резервную копию, экспортируй/скачайте файл из меню рабочей области.
+Если хотите использовать локальную папку (Folder Workspace) — дайте браузеру разрешение на доступ к папке (Browser File System Access). Это используется для ручных бэкапов и внешнего хранения.
+Что нужно дороботать и куда смотреть (приоритеты)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Синхронизация / бэкенд (высокий приоритет)
+Задача: добавить серверную синхронизацию между устройствами (опционально — авторизация).
+Где смотреть: код доменной логики — src/entities/board/api (реализация репозитория), src/entities/board/lib/workspace.
+Надёжность сохранения в Folder Workspace и UX разрешений (высокий)
+Задача: улучшить работу с File System Access, обработку ошибок и восстановление бэкапов.
+Где смотреть: src/entities/board/api/folderStorage + функции в src/entities/board (псевдо-имена: pickWorkspaceFolder, requestWorkspaceFolderPermission и т.п.)
+Мобильная адаптивность и UX (высокий)
+Задача: исправить верстку/поведение на маленьких экранах, жесты перетаскивания.
+Где смотреть: страницы и компоненты в src/app/* и UI в src/entities/board/ui, src/widgets.
+Доступность (a11y) и клавиатурная навигация (средний)
+Задача: добавить ARIA-атрибуты, фокус-менеджмент, тесты с клавиатурой/скринридером.
+Где смотреть: UI-компоненты в src/entities/board/ui и файлы страниц в src/app.
+Тесты и CI (средний)
+Задача: покрыть критическую логику (рабочее пространство, импорт/экспорт, парсинг доски) unit/integration тестами; настроить workflow.
+Где смотреть: логика в src/entities/board и src/features/*.
+Производительность и оптимизация загрузки (низкий/средний)
+Задача: оптимизировать загрузку бандлов, lazy-load тяжелых частей (draw-tool), оптимизировать работу с вложениями.
+Где смотреть: модули в src/modules/draw-tool, обработку вложений в src/entities/board/lib/attachments.
+Импорт/экспорт форматов и миграции (низкий)
+Задача: обеспечить стабильный импорт/экспорт JSON, поддерживать миграции схем.
+Где смотреть: код сериализации в src/entities/board/api и model/schemas.
+Интернационализация (i18n) — если нужна поддержка нескольких языков.
+Документация и onboarding для пользователей — улучшить объяснения внутри приложения и в README.
+Конкретные простые таски для новичка
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Исправить мелкие UI-баги: найти компонент в src/widgets или src/entities/board/ui и отрефакторить.
+Добавить сообщения об ошибках при нехватке прав доступа в Folder Workspace.
+Небольшие улучшения в валидации полей карточки и в UX чек-листов.
+Написать unit-тесты для функций в src/entities/board/lib (attachments, labels, createStarterBoard).
+Куда смотреть в коде (коротко)
 
-## Learn More
+src/app/ — маршруты и страницы (клиентская и серверная логика страниц).
+src/entities/board/ — доменная логика: API-репозиторий, model, lib (утилиты: appearance, attachments, workspace), UI-компоненты.
+src/features/ — реализация конкретных фич (move-card, manage-labels, undo-redo и др.).
+src/modules/ — крупные модули (draw-tool).
+src/widgets/ и src/shared/ — общие виджеты и утилиты.
+public/ — статические ассеты.
+Как сообщать об ошибке / предложить фичу
 
-To learn more about Next.js, take a look at the following resources:
+Открывать Issue в этом репозитории с описанием: что сделал, что ожидалось, шаги для воспроизведения, браузер/устройство, скриншоты.
+Для PR: fork → branch → коммит → отправить pull request с описанием изменения и ссылкой на issue (если есть).
+Краткая инструкция для разработчика (локально)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Клонировать: git clone https://github.com/Ramazan-Yusupov/planora-board.git
+Установить зависимости: npm install
+Запустить dev-сервер: npm run dev
+Открыть http://localhost:3000 и тестировать изменения.
+Контакты / где начать
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Начни с небольших UI-исправлений в src/entities/board/ui или функций в src/entities/board/lib.
+Если хочешь взяться за приоритет (синхронизацию или Folder Workspace) — напиши краткий план (issue) и предложи архитектуру: серверный API или P2P синхронизацию, формат конфликтного слияния и т.д.
